@@ -1,0 +1,6 @@
+{"event_msg":{"type":"session","session":{"model":"gpt-4o"},"timestamp":1776738085300}}
+{"event_msg":{"type":"event","payload":{"type":"function_call","function":{"name":"Read"},"timestamp":1776738085350},"timestamp":1776738085350}}
+{"event_msg":{"type":"event","payload":{"type":"token_count","last_token_usage":{"input_tokens":100,"output_tokens":50,"cached_input_tokens":0,"reasoning_output_tokens":20},"model":"gpt-4o"},"timestamp":1776738085400}}
+{"event_msg":{"type":"event","payload":{"type":"function_call","function":{"name":"Bash"},"timestamp":1776738085450},"timestamp":1776738085450}}
+{"event_msg":{"type":"event","payload":{"type":"token_count","last_token_usage":{"input_tokens":200,"output_tokens":80,"cached_input_tokens":50,"reasoning_output_tokens":0},"model":"gpt-4o"},"timestamp":1776738085500}}
+{"event_msg":{"type":"event","payload":{"type":"function_call","function":{"name":"Edit"},"timestamp":1776738085550},"timestamp":1776738085550}}
