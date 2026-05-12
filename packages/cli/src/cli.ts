@@ -1,4 +1,8 @@
 import { Command } from 'commander'
+import { serve } from './commands/serve.js'
+import { createDatabase } from './db/index.js'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 const program = new Command()
 
@@ -66,6 +70,16 @@ program
   .option('--pricing', 'Recalculate using latest pricing')
   .action((options) => {
     console.log('Running recalc with options:', options)
+  })
+
+// serve command
+program
+  .command('serve')
+  .description('Start web dashboard')
+  .option('-p, --port <port>', 'Port number', '3847')
+  .action((options) => {
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    serve({ port: parseInt(options.port), db })
   })
 
 export { program }
