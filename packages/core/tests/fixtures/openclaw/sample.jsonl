@@ -1,0 +1,3 @@
+{"message":{"role":"assistant","content":[{"type":"text","text":"Hi"},{"type":"tool_use","id":"tu_1","name":"Bash","input":{}}],"model":"claude-sonnet-4-6","usage":{"input":100,"output":50,"cacheRead":0,"cacheWrite":200},"provider":"anthropic","timestamp":1776738085400}}
+{"message":{"role":"assistant","content":[{"type":"text","text":"Done"}],"model":"gpt-4o","usage":{"input":150,"output":30,"cacheRead":100,"cacheWrite":0,"cost":0.05},"timestamp":1776738085500}}
+{"message":{"role":"assistant","content":[{"type":"tool_use","id":"tu_2","name":"Read","input":{}},{"type":"tool_use","id":"tu_3","name":"Edit","input":{}}],"model":"unknown","usage":{"input":50,"output":20},"timestamp":1776738085600}}
