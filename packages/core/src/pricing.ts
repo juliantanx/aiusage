@@ -1,9 +1,9 @@
 export interface PriceEntry {
-  input: number        // USD per 1B tokens
-  output: number       // USD per 1B tokens
-  cacheRead?: number   // USD per 1B tokens
-  cacheWrite?: number  // USD per 1B tokens
-  thinking?: number    // USD per 1B tokens
+  input: number        // USD per 1M tokens
+  output: number       // USD per 1M tokens
+  cacheRead?: number   // USD per 1M tokens
+  cacheWrite?: number  // USD per 1M tokens
+  thinking?: number    // USD per 1M tokens
 }
 
 export const PRICE_TABLE: Record<string, PriceEntry> = {
@@ -28,12 +28,12 @@ export function calculateCost(
   const price = PRICE_TABLE[model]
   if (!price) return 0
 
-  const inputCost = (tokens.inputTokens / 1_000_000_000) * price.input
-  const outputCost = (tokens.outputTokens / 1_000_000_000) * price.output
-  const cacheReadCost = (tokens.cacheReadTokens / 1_000_000_000) * (price.cacheRead ?? 0)
-  const cacheWriteCost = (tokens.cacheWriteTokens / 1_000_000_000) * (price.cacheWrite ?? 0)
+  const inputCost = (tokens.inputTokens / 1_000_000) * price.input
+  const outputCost = (tokens.outputTokens / 1_000_000) * price.output
+  const cacheReadCost = (tokens.cacheReadTokens / 1_000_000) * (price.cacheRead ?? 0)
+  const cacheWriteCost = (tokens.cacheWriteTokens / 1_000_000) * (price.cacheWrite ?? 0)
   const thinkingPrice = price.thinking ?? price.output  // Fallback to output price
-  const thinkingCost = (tokens.thinkingTokens / 1_000_000_000) * thinkingPrice
+  const thinkingCost = (tokens.thinkingTokens / 1_000_000) * thinkingPrice
 
   return inputCost + outputCost + cacheReadCost + cacheWriteCost + thinkingCost
 }

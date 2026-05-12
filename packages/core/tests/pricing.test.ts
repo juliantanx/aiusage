@@ -24,7 +24,7 @@ describe('PRICE_TABLE', () => {
 describe('calculateCost', () => {
   it('calculates cost for claude-sonnet-4-6', () => {
     // Input: 1000 tokens, Output: 500 tokens
-    // Expected: (1000/1M * 3) + (500/1M * 15) = 0.000003 + 0.0000075 = 0.0000105
+    // Expected: (1000/1M * 3) + (500/1M * 15) = 0.003 + 0.0075 = 0.0105
     const cost = calculateCost('claude-sonnet-4-6', {
       inputTokens: 1000,
       outputTokens: 500,
@@ -32,7 +32,7 @@ describe('calculateCost', () => {
       cacheWriteTokens: 0,
       thinkingTokens: 0,
     })
-    expect(cost).toBeCloseTo(0.0000105, 10)
+    expect(cost).toBeCloseTo(0.0105, 6)
   })
 
   it('calculates cost with cache read tokens', () => {
@@ -44,7 +44,7 @@ describe('calculateCost', () => {
       thinkingTokens: 0,
     })
     // (1000/1M * 3) + (500/1M * 15) + (2000/1M * 0.3)
-    expect(cost).toBeCloseTo(0.0000105 + 0.0000006, 10)
+    expect(cost).toBeCloseTo(0.0105 + 0.0006, 6)
   })
 
   it('calculates cost with thinking tokens', () => {
@@ -56,7 +56,7 @@ describe('calculateCost', () => {
       thinkingTokens: 1000,
     })
     // (1000/1M * 15) + (500/1M * 75) + (1000/1M * 75)
-    expect(cost).toBeCloseTo(0.000015 + 0.0000375 + 0.000075, 10)
+    expect(cost).toBeCloseTo(0.015 + 0.0375 + 0.075, 6)
   })
 
   it('returns 0 for unknown model', () => {
@@ -79,7 +79,7 @@ describe('calculateCost', () => {
       thinkingTokens: 0,
     })
     // (1000/1M * 2.5) + (500/1M * 10)
-    expect(cost).toBeCloseTo(0.0000025 + 0.000005, 10)
+    expect(cost).toBeCloseTo(0.0025 + 0.005, 6)
   })
 
   it('uses output price for thinking when thinking price not set', () => {
@@ -92,6 +92,6 @@ describe('calculateCost', () => {
       thinkingTokens: 1000,
     })
     // (1000/1M * 10) - uses output price for thinking
-    expect(cost).toBeCloseTo(0.00001, 10)
+    expect(cost).toBeCloseTo(0.01, 6)
   })
 })
