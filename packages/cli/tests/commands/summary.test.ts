@@ -5,9 +5,10 @@ import { join } from 'node:path'
 import { mkdirSync, rmSync } from 'node:fs'
 import { initializeDatabase } from '../../src/db/index.js'
 import { insertRecord } from '../../src/db/records.js'
+import { insertSyncedRecord } from '../../src/db/synced-records.js'
 import { insertToolCall } from '../../src/db/tool-calls.js'
 import { generateSummary } from '../../src/commands/summary.js'
-import type { StatsRecord, ToolCallRecord } from '@aiusage/core'
+import type { StatsRecord, SyncRecord, ToolCallRecord } from '@aiusage/core'
 
 function createTestRecord(overrides: Partial<StatsRecord> = {}): StatsRecord {
   return {
@@ -84,5 +85,94 @@ describe('Summary Command', () => {
     expect(summary.topToolCalls).toHaveLength(2)
     expect(summary.topToolCalls[0].name).toBe('Read')
     expect(summary.topToolCalls[0].count).toBe(2)
+  })
+
+  it('returns merged data from records and synced_records', () => {
+    insertRecord(db, createTestRecord({ id: 'local1', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, cost: 0.001 }))
+    insertSyncedRecord(db, {
+      id: 'synced1',
+      ts: Date.now(),
+      tool: 'codex',
+      model: 'gpt-4',
+      provider: 'openai',
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.002,
+      costSource: 'pricing',
+      sessionKey: 'sk1',
+      device: 'remote-device',
+      deviceInstanceId: 'remote-uuid',
+      updatedAt: Date.now(),
+    })
+
+    const summary = generateSummary(db, { currentDeviceInstanceId: 'device-123' })
+    // local: 100+50=150, synced: 200+100=300, total=450
+    expect(summary.totalTokens).toBe(450)
+    expect(summary.deviceCount).toBe(2)
+  })
+
+  it('filters by device when --device specified', () => {
+    insertRecord(db, createTestRecord({ id: 'local1', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, device: 'macbook', deviceInstanceId: 'uuid1' }))
+    insertSyncedRecord(db, {
+      id: 'synced1',
+      ts: Date.now(),
+      tool: 'codex',
+      model: 'gpt-4',
+      provider: 'openai',
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.002,
+      costSource: 'pricing',
+      sessionKey: 'sk1',
+      device: 'desktop',
+      deviceInstanceId: 'uuid2',
+      updatedAt: Date.now(),
+    })
+
+    const summary = generateSummary(db, { device: 'uuid2', currentDeviceInstanceId: 'uuid1' })
+    // only synced device: 200+100=300
+    expect(summary.totalTokens).toBe(300)
+    expect(summary.deviceLabel).toBe('desktop')
+  })
+
+  it('returns only local data when no synced records exist', () => {
+    insertRecord(db, createTestRecord({ id: 'local1', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, cost: 0.001 }))
+
+    const summary = generateSummary(db, { currentDeviceInstanceId: 'device-123' })
+    expect(summary.totalTokens).toBe(150)
+    expect(summary.deviceCount).toBe(1)
+  })
+
+  it('returns local-only data when no currentDeviceInstanceId', () => {
+    insertRecord(db, createTestRecord({ id: 'local1', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, cost: 0.001 }))
+    insertSyncedRecord(db, {
+      id: 'synced1',
+      ts: Date.now(),
+      tool: 'codex',
+      model: 'gpt-4',
+      provider: 'openai',
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.002,
+      costSource: 'pricing',
+      sessionKey: 'sk1',
+      device: 'remote-device',
+      deviceInstanceId: 'remote-uuid',
+      updatedAt: Date.now(),
+    })
+
+    // No currentDeviceInstanceId → legacy behavior, local only
+    const summary = generateSummary(db)
+    expect(summary.totalTokens).toBe(150)
+    expect(summary.deviceCount).toBe(1)
   })
 })

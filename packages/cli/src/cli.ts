@@ -10,6 +10,8 @@ import { cleanOldData } from './commands/clean.js'
 import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
 import { createDatabase } from './db/index.js'
+import { getState } from './init.js'
+import { AIUSAGE_DIR } from './config.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -24,7 +26,13 @@ program
 program
   .action(() => {
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
-    const summary = generateSummary(db)
+    const state = getState(AIUSAGE_DIR)
+    const summary = generateSummary(db, {
+      currentDeviceInstanceId: state?.deviceInstanceId,
+    })
+    if (summary.deviceCount > 1) {
+      console.log(`设备：全部（${summary.deviceCount} 台设备在线）`)
+    }
     console.log(`Total Tokens: ${summary.totalTokens.toLocaleString()}`)
     console.log(`Total Cost:   $${summary.totalCost.toFixed(4)}`)
     console.log(`Records:      ${summary.recordCount}`)
@@ -51,9 +59,19 @@ program
   .option('--month', 'Show this month')
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
-  .action(() => {
+  .option('--device <id>', 'Filter by device instance ID')
+  .action((options) => {
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
-    const summary = generateSummary(db)
+    const state = getState(AIUSAGE_DIR)
+    const summary = generateSummary(db, {
+      currentDeviceInstanceId: state?.deviceInstanceId,
+      device: options.device,
+    })
+    if (summary.deviceLabel) {
+      console.log(`设备：${summary.deviceLabel}`)
+    } else if (summary.deviceCount > 1) {
+      console.log(`设备：全部（${summary.deviceCount} 台设备在线）`)
+    }
     console.log(`Total Tokens: ${summary.totalTokens.toLocaleString()}`)
     console.log(`Total Cost:   $${summary.totalCost.toFixed(4)}`)
     console.log(`Records:      ${summary.recordCount}`)
