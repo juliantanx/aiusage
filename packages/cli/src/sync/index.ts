@@ -21,6 +21,8 @@ export interface SyncResult {
   error?: string
 }
 
+const BATCH_SIZE = 5000
+
 export class SyncOrchestrator {
   private db: Database.Database
   private backend: SyncBackend
@@ -76,12 +78,43 @@ export class SyncOrchestrator {
     const now = new Date()
     const path = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}.ndjson`
 
-    const syncRecords = unsynced.map(mapStatsRecordToSyncRecord)
-    const content = syncRecords.map(r => JSON.stringify(r)).join('\n') + '\n'
+    // Read existing remote data to merge (never overwrite)
+    const remote = await this.backend.readFile(path)
+    const remoteRecords = new Map<string, SyncRecord>()
+    if (remote) {
+      for (const line of remote.content.split('\n').filter(Boolean)) {
+        try {
+          const record: SyncRecord = JSON.parse(line)
+          remoteRecords.set(record.id, record)
+        } catch {}
+      }
+    }
 
-    const current = await this.backend.readFile(path)
-    await this.backend.writeFile(path, content, current?.sha)
+    // Merge: add new records, update existing if local is newer
+    const localSyncRecords = unsynced.map(mapStatsRecordToSyncRecord)
+    for (const record of localSyncRecords) {
+      const existing = remoteRecords.get(record.id)
+      if (!existing || record.updatedAt >= existing.updatedAt) {
+        remoteRecords.set(record.id, record)
+      }
+    }
 
+    // Write merged data in batches
+    const allRecords = Array.from(remoteRecords.values())
+    let currentSha: string | undefined = remote?.sha
+
+    for (let i = 0; i < allRecords.length; i += BATCH_SIZE) {
+      const batch = allRecords.slice(i, i + BATCH_SIZE)
+      const content = batch.map(r => JSON.stringify(r)).join('\n') + '\n'
+      await this.backend.writeFile(path, content, currentSha)
+      // After first write, subsequent writes need the new SHA from re-reading
+      if (i + BATCH_SIZE < allRecords.length) {
+        const updated = await this.backend.readFile(path)
+        currentSha = updated?.sha
+      }
+    }
+
+    // Mark local records as synced
     const syncedAt = Date.now()
     for (const record of unsynced) {
       this.db.prepare('UPDATE records SET synced_at = ? WHERE id = ?').run(syncedAt, record.id)

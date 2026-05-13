@@ -1,5 +1,6 @@
 import http from 'node:http'
 import type Database from 'better-sqlite3'
+import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = ''): { where: string; params: Record<string, unknown> } {
   const ts = prefix ? `${prefix}.ts` : 'ts'
@@ -56,12 +57,17 @@ function extractProject(sourceFile: string): string {
   return parts.slice(-2).join('-') || raw
 }
 
-export function createApiServer(db: Database.Database): http.Server {
+export interface ApiServerOptions {
+  db: Database.Database
+  onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
+}
+
+export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
 
     res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
     if (req.method === 'OPTIONS') {
@@ -323,6 +329,128 @@ export function createApiServer(db: Database.Database): http.Server {
           .sort((a, b) => b.tokens - a.tokens)
 
         json(res, { projects })
+        return
+      }
+
+      // ── /api/pricing ────────────────────────────────────────────────
+      if (url.pathname === '/api/pricing') {
+        // GET: list all prices (defaults + overrides + models from DB)
+        if (req.method === 'GET') {
+          const table = getPriceTable()
+          const overrides = getUserOverrides()
+          // Also include models from DB that have no pricing
+          const dbModels = db.prepare('SELECT DISTINCT model FROM records ORDER BY model').all() as any[]
+          const models = dbModels.map(r => {
+            const model = r.model
+            const exactPrice = table[model]
+            const resolvedPrice = resolvePrice(model)
+            const isOverride = model in overrides
+            const isDefault = model in DEFAULT_PRICE_TABLE && !isOverride
+            let matchedBy: string | null = null
+            if (!exactPrice && resolvedPrice) {
+              // Find which prefix matched
+              for (const prefix of Object.keys(table)) {
+                if (model.startsWith(prefix) || model.toLowerCase().startsWith(prefix)) {
+                  matchedBy = prefix
+                  break
+                }
+              }
+              if (!matchedBy) {
+                // Provider-stripped match
+                const stripped = model.replace(/^[^/]+\//, '').toLowerCase()
+                for (const prefix of Object.keys(table)) {
+                  if (stripped.startsWith(prefix)) { matchedBy = prefix; break }
+                }
+              }
+            }
+            return {
+              model,
+              price: resolvedPrice ?? null,
+              isDefault,
+              isOverride,
+              matchedBy,
+            }
+          })
+          json(res, { models, overrides })
+          return
+        }
+        // PUT: set price override
+        if (req.method === 'PUT') {
+          let body = ''
+          for await (const chunk of req) body += chunk
+          try {
+            const data = JSON.parse(body)
+            if (!data.model || typeof data.input !== 'number' || typeof data.output !== 'number') {
+              json(res, { error: { code: 'INVALID_PARAM', message: 'model, input, output required' } }, 400)
+              return
+            }
+            setPriceOverride(data.model, {
+              input: data.input,
+              output: data.output,
+              cacheRead: data.cacheRead,
+              cacheWrite: data.cacheWrite,
+              thinking: data.thinking,
+            })
+            json(res, { ok: true })
+          } catch {
+            json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
+          }
+          return
+        }
+        // DELETE: remove price override
+        if (req.method === 'DELETE') {
+          const model = url.searchParams.get('model')
+          if (!model) {
+            json(res, { error: { code: 'INVALID_PARAM', message: 'model param required' } }, 400)
+            return
+          }
+          removePriceOverride(model)
+          json(res, { ok: true })
+          return
+        }
+      }
+
+      // ── /api/pricing/recalc ─────────────────────────────────────────
+      if (url.pathname === '/api/pricing/recalc' && req.method === 'POST') {
+        const { resolvePrice } = await import('@aiusage/core')
+        const BATCH_SIZE = 1000
+        let updated = 0
+        let lastId = ''
+        while (true) {
+          const records = db.prepare(
+            'SELECT id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens FROM records WHERE id > ? ORDER BY id LIMIT ?'
+          ).all(lastId, BATCH_SIZE) as any[]
+          if (records.length === 0) break
+          const updateStmt = db.prepare('UPDATE records SET cost = ?, cost_source = ? WHERE id = ?')
+          const tx = db.transaction((batch: any[]) => {
+            for (const r of batch) {
+              const price = resolvePrice(r.model)
+              if (!price) continue
+              const cost =
+                (r.input_tokens / 1e6) * price.input +
+                (r.output_tokens / 1e6) * price.output +
+                (r.cache_read_tokens / 1e6) * (price.cacheRead ?? 0) +
+                (r.cache_write_tokens / 1e6) * (price.cacheWrite ?? 0) +
+                (r.thinking_tokens / 1e6) * (price.thinking ?? price.output)
+              updateStmt.run(cost, 'pricing', r.id)
+              updated++
+            }
+          })
+          tx(records)
+          lastId = records[records.length - 1].id
+        }
+        json(res, { updated })
+        return
+      }
+
+      // ── /api/refresh ────────────────────────────────────────────────
+      if (url.pathname === '/api/refresh') {
+        if (!options?.onRefresh) {
+          json(res, { error: { code: 'NOT_AVAILABLE', message: 'Refresh not available' } }, 501)
+          return
+        }
+        const result = await options.onRefresh()
+        json(res, result)
         return
       }
 

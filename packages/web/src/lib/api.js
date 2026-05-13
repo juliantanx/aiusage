@@ -47,3 +47,42 @@ export async function fetchSessions(params) {
 export async function fetchProjects(params) {
   return apiFetch(buildUrl('/api/projects', params))
 }
+
+export async function refreshData() {
+  return apiFetch('/api/refresh')
+}
+
+export async function fetchPricing() {
+  return apiFetch('/api/pricing')
+}
+
+export async function updatePricing(model, entry) {
+  const response = await fetch('/api/pricing', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, ...entry }),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function deletePricing(model) {
+  const response = await fetch(`/api/pricing?model=${encodeURIComponent(model)}`, { method: 'DELETE' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function recalcPricing() {
+  const response = await fetch('/api/pricing/recalc', { method: 'POST' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}

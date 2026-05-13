@@ -1,4 +1,5 @@
 import { Command } from 'commander'
+import { writeFileSync } from 'node:fs'
 import { serve } from './commands/serve.js'
 import { runInit } from './commands/init.js'
 import { runSync } from './commands/sync.js'
@@ -26,7 +27,7 @@ program
     const summary = generateSummary(db)
     console.log(`Total Tokens: ${summary.totalTokens.toLocaleString()}`)
     console.log(`Total Cost:   $${summary.totalCost.toFixed(4)}`)
-    console.log(`Records:      ${summary.records.length}`)
+    console.log(`Records:      ${summary.recordCount}`)
     if (Object.keys(summary.byTool).length > 0) {
       console.log('\nBy Tool:')
       for (const [tool, stats] of Object.entries(summary.byTool)) {
@@ -55,7 +56,7 @@ program
     const summary = generateSummary(db)
     console.log(`Total Tokens: ${summary.totalTokens.toLocaleString()}`)
     console.log(`Total Cost:   $${summary.totalCost.toFixed(4)}`)
-    console.log(`Records:      ${summary.records.length}`)
+    console.log(`Records:      ${summary.recordCount}`)
     if (Object.keys(summary.byTool).length > 0) {
       console.log('\nBy Tool:')
       for (const [tool, stats] of Object.entries(summary.byTool)) {
@@ -101,7 +102,6 @@ program
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
     const data = exportData(db, format)
     if (options.output) {
-      const { writeFileSync } = require('node:fs')
       writeFileSync(options.output, data, 'utf-8')
       console.log(`Exported to ${options.output}`)
     } else {

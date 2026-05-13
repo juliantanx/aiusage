@@ -48,10 +48,13 @@
     }
   }
 
-  function isActive(range) {
-    if (selectedMonth) return false
-    return $dateRange.range === range && !$dateRange.from
-  }
+  // Use reactive variables so Svelte tracks store dependency in class:active directives
+  $: activeDay = !selectedMonth && $dateRange.range === 'day' && !$dateRange.from
+  $: activeWeek = !selectedMonth && $dateRange.range === 'week' && !$dateRange.from
+  $: activeMonth = !selectedMonth && $dateRange.range === 'month' && !$dateRange.from
+  $: activeLast30 = !selectedMonth && $dateRange.range === 'last30' && !$dateRange.from
+  $: activeAll = !selectedMonth && $dateRange.range === 'all' && !$dateRange.from
+  $: activeCustom = showCustom || ($dateRange.from && !selectedMonth)
 
   function formatMonthLabel(val) {
     const [y, m] = val.split('-')
@@ -65,19 +68,19 @@
 </script>
 
 <div class="date-range">
-  <button class:active={isActive('day')} on:click={() => handleRangeChange('day')}>
+  <button class:active={activeDay} on:click={() => handleRangeChange('day')}>
     {$t('range.today')}
   </button>
-  <button class:active={isActive('week')} on:click={() => handleRangeChange('week')}>
+  <button class:active={activeWeek} on:click={() => handleRangeChange('week')}>
     {$t('range.week')}
   </button>
-  <button class:active={isActive('month')} on:click={() => handleRangeChange('month')}>
+  <button class:active={activeMonth} on:click={() => handleRangeChange('month')}>
     {$t('range.month')}
   </button>
-  <button class:active={isActive('last30')} on:click={() => handleRangeChange('last30')}>
+  <button class:active={activeLast30} on:click={() => handleRangeChange('last30')}>
     {$t('range.last30')}
   </button>
-  <button class:active={isActive('all')} on:click={() => handleRangeChange('all')}>
+  <button class:active={activeAll} on:click={() => handleRangeChange('all')}>
     {$t('range.allTime')}
   </button>
 
@@ -99,7 +102,7 @@
 
   <button
     class="custom-toggle"
-    class:active={showCustom || ($dateRange.from && !selectedMonth)}
+    class:active={activeCustom}
     on:click={() => { showCustom = !showCustom; showMonthPicker = false }}
     title="Custom range"
   >⊞</button>

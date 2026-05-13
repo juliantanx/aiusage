@@ -12,6 +12,7 @@ interface PendingToolCall {
 export class CodexParser implements Parser {
   readonly tool: Tool = 'codex'
   private pendingToolCalls: PendingToolCall[] = []
+  private currentModel: string | null = null
 
   parseLine(line: string, context: ParseContext): ParseResult | null {
     let parsed: any
@@ -21,7 +22,19 @@ export class CodexParser implements Parser {
       return null
     }
 
-    const payload = parsed.event_msg?.payload
+    // Support both formats: { event_msg: { payload: ... } } and { type: 'event_msg', payload: ... }
+    // Also handle top-level turn_context events (new Codex format)
+    const payload = parsed.event_msg?.payload ?? (parsed.type === 'event_msg' ? parsed.payload : undefined)
+
+    // Track model from turn_context events (top-level or wrapped)
+    const turnCtx = parsed.type === 'turn_context' ? parsed.payload : undefined
+    if (turnCtx?.model) {
+      this.currentModel = turnCtx.model
+    }
+    if (payload?.type === 'turn_context' && payload.model) {
+      this.currentModel = payload.model
+    }
+
     if (!payload) return null
 
     // Skip non-token_count/function_call lines
@@ -31,19 +44,19 @@ export class CodexParser implements Parser {
     if (payload.type === 'function_call') {
       this.pendingToolCalls.push({
         name: payload.function?.name ?? 'unknown',
-        ts: parsed.event_msg.timestamp ?? context.now,
+        ts: parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now,
       })
       return null
     }
 
-    // Process token_count
-    if (!payload.last_token_usage) {
+    // Process token_count — support both old format (payload.last_token_usage) and new format (payload.info.last_token_usage)
+    const usage = payload.last_token_usage ?? payload.info?.last_token_usage
+    if (!usage) {
       return null
     }
 
-    const usage = payload.last_token_usage
-    const model = payload.model ?? 'unknown'
-    const ts = parsed.event_msg.timestamp ?? context.now
+    const model = payload.model ?? parsed.model ?? this.currentModel ?? 'unknown'
+    const ts = parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now
 
     const inputTokens = usage.input_tokens ?? 0
     const outputTokens = usage.output_tokens ?? 0

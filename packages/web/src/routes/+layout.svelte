@@ -12,6 +12,7 @@
     { path: '/tool-calls', key: 'nav.toolCalls' },
     { path: '/projects', key: 'nav.projects' },
     { path: '/sessions', key: 'nav.sessions' },
+    { path: '/pricing', key: 'nav.pricing' },
   ]
 
   const themeIcons = {

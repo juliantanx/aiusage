@@ -20,7 +20,9 @@ export class OpenClawParser implements Parser {
 
     const usage = parsed.message.usage
     const model = parsed.message.model ?? 'unknown'
-    const ts = parsed.message.timestamp ?? context.now
+    const rawTs = parsed.message.timestamp ?? context.now
+    // Normalize timestamp to ISO string (OpenClaw stores Unix ms)
+    const ts = typeof rawTs === 'number' ? new Date(rawTs).toISOString() : rawTs
 
     const inputTokens = usage.input ?? 0
     const outputTokens = usage.output ?? 0
@@ -28,13 +30,15 @@ export class OpenClawParser implements Parser {
     const cacheWriteTokens = usage.cacheWrite ?? 0
     const thinkingTokens = 0 // OpenClaw doesn't provide thinking tokens
 
-    // Cost handling: use log value if present, otherwise calculate
+    // Cost handling: usage.cost can be an object {total, input, output, ...} or a number
     let cost: number
     let costSource: 'log' | 'pricing' | 'unknown'
 
-    if ('cost' in usage) {
-      // cost field exists (including cost=0)
-      cost = usage.cost ?? 0
+    if (usage.cost != null && typeof usage.cost === 'object') {
+      cost = usage.cost.total ?? 0
+      costSource = 'log'
+    } else if (typeof usage.cost === 'number') {
+      cost = usage.cost
       costSource = 'log'
     } else if (model === 'unknown') {
       cost = 0

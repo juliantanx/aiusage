@@ -3,6 +3,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join, extname, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
+import { runParse } from './parse.js'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
@@ -36,7 +37,9 @@ function findMonorepoRoot(): string {
 }
 
 export function serve(options: ServeOptions): void {
-  const apiServer = createApiServer(options.db)
+  const apiServer = createApiServer(options.db, {
+    onRefresh: () => runParse(options.db),
+  })
   const webBuildDir = join(findMonorepoRoot(), 'packages', 'web', 'build')
 
   const server = http.createServer(async (req, res) => {

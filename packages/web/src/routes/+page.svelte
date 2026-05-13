@@ -1,14 +1,17 @@
 <script>
+  import { onMount } from 'svelte'
   import { dateRange, formatNumber, formatCost, formatTokens } from '$lib/stores.js'
-  import { fetchSummary } from '$lib/api.js'
+  import { fetchSummary, refreshData } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
   let data = null
   let error = null
   let loading = true
+  let initialized = false
 
   async function loadData() {
+    if (!initialized) return
     loading = true
     error = null
     try {
@@ -20,6 +23,12 @@
       loading = false
     }
   }
+
+  onMount(async () => {
+    await refreshData().catch(() => {})
+    initialized = true
+    await loadData()
+  })
 
   $: $dateRange, loadData()
 </script>

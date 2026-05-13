@@ -20,6 +20,9 @@ export class ClaudeCodeParser implements Parser {
 
     const usage = parsed.message.usage
     const model = parsed.message.model ?? 'unknown'
+
+    // Skip synthetic messages (Claude Code internal, zero token usage)
+    if (model === '<synthetic>') return null
     const ts = parsed.message.timestamp ?? parsed.timestamp ?? context.now
 
     const inputTokens = usage.input_tokens ?? 0
@@ -68,10 +71,14 @@ export class ClaudeCodeParser implements Parser {
       let callIndex = 0
       for (const block of parsed.message.content) {
         if (block.type === 'tool_use') {
+          // Clean malformed names (some logs have args/quotes embedded in name)
+          const rawName: string = block.name ?? ''
+          const cleanName = rawName.replace(/[=:"'{\[\s].*$/s, '').replace(/[^a-zA-Z0-9_-]/g, '')
+          if (!cleanName) { callIndex++; continue }
           toolCalls.push({
-            id: generateToolCallId(record.id, block.name, ts, callIndex),
+            id: generateToolCallId(record.id, cleanName, ts, callIndex),
             recordId: record.id,
-            name: block.name,
+            name: cleanName,
             ts,
             callIndex,
           })

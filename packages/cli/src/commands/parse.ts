@@ -57,6 +57,15 @@ function discoverLogFiles(): ToolPaths[] {
     }
   }
 
+  // OpenClaw: ~/.openclaw/agents/main/sessions/*.jsonl (skip checkpoint files)
+  const openclawDir = join(home, '.openclaw', 'agents', 'main', 'sessions')
+  if (existsSync(openclawDir)) {
+    const openclawPaths = findJsonlFiles(openclawDir).filter(p => !p.includes('.checkpoint.'))
+    if (openclawPaths.length > 0) {
+      results.push({ tool: 'openclaw', paths: openclawPaths })
+    }
+  }
+
   return results
 }
 
@@ -68,9 +77,15 @@ function extractSessionId(filePath: string, tool: Tool): string {
     return filename.replace('.jsonl', '')
   }
   if (tool === 'codex') {
-    // Extract from path like ~/.codex/sessions/<session>/rollout.jsonl
-    const parts = filePath.split('/')
-    return parts[parts.length - 2] ?? 'unknown'
+    // Extract from path like ~/.codex/sessions/2026/04/22/rollout-<uuid>.jsonl
+    const filename = filePath.split('/').pop() ?? ''
+    const match = filename.match(/rollout-(.+)\.jsonl$/)
+    return match ? match[1] : filename.replace('.jsonl', '')
+  }
+  if (tool === 'openclaw') {
+    // Extract from path like ~/.openclaw/agents/main/sessions/<uuid>.jsonl
+    const filename = filePath.split('/').pop() ?? ''
+    return filename.replace('.jsonl', '')
   }
   return 'unknown'
 }

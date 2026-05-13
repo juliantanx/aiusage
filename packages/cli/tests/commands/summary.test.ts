@@ -47,31 +47,31 @@ describe('Summary Command', () => {
   })
 
   it('generates summary with data', () => {
-    insertRecord(db, createTestRecord({ id: 'r1', tool: 'claude-code', inputTokens: 1000, outputTokens: 500, cost: 0.001 }))
-    insertRecord(db, createTestRecord({ id: 'r2', tool: 'codex', inputTokens: 2000, outputTokens: 1000, cost: 0.002 }))
+    insertRecord(db, createTestRecord({ id: 'r1', tool: 'claude-code', inputTokens: 1000, outputTokens: 500, cacheWriteTokens: 200, cost: 0.001 }))
+    insertRecord(db, createTestRecord({ id: 'r2', tool: 'codex', inputTokens: 2000, outputTokens: 1000, cacheWriteTokens: 200, cost: 0.002 }))
 
     const summary = generateSummary(db)
-    expect(summary.totalTokens).toBe(4500) // 1000+500+2000+1000
+    expect(summary.totalTokens).toBe(4900) // 1000+500+200+2000+1000+200
     expect(summary.totalCost).toBeCloseTo(0.003, 6)
-    expect(summary.records).toHaveLength(2)
+    expect(summary.recordCount).toBe(2)
   })
 
   it('groups by tool', () => {
-    insertRecord(db, createTestRecord({ id: 'r1', tool: 'claude-code', inputTokens: 1000, outputTokens: 500, cost: 0.001 }))
-    insertRecord(db, createTestRecord({ id: 'r2', tool: 'codex', inputTokens: 2000, outputTokens: 1000, cost: 0.002 }))
+    insertRecord(db, createTestRecord({ id: 'r1', tool: 'claude-code', inputTokens: 1000, outputTokens: 500, cacheWriteTokens: 200, cost: 0.001 }))
+    insertRecord(db, createTestRecord({ id: 'r2', tool: 'codex', inputTokens: 2000, outputTokens: 1000, cacheWriteTokens: 200, cost: 0.002 }))
 
     const summary = generateSummary(db)
     expect(summary.byTool['claude-code']).toBeDefined()
     expect(summary.byTool['codex']).toBeDefined()
-    expect(summary.byTool['claude-code'].tokens).toBe(1500)
-    expect(summary.byTool['codex'].tokens).toBe(3000)
+    expect(summary.byTool['claude-code'].tokens).toBe(1700)
+    expect(summary.byTool['codex'].tokens).toBe(3200)
   })
 
   it('returns empty summary when no data', () => {
     const summary = generateSummary(db)
     expect(summary.totalTokens).toBe(0)
     expect(summary.totalCost).toBe(0)
-    expect(summary.records).toHaveLength(0)
+    expect(summary.recordCount).toBe(0)
   })
 
   it('includes top tool calls', () => {
