@@ -4,6 +4,9 @@ import { join, extname, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
 import { runParse } from './parse.js'
+import { runSync } from './sync.js'
+import { getState } from '../init.js'
+import { AIUSAGE_DIR } from '../config.js'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
@@ -39,6 +42,18 @@ function findMonorepoRoot(): string {
 export function serve(options: ServeOptions): void {
   const apiServer = createApiServer(options.db, {
     onRefresh: () => runParse(options.db),
+    onSync: () => runSync(options.db),
+    getSyncStatus: () => {
+      const state = getState(AIUSAGE_DIR)
+      if (!state) return null
+      return {
+        lastSyncAt: state.lastSyncAt,
+        lastSyncStatus: state.lastSyncStatus,
+        lastSyncTarget: state.lastSyncTarget,
+        lastSyncUploaded: state.lastSyncUploaded,
+        lastSyncPulled: state.lastSyncPulled,
+      }
+    },
   })
   const webBuildDir = join(findMonorepoRoot(), 'packages', 'web', 'build')
 

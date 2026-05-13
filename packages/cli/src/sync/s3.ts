@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
 export interface S3Config {
   bucket: string
@@ -65,6 +65,34 @@ export class S3SyncBackend {
       ...(sha ? { IfMatch: `"${sha}"` } : {}),
     })
     await this.client.send(command)
+  }
+
+  async listFiles(): Promise<string[]> {
+    const files: string[] = []
+    let continuationToken: string | undefined
+
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: `${this.prefix}data/`,
+        ContinuationToken: continuationToken,
+      })
+      const response = await this.client.send(command)
+
+      if (response.Contents) {
+        for (const obj of response.Contents) {
+          const key = obj.Key!
+          const relPath = key.slice(`${this.prefix}data/`.length)
+          if (relPath.endsWith('.ndjson')) {
+            files.push(relPath)
+          }
+        }
+      }
+
+      continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
+    } while (continuationToken)
+
+    return files.sort()
   }
 
   async fileExists(path: string): Promise<boolean> {

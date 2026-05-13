@@ -10,6 +10,7 @@ describe('SyncOrchestrator', () => {
   const mockBackend = {
     readFile: vi.fn(),
     writeFile: vi.fn(),
+    listFiles: vi.fn(),
   }
 
   beforeEach(() => {
@@ -49,6 +50,7 @@ describe('SyncOrchestrator', () => {
       updatedAt: 1776738085700,
     }
 
+    mockBackend.listFiles.mockResolvedValueOnce(['2026/05.ndjson'])
     mockBackend.readFile.mockResolvedValueOnce({
       sha: 'abc123',
       content: JSON.stringify(remoteRecord) + '\n',
@@ -69,6 +71,7 @@ describe('SyncOrchestrator', () => {
   it('uploads unsynced local records', async () => {
     db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', 1000, 1000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
 
+    mockBackend.listFiles.mockResolvedValue([])
     mockBackend.readFile.mockResolvedValue(null)
     mockBackend.writeFile.mockResolvedValue(undefined)
 
@@ -114,6 +117,7 @@ describe('SyncOrchestrator', () => {
       updatedAt: 1000,
     }
 
+    mockBackend.listFiles.mockResolvedValue(['1970/01.ndjson'])
     mockBackend.readFile.mockResolvedValue({
       sha: 'remote-sha',
       content: JSON.stringify(remoteRecord) + '\n',
@@ -165,6 +169,7 @@ describe('SyncOrchestrator', () => {
       updatedAt: 1000,
     }
 
+    mockBackend.listFiles.mockResolvedValue(['1970/01.ndjson'])
     mockBackend.readFile.mockResolvedValue({
       sha: 'remote-sha',
       content: JSON.stringify(remoteRecord) + '\n',

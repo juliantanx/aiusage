@@ -60,6 +60,8 @@ function extractProject(sourceFile: string): string {
 export interface ApiServerOptions {
   db: Database.Database
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
+  onSync?: () => Promise<{ status: string; pulledCount: number; uploadedCount: number; mergedCount: number; error?: string }>
+  getSyncStatus?: () => { lastSyncAt?: number; lastSyncStatus?: string; lastSyncTarget?: string; lastSyncUploaded?: number; lastSyncPulled?: number } | null
 }
 
 export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
@@ -440,6 +442,23 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           lastId = records[records.length - 1].id
         }
         json(res, { updated })
+        return
+      }
+
+      // ── /api/sync ──────────────────────────────────────────────────
+      if (url.pathname === '/api/sync') {
+        if (req.method === 'POST') {
+          if (!options?.onSync) {
+            json(res, { error: { code: 'NOT_AVAILABLE', message: 'Sync not configured' } }, 501)
+            return
+          }
+          const result = await options.onSync()
+          json(res, result)
+          return
+        }
+        // GET: sync status
+        const status = options?.getSyncStatus?.() ?? null
+        json(res, { status })
         return
       }
 

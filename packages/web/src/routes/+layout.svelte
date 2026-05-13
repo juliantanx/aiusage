@@ -3,6 +3,7 @@
   import { onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
   import { userPref, resolvedTheme, cycleTheme, initTheme } from '$lib/theme.js'
+  import { triggerSync, fetchSyncStatus } from '$lib/api.js'
 
   const navItems = [
     { path: '/', key: 'nav.overview' },
@@ -21,8 +22,47 @@
     light: '○',
   }
 
+  let syncStatus = null
+  let syncing = false
+  let syncResult = ''
+
+  async function loadSyncStatus() {
+    try {
+      const data = await fetchSyncStatus()
+      syncStatus = data.status
+    } catch {
+      syncStatus = null
+    }
+  }
+
+  async function handleSync() {
+    syncing = true
+    syncResult = ''
+    try {
+      const result = await triggerSync()
+      if (result.status === 'ok') {
+        syncResult = $t('sync.complete')
+      } else {
+        syncResult = result.error || $t('sync.failed')
+      }
+      await loadSyncStatus()
+    } catch {
+      syncResult = $t('sync.failed')
+    } finally {
+      syncing = false
+      setTimeout(() => { syncResult = '' }, 3000)
+    }
+  }
+
+  function formatSyncTime(ts) {
+    if (!ts) return $t('sync.never')
+    const d = new Date(ts)
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
   onMount(() => {
     initTheme()
+    loadSyncStatus()
   })
 </script>
 
@@ -43,6 +83,16 @@
       {/each}
     </nav>
     <div class="controls">
+      <button class="sync-toggle" on:click={handleSync} disabled={syncing} title={syncStatus ? `${$t('sync.lastSync')}: ${formatSyncTime(syncStatus.lastSyncAt)}` : $t('sync.notConfigured')}>
+        <span class="sync-icon">{syncing ? '↻' : '⇅'}</span>
+        {#if syncing}
+          <span class="sync-label">{$t('sync.syncing')}</span>
+        {:else if syncResult}
+          <span class="sync-label" class:ok={syncResult === $t('sync.complete')} class:err={syncResult === $t('sync.failed')}>{syncResult}</span>
+        {:else}
+          <span class="sync-label">{$t('sync.trigger')}</span>
+        {/if}
+      </button>
       <button class="theme-toggle" on:click={cycleTheme} title={$t(`theme.${$userPref}`)}>
         <span class="theme-icon">{themeIcons[$userPref]}</span>
         <span class="theme-label">{$t(`theme.${$userPref}`)}</span>
@@ -209,6 +259,49 @@
     gap: 0.5rem;
     flex-shrink: 0;
   }
+
+  .sync-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .sync-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-dim);
+  }
+  .sync-toggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .sync-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+  .sync-toggle:disabled .sync-icon {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .sync-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .sync-label.ok { color: var(--green); }
+  .sync-label.err { color: var(--rose); }
 
   .theme-toggle {
     display: flex;

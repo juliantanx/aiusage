@@ -207,7 +207,7 @@ program
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
     const result = await runSync(db)
     if (result.status === 'ok') {
-      console.log(`✓ Sync complete — pulled: ${result.pulledCount}, uploaded: ${result.uploadedCount}`)
+      console.log(`✓ Sync complete — pulled: ${result.pulledCount}, merged: ${result.mergedCount}, uploaded: ${result.uploadedCount}`)
     } else if (result.status === 'blocked_pending_consent') {
       console.error(`✗ ${result.error}`)
       process.exit(1)

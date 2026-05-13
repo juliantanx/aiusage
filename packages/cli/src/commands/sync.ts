@@ -35,56 +35,39 @@ function createBackend(config: import('../config.js').Config): SyncBackend | nul
   return null
 }
 
+function failedResult(error: string): SyncResult {
+  return { status: 'failed', pulledCount: 0, uploadedCount: 0, mergedCount: 0, error }
+}
+
+function blockedResult(error: string): SyncResult {
+  return { status: 'blocked_pending_consent', pulledCount: 0, uploadedCount: 0, mergedCount: 0, error }
+}
+
 export async function runSync(db: Database.Database): Promise<SyncResult> {
   const config = loadConfig()
   if (!config?.sync) {
-    return {
-      status: 'failed',
-      pulledCount: 0,
-      uploadedCount: 0,
-      error: 'Cloud sync not configured. Run "aiusage init" first.',
-    }
+    return failedResult('Cloud sync not configured. Run "aiusage init" first.')
   }
 
   const state = getState(AIUSAGE_DIR)
   if (!state?.syncConsentAt || !state?.syncConsentTarget) {
     setState(AIUSAGE_DIR, { lastSyncStatus: 'blocked_pending_consent' })
-    return {
-      status: 'blocked_pending_consent',
-      pulledCount: 0,
-      uploadedCount: 0,
-      error: 'Sync consent not provided. Run "aiusage init" to approve.',
-    }
+    return blockedResult('Sync consent not provided. Run "aiusage init" to approve.')
   }
 
   const consentConfig = buildConsentConfig(config)
   if (!consentConfig) {
-    return {
-      status: 'failed',
-      pulledCount: 0,
-      uploadedCount: 0,
-      error: 'Invalid sync configuration.',
-    }
+    return failedResult('Invalid sync configuration.')
   }
 
   if (!verifyConsent(state.syncConsentTarget, consentConfig)) {
     setState(AIUSAGE_DIR, { lastSyncStatus: 'blocked_pending_consent' })
-    return {
-      status: 'blocked_pending_consent',
-      pulledCount: 0,
-      uploadedCount: 0,
-      error: 'Sync configuration has changed since last approval. Run "aiusage init" to re-approve.',
-    }
+    return blockedResult('Sync configuration has changed since last approval. Run "aiusage init" to re-approve.')
   }
 
   const backend = createBackend(config)
   if (!backend) {
-    return {
-      status: 'failed',
-      pulledCount: 0,
-      uploadedCount: 0,
-      error: 'Could not create sync backend. Check credentials.',
-    }
+    return failedResult('Could not create sync backend. Check credentials.')
   }
 
   const orchestrator = new SyncOrchestrator(db, backend, {

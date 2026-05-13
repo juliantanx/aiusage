@@ -86,3 +86,16 @@ export async function recalcPricing() {
   }
   return response.json()
 }
+
+export async function triggerSync() {
+  const response = await fetch('/api/sync', { method: 'POST' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function fetchSyncStatus() {
+  return apiFetch('/api/sync')
+}

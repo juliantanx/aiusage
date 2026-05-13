@@ -139,6 +139,15 @@ const translations = {
       noPrice: 'No pricing',
       perMillion: '/ 1M tokens',
     },
+    sync: {
+      trigger: 'Sync',
+      syncing: 'Syncing...',
+      complete: 'Synced',
+      failed: 'Sync failed',
+      notConfigured: 'Not configured',
+      lastSync: 'Last sync',
+      never: 'Never',
+    },
   },
   zh: {
     nav: {
@@ -277,6 +286,15 @@ const translations = {
       matched: '前缀匹配',
       noPrice: '无定价',
       perMillion: '/ 1M tokens',
+    },
+    sync: {
+      trigger: '同步',
+      syncing: '同步中...',
+      complete: '已同步',
+      failed: '同步失败',
+      notConfigured: '未配置',
+      lastSync: '上次同步',
+      never: '从未',
     },
   },
 }
