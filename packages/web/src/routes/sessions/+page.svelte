@@ -1,6 +1,7 @@
 <script>
   import { dateRange, formatTokens, formatCost, formatDate } from '$lib/stores.js'
   import { fetchSessions } from '$lib/api.js'
+  import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
   let data = null
@@ -45,16 +46,16 @@
 </script>
 
 <svelte:head>
-  <title>Sessions - aiusage</title>
+  <title>{$t('sessions.title')} — AIUsage</title>
 </svelte:head>
 
 <DateRangeSelector />
 
 <div class="filters">
-  <label>
-    AI Assistant:
+  <label class="filter-label">
+    <span class="filter-text">{$t('sessions.assistant')}</span>
     <select on:change={handleToolChange}>
-      <option value="">All</option>
+      <option value="">{$t('common.all')}</option>
       <option value="claude-code">Claude Code</option>
       <option value="codex">Codex</option>
       <option value="openclaw">OpenClaw</option>
@@ -63,83 +64,81 @@
 </div>
 
 {#if loading}
-  <div class="loading">Loading...</div>
+  <div class="state-msg">{$t('common.loading')}</div>
 {:else if error}
-  <div class="error">{error}</div>
+  <div class="state-msg error">{error}</div>
 {:else if !data?.sessions.length}
-  <div class="empty">
-    <h2>No sessions</h2>
-    <p>No sessions recorded for this period.</p>
+  <div class="state-msg">
+    <h2>{$t('sessions.noData')}</h2>
+    <p>{$t('sessions.noDataHint')}</p>
   </div>
 {:else}
-  <table>
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th>Tool</th>
-        <th>Model</th>
-        <th>Input</th>
-        <th>Output</th>
-        <th>Cost</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each data.sessions as session}
+  <div class="card">
+    <table>
+      <thead>
         <tr>
-          <td>{formatDate(session.ts)}</td>
-          <td>{session.tool}</td>
-          <td class="model">{session.model}</td>
-          <td>{formatTokens(session.inputTokens)}</td>
-          <td>{formatTokens(session.outputTokens)}</td>
-          <td>{formatCost(session.cost)}</td>
+          <th>{$t('sessions.time')}</th>
+          <th>{$t('sessions.tool')}</th>
+          <th>{$t('sessions.model')}</th>
+          <th>{$t('sessions.input')}</th>
+          <th>{$t('sessions.output')}</th>
+          <th>{$t('sessions.cost')}</th>
         </tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#each data.sessions as session}
+          <tr>
+            <td class="mono">{formatDate(session.ts)}</td>
+            <td>{session.tool}</td>
+            <td class="mono model">{session.model}</td>
+            <td class="mono green">{formatTokens(session.inputTokens)}</td>
+            <td class="mono blue">{formatTokens(session.outputTokens)}</td>
+            <td class="mono accent">{formatCost(session.cost)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 
   <div class="pagination">
-    <button on:click={prevPage} disabled={page <= 1}>Previous</button>
-    <span>Page {page} of {Math.ceil(data.total / pageSize)}</span>
-    <button on:click={nextPage} disabled={page * pageSize >= data.total}>Next</button>
+    <button on:click={prevPage} disabled={page <= 1}>← {$t('common.previous')}</button>
+    <span class="page-info mono">{$t('common.page')} {page} {$t('common.of')} {Math.ceil(data.total / pageSize)}</span>
+    <button on:click={nextPage} disabled={page * pageSize >= data.total}>{$t('common.next')} →</button>
   </div>
 {/if}
 
 <style>
-  .loading, .error, .empty {
-    text-align: center;
-    padding: 3rem;
-    color: #666;
-  }
-  .error { color: #dc3545; }
   .filters {
     margin-bottom: 1rem;
   }
-  label {
-    font-size: 0.875rem;
+  .filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  .filter-text {
+    font-weight: 500;
   }
   select {
-    padding: 0.35rem 0.5rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    margin-left: 0.25rem;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.5rem;
-    border-bottom: 1px solid #eee;
-  }
-  th {
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-family: var(--mono);
     font-size: 0.8rem;
-    text-transform: uppercase;
-    color: #666;
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  select:focus {
+    outline: none;
+    border-color: var(--accent);
   }
   .model {
-    font-family: monospace;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
+    color: var(--text-primary);
   }
   .pagination {
     display: flex;
@@ -147,17 +146,28 @@
     justify-content: center;
     gap: 1rem;
     margin-top: 1.5rem;
-    font-size: 0.875rem;
   }
-  button {
-    padding: 0.4rem 0.8rem;
-    border: 1px solid #ddd;
-    background: white;
-    border-radius: 4px;
+  .pagination button {
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    border-radius: 6px;
     cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
   }
-  button:disabled {
-    opacity: 0.5;
+  .pagination button:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .pagination button:disabled {
+    opacity: 0.35;
     cursor: not-allowed;
+  }
+  .page-info {
+    font-size: 0.75rem;
+    color: var(--text-muted);
   }
 </style>

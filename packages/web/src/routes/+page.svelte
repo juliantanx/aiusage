@@ -1,6 +1,7 @@
 <script>
   import { dateRange, formatNumber, formatCost, formatTokens } from '$lib/stores.js'
   import { fetchSummary } from '$lib/api.js'
+  import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
   let data = null
@@ -24,144 +25,183 @@
 </script>
 
 <svelte:head>
-  <title>Overview - aiusage</title>
+  <title>{$t('overview.title')} — AIUsage</title>
 </svelte:head>
 
 <DateRangeSelector />
 
 {#if loading}
-  <div class="loading">Loading...</div>
+  <div class="state-msg">{$t('common.loading')}</div>
 {:else if error}
-  <div class="error">{error}</div>
+  <div class="state-msg error">{error}</div>
 {:else if !data || data.totalTokens === 0}
-  <div class="empty">
-    <h2>No data available</h2>
-    <p>Start using AI tools to see statistics here.</p>
+  <div class="state-msg">
+    <h2>{$t('common.noData')}</h2>
+    <p>{$t('common.noDataHint')}</p>
   </div>
 {:else}
-  <div class="stats">
-    <div class="stat">
-      <h3>Total Tokens</h3>
-      <p>{formatTokens(data.totalTokens)}</p>
+  <div class="hero-stats">
+    <div class="hero-card">
+      <span class="hero-label">{$t('overview.totalTokens')}</span>
+      <span class="hero-value">{formatTokens(data.totalTokens)}</span>
     </div>
-    <div class="stat">
-      <h3>Total Cost</h3>
-      <p>{formatCost(data.totalCost)}</p>
+    <div class="hero-card accent">
+      <span class="hero-label">{$t('overview.totalCost')}</span>
+      <span class="hero-value">{formatCost(data.totalCost)}</span>
     </div>
-    <div class="stat">
-      <h3>Active Days</h3>
-      <p>{data.activeDays}</p>
+    <div class="hero-card">
+      <span class="hero-label">{$t('overview.activeDays')}</span>
+      <span class="hero-value">{data.activeDays}</span>
     </div>
   </div>
 
-  <div class="sections">
-    <section>
-      <h3>By AI Assistant</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-title">{$t('overview.byTool')}</div>
       {#if Object.keys(data.byTool).length === 0}
-        <p class="muted">No data</p>
+        <p class="muted">{$t('overview.noToolData')}</p>
       {:else}
         <table>
           <thead>
-            <tr><th>Tool</th><th>Tokens</th><th>Cost</th></tr>
+            <tr>
+              <th>{$t('overview.tool')}</th>
+              <th>{$t('overview.tokens')}</th>
+              <th>{$t('overview.cost')}</th>
+            </tr>
           </thead>
           <tbody>
             {#each Object.entries(data.byTool) as [tool, stats]}
               <tr>
-                <td>{tool}</td>
-                <td>{formatTokens(stats.tokens)}</td>
-                <td>{formatCost(stats.cost)}</td>
+                <td class="mono">{tool}</td>
+                <td class="mono">{formatTokens(stats.tokens)}</td>
+                <td class="mono accent">{formatCost(stats.cost)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       {/if}
-    </section>
+    </div>
 
-    <section>
-      <h3>Top Tool Calls</h3>
+    <div class="card">
+      <div class="section-title">{$t('overview.topToolCalls')}</div>
       {#if data.topToolCalls.length === 0}
-        <p class="muted">No tool calls recorded</p>
+        <p class="muted">{$t('overview.noToolCalls')}</p>
       {:else}
-        <div class="tool-calls">
-          {#each data.topToolCalls as tc}
-            <div class="tc-row">
-              <span class="tc-name">{tc.name}</span>
-              <span class="tc-count">{formatNumber(tc.count)}</span>
+        <div class="tc-list">
+          {#each data.topToolCalls as tc, i}
+            <div class="tc-row" style="animation-delay: {i * 40}ms">
+              <span class="tc-rank">#{i + 1}</span>
+              <span class="tc-name mono">{tc.name}</span>
+              <span class="tc-count mono">{formatNumber(tc.count)}</span>
             </div>
           {/each}
         </div>
       {/if}
-    </section>
+    </div>
   </div>
 {/if}
 
 <style>
-  .loading, .error, .empty {
-    text-align: center;
-    padding: 3rem;
-    color: #666;
-  }
-  .error { color: #dc3545; }
-  .stats {
+  .hero-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
   }
-  .stat {
-    background: #f8f9fa;
-    padding: 1.25rem;
-    border-radius: 8px;
-    text-align: center;
-  }
-  .stat h3 {
-    margin: 0;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    color: #666;
-    letter-spacing: 0.05em;
-  }
-  .stat p {
-    margin: 0.5rem 0 0;
-    font-size: 1.75rem;
-    font-weight: 700;
-  }
-  .sections {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-  }
-  section h3 {
-    margin: 0 0 1rem;
-    font-size: 1rem;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.5rem;
-    border-bottom: 1px solid #eee;
-  }
-  th {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    color: #666;
-  }
-  .tool-calls {
+  .hero-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .hero-card:hover {
+    border-color: var(--border-medium);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  }
+  .hero-card.accent {
+    border-color: var(--accent-dim);
+    background: linear-gradient(135deg, var(--bg-surface), var(--accent-dim));
+  }
+  .hero-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+  .hero-value {
+    font-family: var(--mono);
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+  .hero-card.accent .hero-value {
+    color: var(--accent);
+    text-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .muted {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.85rem;
+  }
+
+  .tc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
   }
   .tc-row {
     display: flex;
-    justify-content: space-between;
-    padding: 0.5rem;
-    background: #f8f9fa;
-    border-radius: 4px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    background: var(--bg-raised);
+    transition: background 0.15s;
+    animation: fadeUp 0.3s ease both;
   }
-  .tc-name { font-weight: 500; }
-  .tc-count { color: #007bff; font-weight: 600; }
-  .muted { color: #999; font-style: italic; }
+  .tc-row:hover {
+    background: var(--bg-hover);
+  }
+  .tc-rank {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    width: 2rem;
+    flex-shrink: 0;
+  }
+  .tc-name {
+    flex: 1;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .tc-count {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 768px) {
+    .hero-stats { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
 </style>

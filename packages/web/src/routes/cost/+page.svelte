@@ -1,6 +1,7 @@
 <script>
   import { dateRange, formatCost } from '$lib/stores.js'
   import { fetchCost } from '$lib/api.js'
+  import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
   let data = null
@@ -44,34 +45,32 @@
 </script>
 
 <svelte:head>
-  <title>Cost - aiusage</title>
+  <title>{$t('cost.title')} — AIUsage</title>
 </svelte:head>
 
 <DateRangeSelector />
 
 {#if loading}
-  <div class="loading">Loading...</div>
+  <div class="state-msg">{$t('common.loading')}</div>
 {:else if error}
-  <div class="error">{error}</div>
+  <div class="state-msg error">{error}</div>
 {:else if !data?.data.length}
-  <div class="empty">
-    <h2>No cost data</h2>
-    <p>No costs recorded for this period.</p>
+  <div class="state-msg">
+    <h2>{$t('cost.noData')}</h2>
+    <p>{$t('cost.noDataHint')}</p>
   </div>
 {:else}
-  <div class="summary">
-    <div class="stat">
-      <h3>Total Cost</h3>
-      <p>{formatCost(getTotalCost())}</p>
-    </div>
+  <div class="hero-card accent">
+    <span class="hero-label">{$t('cost.totalCost')}</span>
+    <span class="hero-value">{formatCost(getTotalCost())}</span>
   </div>
 
-  <div class="chart-container">
-    <h3>Cost by Day</h3>
+  <div class="card chart-section">
+    <div class="section-title">{$t('cost.chartTitle')}</div>
     <div class="chart">
-      {#each data.data as day}
+      {#each data.data as day, i}
         {@const max = getMaxCost()}
-        <div class="bar-group">
+        <div class="bar-group" style="animation-delay: {i * 30}ms">
           <div
             class="bar"
             style="height: {getBarHeight(day.cost, max)}px"
@@ -83,106 +82,113 @@
     </div>
   </div>
 
-  <div class="breakdown">
-    <section>
-      <h3>By AI Assistant</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-title">{$t('cost.byTool')}</div>
       {#each getTopEntries(data.byTool, 10) as [tool, cost]}
-        <div class="row">
-          <span>{tool}</span>
-          <span class="cost">{formatCost(cost)}</span>
+        <div class="breakdown-row">
+          <span class="mono">{tool}</span>
+          <span class="mono accent">{formatCost(cost)}</span>
         </div>
       {/each}
-    </section>
-
-    <section>
-      <h3>By Model</h3>
+    </div>
+    <div class="card">
+      <div class="section-title">{$t('cost.byModel')}</div>
       {#each getTopEntries(data.byModel, 10) as [model, cost]}
-        <div class="row">
-          <span>{model}</span>
-          <span class="cost">{formatCost(cost)}</span>
+        <div class="breakdown-row">
+          <span class="mono">{model}</span>
+          <span class="mono accent">{formatCost(cost)}</span>
         </div>
       {/each}
-    </section>
+    </div>
   </div>
 {/if}
 
 <style>
-  .loading, .error, .empty {
-    text-align: center;
-    padding: 3rem;
-    color: #666;
+  .hero-card {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-dim);
+    border-radius: 10px;
+    padding: 1.25rem 2rem;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, var(--bg-surface), var(--accent-dim));
   }
-  .error { color: #dc3545; }
-  .summary {
-    margin-bottom: 2rem;
-  }
-  .stat {
-    background: #f8f9fa;
-    padding: 1.25rem;
-    border-radius: 8px;
-    text-align: center;
-    display: inline-block;
-    min-width: 200px;
-  }
-  .stat h3 {
-    margin: 0;
-    font-size: 0.8rem;
+  .hero-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 600;
     text-transform: uppercase;
-    color: #666;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
   }
-  .stat p {
-    margin: 0.5rem 0 0;
+  .hero-value {
+    font-family: var(--mono);
     font-size: 1.75rem;
     font-weight: 700;
+    color: var(--accent);
+    text-shadow: 0 0 20px var(--accent-glow);
   }
-  .chart-container {
-    margin-bottom: 2rem;
-  }
-  .chart-container h3 {
-    margin: 0 0 1rem;
+
+  .chart-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
   }
   .chart {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
+    gap: 3px;
     height: 220px;
-    padding: 0 0 20px;
-    border-bottom: 1px solid #eee;
+    padding: 0 0 16px;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .bar-group {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
+    animation: fadeUp 0.3s ease both;
   }
   .bar {
-    width: 16px;
+    width: 14px;
     min-height: 2px;
-    background: #FF9800;
+    background: var(--accent);
     border-radius: 2px 2px 0 0;
-    transition: height 0.3s;
+    transition: height 0.4s ease;
+    box-shadow: 0 0 8px var(--accent-dim);
   }
   .label {
-    font-size: 0.7rem;
-    color: #666;
-    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    margin-top: 6px;
   }
-  .breakdown {
+
+  .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    gap: 1rem;
   }
-  section h3 {
-    margin: 0 0 1rem;
-  }
-  .row {
+  .breakdown-row {
     display: flex;
     justify-content: space-between;
-    padding: 0.4rem 0;
-    border-bottom: 1px solid #eee;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
   }
-  .cost {
-    font-weight: 600;
-    color: #FF9800;
+  .breakdown-row:last-child {
+    border-bottom: none;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr; }
   }
 </style>

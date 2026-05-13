@@ -1,6 +1,7 @@
 <script>
   import { dateRange, formatTokens, formatNumber } from '$lib/stores.js'
   import { fetchModels } from '$lib/api.js'
+  import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
   let data = null
@@ -24,87 +25,92 @@
 </script>
 
 <svelte:head>
-  <title>Models - aiusage</title>
+  <title>{$t('models.title')} — AIUsage</title>
 </svelte:head>
 
 <DateRangeSelector />
 
 {#if loading}
-  <div class="loading">Loading...</div>
+  <div class="state-msg">{$t('common.loading')}</div>
 {:else if error}
-  <div class="error">{error}</div>
+  <div class="state-msg error">{error}</div>
 {:else if !data?.models.length}
-  <div class="empty">
-    <h2>No model data</h2>
-    <p>No model usage recorded for this period.</p>
+  <div class="state-msg">
+    <h2>{$t('models.noData')}</h2>
+    <p>{$t('models.noDataHint')}</p>
   </div>
 {:else}
-  <table>
-    <thead>
-      <tr>
-        <th>Model</th>
-        <th>Provider</th>
-        <th>Calls</th>
-        <th>Tokens</th>
-        <th>Share</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each data.models as model}
+  <div class="card">
+    <table>
+      <thead>
         <tr>
-          <td class="model-name">{model.model}</td>
-          <td class="provider">{model.provider}</td>
-          <td>{formatNumber(model.callCount)}</td>
-          <td>{formatTokens(model.totalTokens)}</td>
-          <td>
-            <div class="bar-container">
-              <div class="bar" style="width: {model.percentage}%"></div>
-              <span>{model.percentage.toFixed(1)}%</span>
-            </div>
-          </td>
+          <th>{$t('models.model')}</th>
+          <th>{$t('models.provider')}</th>
+          <th>{$t('models.calls')}</th>
+          <th>{$t('models.tokens')}</th>
+          <th>{$t('models.share')}</th>
         </tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#each data.models as model, i}
+          <tr style="animation-delay: {i * 40}ms" class="animate-row">
+            <td class="mono model-name">{model.model}</td>
+            <td style="color: var(--text-muted)">{model.provider}</td>
+            <td class="mono">{formatNumber(model.callCount)}</td>
+            <td class="mono">{formatTokens(model.totalTokens)}</td>
+            <td>
+              <div class="bar-cell">
+                <div class="bar-track">
+                  <div class="bar-fill" style="width: {model.percentage}%"></div>
+                </div>
+                <span class="mono pct">{model.percentage.toFixed(1)}%</span>
+              </div>
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 {/if}
 
 <style>
-  .loading, .error, .empty {
-    text-align: center;
-    padding: 3rem;
-    color: #666;
-  }
-  .error { color: #dc3545; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.75rem 0.5rem;
-    border-bottom: 1px solid #eee;
-  }
-  th {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    color: #666;
-  }
   .model-name {
     font-weight: 600;
-    font-family: monospace;
+    color: var(--text-primary);
   }
-  .provider {
-    color: #666;
-  }
-  .bar-container {
+  .bar-cell {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
-  .bar {
-    height: 8px;
-    background: #007bff;
-    border-radius: 4px;
-    min-width: 4px;
+  .bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-raised);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 120px;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.6s ease;
+    box-shadow: 0 0 6px var(--accent-dim);
+  }
+  .pct {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-width: 3rem;
+    text-align: right;
+  }
+
+  .animate-row {
+    animation: fadeUp 0.3s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>

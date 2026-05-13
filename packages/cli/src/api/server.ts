@@ -21,6 +21,14 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     return { where: `AND ${ts} >= @start`, params: { start: startOfMonth.toISOString() } }
   }
+  if (range === 'last30') {
+    const start = new Date(today)
+    start.setDate(start.getDate() - 30)
+    return { where: `AND ${ts} >= @start`, params: { start: start.toISOString() } }
+  }
+  if (range === 'all') {
+    return { where: '', params: {} }
+  }
   // default: day
   return { where: `AND ${ts} >= @start`, params: { start: today.toISOString() } }
 }
@@ -51,7 +59,7 @@ export function createApiServer(db: Database.Database): http.Server {
     try {
       // ── /api/summary ──────────────────────────────────────────────
       if (url.pathname === '/api/summary') {
-        if (range && !['day', 'week', 'month'].includes(range)) {
+        if (range && !['day', 'week', 'month', 'last30', 'all'].includes(range)) {
           json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid range' } }, 400)
           return
         }

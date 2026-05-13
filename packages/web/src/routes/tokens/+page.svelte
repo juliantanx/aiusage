@@ -1,6 +1,7 @@
 <script>
   import { dateRange, formatTokens } from '$lib/stores.js'
   import { fetchTokens } from '$lib/api.js'
+  import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
   let data = null
@@ -33,44 +34,44 @@
 </script>
 
 <svelte:head>
-  <title>Tokens - aiusage</title>
+  <title>{$t('tokens.title')} — AIUsage</title>
 </svelte:head>
 
 <DateRangeSelector />
 
 {#if loading}
-  <div class="loading">Loading...</div>
+  <div class="state-msg">{$t('common.loading')}</div>
 {:else if error}
-  <div class="error">{error}</div>
+  <div class="state-msg error">{error}</div>
 {:else if !data?.data.length}
-  <div class="empty">
-    <h2>No token data</h2>
-    <p>No token usage recorded for this period.</p>
+  <div class="state-msg">
+    <h2>{$t('tokens.noData')}</h2>
+    <p>{$t('tokens.noDataHint')}</p>
   </div>
 {:else}
-  <div class="chart-container">
-    <h3>Token Usage by Day</h3>
+  <div class="card chart-section">
+    <div class="section-title">{$t('tokens.chartTitle')}</div>
     <div class="chart">
-      {#each data.data as day}
+      {#each data.data as day, i}
         {@const total = day.inputTokens + day.outputTokens + day.thinkingTokens}
         {@const max = getMaxTokens()}
-        <div class="bar-group">
+        <div class="bar-group" style="animation-delay: {i * 30}ms">
           <div class="bars">
             <div
               class="bar input"
               style="height: {getBarHeight(day.inputTokens, max)}px"
-              title="Input: {formatTokens(day.inputTokens)}"
+              title="{$t('tokens.input')}: {formatTokens(day.inputTokens)}"
             ></div>
             <div
               class="bar output"
               style="height: {getBarHeight(day.outputTokens, max)}px"
-              title="Output: {formatTokens(day.outputTokens)}"
+              title="{$t('tokens.output')}: {formatTokens(day.outputTokens)}"
             ></div>
             {#if day.thinkingTokens > 0}
               <div
                 class="bar thinking"
                 style="height: {getBarHeight(day.thinkingTokens, max)}px"
-                title="Thinking: {formatTokens(day.thinkingTokens)}"
+                title="{$t('tokens.thinking')}: {formatTokens(day.thinkingTokens)}"
               ></div>
             {/if}
           </div>
@@ -79,56 +80,58 @@
       {/each}
     </div>
     <div class="legend">
-      <span class="legend-item"><span class="dot input"></span> Input</span>
-      <span class="legend-item"><span class="dot output"></span> Output</span>
-      <span class="legend-item"><span class="dot thinking"></span> Thinking</span>
+      <span class="legend-item"><span class="dot input"></span> {$t('tokens.input')}</span>
+      <span class="legend-item"><span class="dot output"></span> {$t('tokens.output')}</span>
+      <span class="legend-item"><span class="dot thinking"></span> {$t('tokens.thinking')}</span>
     </div>
   </div>
 
-  <table>
-    <thead>
-      <tr><th>Date</th><th>Input</th><th>Output</th><th>Thinking</th><th>Total</th></tr>
-    </thead>
-    <tbody>
-      {#each data.data as day}
+  <div class="card" style="margin-top: 1rem;">
+    <table>
+      <thead>
         <tr>
-          <td>{day.date}</td>
-          <td>{formatTokens(day.inputTokens)}</td>
-          <td>{formatTokens(day.outputTokens)}</td>
-          <td>{formatTokens(day.thinkingTokens)}</td>
-          <td><strong>{formatTokens(day.inputTokens + day.outputTokens + day.thinkingTokens)}</strong></td>
+          <th>{$t('tokens.date')}</th>
+          <th>{$t('tokens.input')}</th>
+          <th>{$t('tokens.output')}</th>
+          <th>{$t('tokens.thinking')}</th>
+          <th>{$t('tokens.total')}</th>
         </tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#each data.data as day}
+          <tr>
+            <td class="mono">{day.date}</td>
+            <td class="mono green">{formatTokens(day.inputTokens)}</td>
+            <td class="mono blue">{formatTokens(day.outputTokens)}</td>
+            <td class="mono purple">{formatTokens(day.thinkingTokens)}</td>
+            <td class="mono" style="color:var(--text-primary); font-weight:600">
+              {formatTokens(day.inputTokens + day.outputTokens + day.thinkingTokens)}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 {/if}
 
 <style>
-  .loading, .error, .empty {
-    text-align: center;
-    padding: 3rem;
-    color: #666;
-  }
-  .error { color: #dc3545; }
-  .chart-container {
-    margin-bottom: 2rem;
-  }
-  .chart-container h3 {
-    margin: 0 0 1rem;
+  .chart-section {
+    padding-bottom: 1.5rem;
   }
   .chart {
     display: flex;
     align-items: flex-end;
-    gap: 4px;
+    gap: 3px;
     height: 220px;
-    padding: 0 0 20px;
-    border-bottom: 1px solid #eee;
+    padding: 0 0 16px;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .bar-group {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
+    animation: fadeUp 0.3s ease both;
   }
   .bars {
     display: flex;
@@ -136,51 +139,44 @@
     align-items: flex-end;
   }
   .bar {
-    width: 12px;
+    width: 10px;
     min-height: 2px;
     border-radius: 2px 2px 0 0;
-    transition: height 0.3s;
+    transition: height 0.4s ease;
   }
-  .bar.input { background: #4CAF50; }
-  .bar.output { background: #2196F3; }
-  .bar.thinking { background: #9C27B0; }
+  .bar.input { background: var(--green); }
+  .bar.output { background: var(--blue); }
+  .bar.thinking { background: var(--purple); }
   .label {
-    font-size: 0.7rem;
-    color: #666;
-    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    margin-top: 6px;
   }
   .legend {
     display: flex;
-    gap: 1rem;
-    margin-top: 0.75rem;
+    gap: 1.25rem;
+    margin-top: 1rem;
     justify-content: center;
   }
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    font-size: 0.8rem;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
   }
   .dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 2px;
   }
-  .dot.input { background: #4CAF50; }
-  .dot.output { background: #2196F3; }
-  .dot.thinking { background: #9C27B0; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.5rem;
-    border-bottom: 1px solid #eee;
-  }
-  th {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    color: #666;
+  .dot.input { background: var(--green); }
+  .dot.output { background: var(--blue); }
+  .dot.thinking { background: var(--purple); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>

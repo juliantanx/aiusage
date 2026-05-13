@@ -1,0 +1,225 @@
+import { writable, derived } from 'svelte/store'
+
+const translations = {
+  en: {
+    nav: {
+      overview: 'Overview',
+      tokens: 'Tokens',
+      cost: 'Cost',
+      models: 'Models',
+      toolCalls: 'Tool Calls',
+      sessions: 'Sessions',
+    },
+    common: {
+      loading: 'Loading...',
+      error: 'Error',
+      noData: 'No data available',
+      noDataHint: 'Start using AI tools to see statistics here.',
+      apply: 'Apply',
+      all: 'All',
+      previous: 'Previous',
+      next: 'Next',
+      page: 'Page',
+      of: 'of',
+    },
+    range: {
+      today: 'Today',
+      week: 'This Week',
+      month: 'This Month',
+      last30: 'Last 30d',
+      allTime: 'All Time',
+      from: 'From',
+      to: 'To',
+      pickMonth: 'Month...',
+    },
+    overview: {
+      title: 'Overview',
+      totalTokens: 'Total Tokens',
+      totalCost: 'Total Cost',
+      activeDays: 'Active Days',
+      byTool: 'By AI Assistant',
+      topToolCalls: 'Top Tool Calls',
+      tool: 'Tool',
+      tokens: 'Tokens',
+      cost: 'Cost',
+      noToolData: 'No data',
+      noToolCalls: 'No tool calls recorded',
+    },
+    tokens: {
+      title: 'Tokens',
+      chartTitle: 'Token Usage by Day',
+      input: 'Input',
+      output: 'Output',
+      thinking: 'Thinking',
+      date: 'Date',
+      total: 'Total',
+      noData: 'No token data',
+      noDataHint: 'No token usage recorded for this period.',
+    },
+    cost: {
+      title: 'Cost',
+      totalCost: 'Total Cost',
+      chartTitle: 'Cost by Day',
+      byTool: 'By AI Assistant',
+      byModel: 'By Model',
+      noData: 'No cost data',
+      noDataHint: 'No costs recorded for this period.',
+    },
+    models: {
+      title: 'Models',
+      model: 'Model',
+      provider: 'Provider',
+      calls: 'Calls',
+      tokens: 'Tokens',
+      share: 'Share',
+      noData: 'No model data',
+      noDataHint: 'No model usage recorded for this period.',
+    },
+    toolCalls: {
+      title: 'Tool Calls',
+      noData: 'No tool call data',
+      noDataHint: 'No tool calls recorded for this period.',
+    },
+    sessions: {
+      title: 'Sessions',
+      assistant: 'AI Assistant',
+      time: 'Time',
+      tool: 'Tool',
+      model: 'Model',
+      input: 'Input',
+      output: 'Output',
+      cost: 'Cost',
+      noData: 'No sessions',
+      noDataHint: 'No sessions recorded for this period.',
+    },
+    theme: {
+      system: 'System',
+      dark: 'Dark',
+      light: 'Light',
+    },
+  },
+  zh: {
+    nav: {
+      overview: '概览',
+      tokens: 'Token',
+      cost: '费用',
+      models: '模型',
+      toolCalls: '工具调用',
+      sessions: '会话',
+    },
+    common: {
+      loading: '加载中...',
+      error: '错误',
+      noData: '暂无数据',
+      noDataHint: '开始使用 AI 工具后，统计数据将显示在此处。',
+      apply: '应用',
+      all: '全部',
+      previous: '上一页',
+      next: '下一页',
+      page: '第',
+      of: '页，共',
+    },
+    range: {
+      today: '今天',
+      week: '本周',
+      month: '本月',
+      last30: '近 30 天',
+      allTime: '全部',
+      from: '开始',
+      to: '结束',
+      pickMonth: '选择月份...',
+    },
+    overview: {
+      title: '概览',
+      totalTokens: '总 Token',
+      totalCost: '总费用',
+      activeDays: '活跃天数',
+      byTool: '按 AI 助手',
+      topToolCalls: '常用工具',
+      tool: '工具',
+      tokens: 'Token',
+      cost: '费用',
+      noToolData: '暂无数据',
+      noToolCalls: '暂无工具调用记录',
+    },
+    tokens: {
+      title: 'Token',
+      chartTitle: '每日 Token 用量',
+      input: '输入',
+      output: '输出',
+      thinking: '思考',
+      date: '日期',
+      total: '合计',
+      noData: '暂无 Token 数据',
+      noDataHint: '当前时间段内无 Token 使用记录。',
+    },
+    cost: {
+      title: '费用',
+      totalCost: '总费用',
+      chartTitle: '每日费用',
+      byTool: '按 AI 助手',
+      byModel: '按模型',
+      noData: '暂无费用数据',
+      noDataHint: '当前时间段内无费用记录。',
+    },
+    models: {
+      title: '模型',
+      model: '模型',
+      provider: '提供商',
+      calls: '调用次数',
+      tokens: 'Token',
+      share: '占比',
+      noData: '暂无模型数据',
+      noDataHint: '当前时间段内无模型使用记录。',
+    },
+    toolCalls: {
+      title: '工具调用',
+      noData: '暂无工具调用数据',
+      noDataHint: '当前时间段内无工具调用记录。',
+    },
+    sessions: {
+      title: '会话',
+      assistant: 'AI 助手',
+      time: '时间',
+      tool: '工具',
+      model: '模型',
+      input: '输入',
+      output: '输出',
+      cost: '费用',
+      noData: '暂无会话',
+      noDataHint: '当前时间段内无会话记录。',
+    },
+    theme: {
+      system: '跟随系统',
+      dark: '深色',
+      light: '浅色',
+    },
+  },
+}
+
+function getStoredLang() {
+  if (typeof window === 'undefined') return 'en'
+  return localStorage.getItem('aiusage-lang') || 'en'
+}
+
+export const lang = writable(getStoredLang())
+
+export function toggleLang() {
+  lang.update(current => {
+    const next = current === 'en' ? 'zh' : 'en'
+    if (typeof window !== 'undefined') localStorage.setItem('aiusage-lang', next)
+    return next
+  })
+}
+
+export const t = derived(lang, ($lang) => {
+  const dict = translations[$lang] || translations.en
+  return (key) => {
+    const parts = key.split('.')
+    let result = dict
+    for (const part of parts) {
+      result = result?.[part]
+    }
+    return result || key
+  }
+})
