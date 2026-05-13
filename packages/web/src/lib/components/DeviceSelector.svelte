@@ -31,7 +31,7 @@
   >
     <option value="">{$t('device.allDevices')}</option>
     {#each devices as d}
-      <option value={d.deviceInstanceId}>{d.device} ({d.recordCount})</option>
+      <option value={d.deviceInstanceId}>{d.displayName} ({d.recordCount})</option>
     {/each}
   </select>
 </div>

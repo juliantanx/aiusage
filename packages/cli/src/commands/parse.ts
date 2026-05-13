@@ -1,11 +1,12 @@
 import type Database from 'better-sqlite3'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, extname } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, hostname } from 'node:os'
 import { Aggregator, type Tool } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
+import { loadConfig } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
 
 interface ParseResult {
@@ -92,7 +93,8 @@ function extractSessionId(filePath: string, tool: Tool): string {
 
 export async function runParse(db: Database.Database, filterTool?: string): Promise<ParseResult> {
   const state = getState(join(homedir(), '.aiusage'))
-  const device = state?.deviceInstanceId?.slice(0, 8) ?? 'unknown'
+  const config = loadConfig()
+  const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
   const deviceInstanceId = state?.deviceInstanceId ?? 'unknown'
 
   const watermarkPath = join(homedir(), '.aiusage', 'watermark.json')

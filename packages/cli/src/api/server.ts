@@ -1,6 +1,8 @@
 import http from 'node:http'
+import { hostname } from 'node:os'
 import type Database from 'better-sqlite3'
 import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
+import { loadConfig } from '../config.js'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = ''): { where: string; params: Record<string, unknown> } {
   const ts = prefix ? `${prefix}.ts` : 'ts'
@@ -731,6 +733,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           return
         }
 
+        const config = loadConfig()
+        const currentDeviceAlias = config?.device || hostname()
+
         // Current device from records
         const localRows = db.prepare(`
           SELECT device, device_instance_id AS deviceInstanceId, COUNT(*) AS recordCount
@@ -746,17 +751,25 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           GROUP BY device_instance_id
         `).all({ currentId }) as any[]
 
+        function getDisplayName(device: string, deviceInstanceId: string): string {
+          if (deviceInstanceId === currentId) return currentDeviceAlias
+          if (device && device !== 'unknown' && !/^[0-9a-f]{8}$/.test(device)) return device
+          return `Device (${deviceInstanceId.slice(0, 8)})`
+        }
+
         // Merge and deduplicate
-        const deviceMap = new Map<string, { device: string; deviceInstanceId: string; recordCount: number }>()
+        const deviceMap = new Map<string, { device: string; deviceInstanceId: string; displayName: string; recordCount: number }>()
         for (const row of localRows) {
-          deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, recordCount: row.recordCount })
+          const displayName = getDisplayName(row.device, row.deviceInstanceId)
+          deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, displayName, recordCount: row.recordCount })
         }
         for (const row of syncedRows) {
+          const displayName = getDisplayName(row.device, row.deviceInstanceId)
           const existing = deviceMap.get(row.deviceInstanceId)
           if (existing) {
             existing.recordCount += row.recordCount
           } else {
-            deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, recordCount: row.recordCount })
+            deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, displayName, recordCount: row.recordCount })
           }
         }
 
