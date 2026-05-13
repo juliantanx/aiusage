@@ -1,0 +1,8 @@
+node_modules/
+.git/
+.idea/
+*.tsbuildinfo
+.DS_Store
+packages/core/dist/
+packages/cli/dist/
+packages/web/.svelte-kit/
