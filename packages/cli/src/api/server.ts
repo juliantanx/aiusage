@@ -736,12 +736,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const config = loadConfig()
         const currentDeviceAlias = config?.device || hostname()
 
-        // Current device from records
+        // Current device: only truly local records (not merged from synced)
         const localRows = db.prepare(`
           SELECT device, device_instance_id AS deviceInstanceId, COUNT(*) AS recordCount
           FROM records
+          WHERE device_instance_id = @currentId OR source_file NOT LIKE 'synced/%'
           GROUP BY device_instance_id
-        `).all() as any[]
+        `).all({ currentId }) as any[]
 
         // Other devices from synced_records (exclude current device's copy)
         const syncedRows = db.prepare(`
@@ -753,8 +754,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         function getDisplayName(device: string, deviceInstanceId: string): string {
           if (deviceInstanceId === currentId) return currentDeviceAlias
+          // device alias from parse: config.device || hostname() || UUID前8位
+          // If it looks like a hostname or user-set alias, use it directly
           if (device && device !== 'unknown' && !/^[0-9a-f]{8}$/.test(device)) return device
-          return `Device (${deviceInstanceId.slice(0, 8)})`
+          // UUID prefix — show first 8 chars
+          if (/^[0-9a-f]{8}-/.test(deviceInstanceId)) return deviceInstanceId.slice(0, 8)
+          // deviceInstanceId is "unknown" or other non-UUID — try device field as last resort
+          if (device && device !== 'unknown') return device
+          return 'Unknown Device'
         }
 
         // Merge and deduplicate
