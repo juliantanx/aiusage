@@ -1,5 +1,7 @@
 import { Command } from 'commander'
 import { serve } from './commands/serve.js'
+import { runInit } from './commands/init.js'
+import { runSync } from './commands/sync.js'
 import { createDatabase } from './db/index.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -80,6 +82,49 @@ program
   .action((options) => {
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
     serve({ port: parseInt(options.port), db })
+  })
+
+// init command
+program
+  .command('init')
+  .description('Configure cloud sync')
+  .option('--backend <backend>', 'Sync backend (github|s3|skip)')
+  .option('--repo <repo>', 'GitHub repository (format: username/repo-name)')
+  .option('--token <token>', 'GitHub Personal Access Token')
+  .option('--bucket <bucket>', 'S3 bucket name')
+  .option('--prefix <prefix>', 'S3 object prefix', 'aiusage/')
+  .option('--endpoint <endpoint>', 'S3 endpoint URL')
+  .option('--region <region>', 'S3 region', 'auto')
+  .option('--access-key-id <id>', 'S3 access key ID')
+  .option('--secret-access-key <key>', 'S3 secret access key')
+  .option('--device <alias>', 'Device alias')
+  .action((options) => {
+    const result = runInit(options)
+    if (result.success) {
+      console.log(`✓ ${result.message}`)
+    } else {
+      console.error(`✗ ${result.message}`)
+      process.exit(1)
+    }
+  })
+
+// sync command
+program
+  .command('sync')
+  .description('Sync data with cloud storage')
+  .action(async () => {
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const result = await runSync(db)
+    if (result.status === 'ok') {
+      console.log(`✓ Sync complete — pulled: ${result.pulledCount}, uploaded: ${result.uploadedCount}`)
+    } else if (result.status === 'blocked_pending_consent') {
+      console.error(`✗ ${result.error}`)
+      process.exit(1)
+    } else {
+      console.error(`✗ Sync failed: ${result.error}`)
+      process.exit(1)
+    }
+    db.close()
   })
 
 export { program }
