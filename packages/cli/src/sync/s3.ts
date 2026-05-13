@@ -1,0 +1,86 @@
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
+
+export interface S3Config {
+  bucket: string
+  prefix: string
+  accessKeyId: string
+  secretAccessKey: string
+  endpoint?: string
+  region?: string
+}
+
+export class S3SyncBackend {
+  private client: S3Client
+  private bucket: string
+  private prefix: string
+
+  constructor(config: S3Config) {
+    this.bucket = config.bucket
+    // Ensure prefix ends with / and doesn't start with /
+    this.prefix = config.prefix.replace(/^\/+/, '').replace(/\/?$/, '/')
+    this.client = new S3Client({
+      region: config.region ?? 'auto',
+      ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+    })
+  }
+
+  getObjectKey(path: string): string {
+    return `${this.prefix}${path}`
+  }
+
+  async readFile(path: string): Promise<{ sha: string; content: string } | null> {
+    const key = this.getObjectKey(path)
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      })
+      const response = await this.client.send(command)
+
+      if (!response.Body) return null
+
+      const content = await response.Body.transformToString('utf-8')
+      const etag = response.ETag?.replace(/"/g, '') ?? ''
+
+      return { sha: etag, content }
+    } catch (error: any) {
+      if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+        return null
+      }
+      throw error
+    }
+  }
+
+  async writeFile(path: string, content: string, sha?: string): Promise<void> {
+    const key = this.getObjectKey(path)
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: content,
+      ContentType: 'application/x-ndjson',
+      ...(sha ? { IfMatch: `"${sha}"` } : {}),
+    })
+    await this.client.send(command)
+  }
+
+  async fileExists(path: string): Promise<boolean> {
+    const key = this.getObjectKey(path)
+    try {
+      const command = new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      })
+      await this.client.send(command)
+      return true
+    } catch (error: any) {
+      if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+        return false
+      }
+      throw error
+    }
+  }
+}
