@@ -396,19 +396,50 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       // ── /api/models ───────────────────────────────────────────────
       if (url.pathname === '/api/models') {
         const dr = getDateRangeFilter(range, from, to)
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
 
-        const totalRow = db.prepare(`
-          SELECT COUNT(*) AS total FROM records WHERE 1=1 ${dr.where}
-        `).get(dr.params) as any
-        const total = totalRow.total || 1
+        let total: number
+        let rows: any[]
 
-        const rows = db.prepare(`
-          SELECT model, provider,
-                 COUNT(*) AS callCount,
-                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-          FROM records WHERE 1=1 ${dr.where}
-          GROUP BY model, provider ORDER BY callCount DESC
-        `).all(dr.params) as any[]
+        if (df.useUnion) {
+          const unionSql = `
+            SELECT model, provider, COUNT(*) AS callCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY model, provider
+            UNION ALL
+            SELECT model, provider, COUNT(*) AS callCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            GROUP BY model, provider
+          `
+          const mergedRows = db.prepare(`
+            SELECT model, provider, SUM(callCount) AS callCount, SUM(totalTokens) AS totalTokens
+            FROM (${unionSql})
+            GROUP BY model, provider ORDER BY callCount DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+          total = mergedRows.reduce((s, r) => s + r.callCount, 0) || 1
+          rows = mergedRows
+        } else if (device && device !== options?.currentDeviceInstanceId) {
+          rows = db.prepare(`
+            SELECT model, provider,
+                   COUNT(*) AS callCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY model, provider ORDER BY callCount DESC
+          `).all({ ...df.params, ...dr.params }) as any[]
+          total = rows.reduce((s, r) => s + r.callCount, 0) || 1
+        } else {
+          rows = db.prepare(`
+            SELECT model, provider,
+                   COUNT(*) AS callCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY model, provider ORDER BY callCount DESC
+          `).all(dr.params) as any[]
+          total = rows.reduce((s, r) => s + r.callCount, 0) || 1
+        }
 
         const models = rows.map(r => ({
           model: r.model,
@@ -424,6 +455,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/tool-calls ───────────────────────────────────────────
       if (url.pathname === '/api/tool-calls') {
+        const device = url.searchParams.get('device')
+        if (device && device !== options?.currentDeviceInstanceId) {
+          json(res, { toolCalls: [] })
+          return
+        }
+
         const dr = getDateRangeFilter(range, from, to, 'r')
 
         const totalRow = db.prepare(`
@@ -453,10 +490,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/sessions ─────────────────────────────────────────────
       if (url.pathname === '/api/sessions') {
-        const dr = getDateRangeFilter(range, from, to)
-        const tool = url.searchParams.get('tool')
+        const device = url.searchParams.get('device')
         const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
         const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '50', 10)))
+
+        if (device && device !== options?.currentDeviceInstanceId) {
+          json(res, { sessions: [], total: 0, page, pageSize })
+          return
+        }
+
+        const dr = getDateRangeFilter(range, from, to)
+        const tool = url.searchParams.get('tool')
 
         let toolFilter = ''
         const params: Record<string, unknown> = { ...dr.params }
@@ -499,6 +543,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       // ── /api/projects ─────────────────────────────────────────────
       if (url.pathname === '/api/projects') {
         const dr = getDateRangeFilter(range, from, to)
+        const device = url.searchParams.get('device')
+
+        if (device && device !== options?.currentDeviceInstanceId) {
+          json(res, { projects: [] })
+          return
+        }
 
         const rows = db.prepare(`
           SELECT source_file,

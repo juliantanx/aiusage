@@ -192,4 +192,24 @@ describe('Device filtering', () => {
     expect(data.byTool['claude-code']).toBeCloseTo(0.001)
     expect(data.byTool['codex']).toBeCloseTo(0.003)
   })
+
+  it('models with no device param returns merged data', async () => {
+    const res = await fetch(`${baseUrl}/api/models?range=all`)
+    const data = await res.json()
+    const models = data.models.map((m: any) => m.model)
+    expect(models).toContain('claude-sonnet-4-6')
+    expect(models).toContain('gpt-4.1')
+  })
+
+  it('sessions with other device returns empty', async () => {
+    const res = await fetch(`${baseUrl}/api/sessions?range=all&device=remote-uuid-0001`)
+    const data = await res.json()
+    expect(data.sessions).toEqual([])
+  })
+
+  it('projects with no device param returns merged data', async () => {
+    const res = await fetch(`${baseUrl}/api/projects?range=all`)
+    const data = await res.json()
+    expect(data.projects.length).toBeGreaterThan(0)
+  })
 })
