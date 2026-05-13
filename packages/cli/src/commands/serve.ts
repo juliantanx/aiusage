@@ -99,7 +99,7 @@ export function serve(options: ServeOptions): void {
     res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Web dashboard not built. Run "pnpm --filter @aiusage/web build" first.' } }))
   })
 
-  server.listen(options.port, '127.0.0.1', () => {
+  server.listen(options.port, '0.0.0.0', () => {
     console.log(`aiusage serve listening on http://localhost:${options.port}`)
   })
 
