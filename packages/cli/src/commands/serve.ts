@@ -40,11 +40,12 @@ function findMonorepoRoot(): string {
 }
 
 export function serve(options: ServeOptions): void {
+  const state = getState(AIUSAGE_DIR)
   const apiServer = createApiServer(options.db, {
+    currentDeviceInstanceId: state?.deviceInstanceId,
     onRefresh: () => runParse(options.db),
     onSync: () => runSync(options.db),
     getSyncStatus: () => {
-      const state = getState(AIUSAGE_DIR)
       if (!state) return null
       return {
         lastSyncAt: state.lastSyncAt,
