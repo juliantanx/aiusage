@@ -97,6 +97,7 @@ export class CodexParser implements Parser {
       sourceFile: context.sourceFile,
       device: context.device,
       deviceInstanceId: context.deviceInstanceId,
+      platform: context.platform,
     }
 
     // Associate pending tool calls

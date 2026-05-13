@@ -11,6 +11,7 @@ export interface CreateContextOptions {
   sessionId: string
   device: string
   deviceInstanceId: string
+  platform?: string
 }
 
 export class Aggregator {

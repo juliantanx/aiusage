@@ -63,6 +63,7 @@ export class ClaudeCodeParser implements Parser {
       sourceFile: context.sourceFile,
       device: context.device,
       deviceInstanceId: context.deviceInstanceId,
+      platform: context.platform,
     }
 
     // Extract tool calls from message.content

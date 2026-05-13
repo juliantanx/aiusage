@@ -21,6 +21,7 @@ export interface StatsRecord {
   sourceFile: string                   // 来源日志文件的绝对路径
   device: string                       // 设备别名
   deviceInstanceId: string             // 当前安装实例生成的稳定设备实例 ID
+  platform?: string                    // 'win32' | 'darwin' | 'linux'
 }
 
 export interface ToolCallRecord {
@@ -47,6 +48,7 @@ export interface SyncRecord {
   sessionKey: string                   // sha256(device + sessionId)[0:24]
   device: string
   deviceInstanceId: string
+  platform?: string                    // 'win32' | 'darwin' | 'linux'
   updatedAt: number
 }
 
@@ -80,6 +82,7 @@ export interface ParseContext {
   now: number                          // Current timestamp for ingestedAt/updatedAt
   device: string
   deviceInstanceId: string
+  platform?: string                    // 'win32' | 'darwin' | 'linux'
 }
 
 export interface ParseResult {

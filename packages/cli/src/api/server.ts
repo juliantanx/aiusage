@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { hostname } from 'node:os'
+import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
 import { loadConfig } from '../config.js'
@@ -60,7 +60,6 @@ function extractProject(sourceFile: string): string {
 }
 
 export interface ApiServerOptions {
-  db: Database.Database
   currentDeviceInstanceId?: string
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
   onSync?: () => Promise<{ status: string; pulledCount: number; uploadedCount: number; mergedCount: number; error?: string }>
@@ -74,7 +73,11 @@ interface DeviceFilter {
   params: Record<string, unknown>
   /** True when query should UNION records + synced_records */
   useUnion: boolean
+  /** True when querying records table should exclude merged synced records */
+  localOnly: boolean
 }
+
+const LOCAL_ONLY_FILTER = "AND source_file NOT LIKE 'synced/%'"
 
 function getDeviceFilter(
   device: string | null | undefined,
@@ -82,21 +85,23 @@ function getDeviceFilter(
 ): DeviceFilter {
   if (!currentDeviceInstanceId) {
     // No device instance ID available — query only records (legacy behavior)
-    return { where: '', params: {}, useUnion: false }
+    return { where: '', params: {}, useUnion: false, localOnly: false }
   }
 
   if (!device) {
-    // All devices: UNION records + synced_records (excluding current device's synced copy)
+    // All devices: UNION local records + synced_records from other devices
+    // localOnly=true prevents double-counting merged synced records
     return {
       where: '',
       params: { currentDeviceId: currentDeviceInstanceId },
       useUnion: true,
+      localOnly: true,
     }
   }
 
   if (device === currentDeviceInstanceId) {
-    // Current device only: query records only
-    return { where: '', params: {}, useUnion: false }
+    // Current device only: query local records only (not merged synced from other devices)
+    return { where: '', params: {}, useUnion: false, localOnly: true }
   }
 
   // Specific other device: query synced_records only
@@ -104,6 +109,7 @@ function getDeviceFilter(
     where: 'AND device_instance_id = @deviceId',
     params: { deviceId: device },
     useUnion: false,
+    localOnly: false,
   }
 }
 
@@ -143,7 +149,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           // All devices: UNION records + synced_records (excluding current device's synced copy)
           const unionSql = `
             SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_id
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             UNION ALL
             SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_key AS session_id
             FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
@@ -167,7 +173,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               SELECT tool,
                      SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                      SUM(cost) AS cost
-              FROM records WHERE 1=1 ${dr.where}
+              FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
               GROUP BY tool
               UNION ALL
               SELECT tool,
@@ -213,14 +219,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(cost), 0) AS totalCost,
               COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
               COUNT(DISTINCT session_id) AS totalSessions
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
           `).get(dr.params) as any
 
           byToolRows = db.prepare(`
             SELECT tool,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                    SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY tool ORDER BY cost DESC
           `).all(dr.params) as any[]
         }
@@ -231,13 +237,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         }
 
         const drJoin = getDateRangeFilter(range, from, to, 'r')
+        const dfJoin = df.where ? df.where.replace(/device_instance_id/g, 'r.device_instance_id') : ''
         const topToolCalls = db.prepare(`
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
           JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${drJoin.where}
+          WHERE 1=1 ${dfJoin} ${drJoin.where}
           GROUP BY tc.name ORDER BY count DESC LIMIT 10
-        `).all(drJoin.params) as any[]
+        `).all({ ...drJoin.params, ...df.params }) as any[]
 
         json(res, {
           inputTokens: totals.inputTokens,
@@ -273,7 +280,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                    SUM(cache_write_tokens) AS cacheWriteTokens,
                    SUM(thinking_tokens) AS thinkingTokens
             FROM (
-              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM records WHERE 1=1 ${dr.where}
+              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
               UNION ALL
               SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
             )
@@ -298,7 +305,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                    SUM(cache_read_tokens) AS cacheReadTokens,
                    SUM(cache_write_tokens) AS cacheWriteTokens,
                    SUM(thinking_tokens) AS thinkingTokens
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY date ORDER BY date`
           params = { ...dr.params }
         }
@@ -323,7 +330,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             SELECT substr(ts, 1, 10) AS date,
                    SUM(cost) AS cost
             FROM (
-              SELECT cost, ts FROM records WHERE 1=1 ${dr.where}
+              SELECT cost, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
               UNION ALL
               SELECT cost, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
             )
@@ -332,7 +339,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
           byToolRows = db.prepare(`
             SELECT tool, SUM(cost) AS cost FROM (
-              SELECT tool, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} GROUP BY tool
+              SELECT tool, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} GROUP BY tool
               UNION ALL
               SELECT tool, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} GROUP BY tool
             ) GROUP BY tool ORDER BY cost DESC
@@ -340,7 +347,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
           byModelRows = db.prepare(`
             SELECT model, SUM(cost) AS cost FROM (
-              SELECT model, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} GROUP BY model
+              SELECT model, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} GROUP BY model
               UNION ALL
               SELECT model, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} GROUP BY model
             ) GROUP BY model ORDER BY cost DESC
@@ -368,19 +375,19 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           daily = db.prepare(`
             SELECT substr(ts, 1, 10) AS date,
                    SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY date ORDER BY date
           `).all(dr.params) as any[]
 
           byToolRows = db.prepare(`
             SELECT tool, SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY tool ORDER BY cost DESC
           `).all(dr.params) as any[]
 
           byModelRows = db.prepare(`
             SELECT model, SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY model ORDER BY cost DESC
           `).all(dr.params) as any[]
         }
@@ -408,7 +415,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           const unionSql = `
             SELECT model, provider, COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY model, provider
             UNION ALL
             SELECT model, provider, COUNT(*) AS callCount,
@@ -437,7 +444,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             SELECT model, provider,
                    COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM records WHERE 1=1 ${dr.where}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY model, provider ORDER BY callCount DESC
           `).all(dr.params) as any[]
           total = rows.reduce((s, r) => s + r.callCount, 0) || 1
@@ -492,16 +499,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/sessions ─────────────────────────────────────────────
       if (url.pathname === '/api/sessions') {
-        const device = url.searchParams.get('device')
         const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
         const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '50', 10)))
 
-        if (device && device !== options?.currentDeviceInstanceId) {
-          json(res, { sessions: [], total: 0, page, pageSize })
-          return
-        }
-
         const dr = getDateRangeFilter(range, from, to)
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
         const tool = url.searchParams.get('tool')
 
         let toolFilter = ''
@@ -513,7 +516,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         const totalRow = db.prepare(`
           SELECT COUNT(DISTINCT session_id) AS total
-          FROM records WHERE 1=1 ${dr.where} ${toolFilter}
+          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${toolFilter}
         `).get(params) as any
 
         const sessions = db.prepare(`
@@ -527,7 +530,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                  SUM(cache_write_tokens) AS cacheWriteTokens,
                  SUM(cost) AS cost
           FROM records
-          WHERE 1=1 ${dr.where} ${toolFilter}
+          WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${toolFilter}
           GROUP BY session_id
           ORDER BY ts DESC
           LIMIT @limit OFFSET @offset
@@ -546,18 +549,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       if (url.pathname === '/api/projects') {
         const dr = getDateRangeFilter(range, from, to)
         const device = url.searchParams.get('device')
-
-        if (device && device !== options?.currentDeviceInstanceId) {
-          json(res, { projects: [] })
-          return
-        }
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
 
         const rows = db.prepare(`
           SELECT source_file,
                  COUNT(*) AS sessionCount,
                  SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
                  SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where}
+          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
           GROUP BY source_file ORDER BY totalTokens DESC
         `).all(dr.params) as any[]
 
@@ -736,17 +735,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const config = loadConfig()
         const currentDeviceAlias = config?.device || hostname()
 
-        // Current device: only truly local records (not merged from synced)
+        // Current device: only local records (not merged from synced)
         const localRows = db.prepare(`
           SELECT device, device_instance_id AS deviceInstanceId, COUNT(*) AS recordCount
           FROM records
-          WHERE device_instance_id = @currentId OR source_file NOT LIKE 'synced/%'
+          WHERE device_instance_id = @currentId AND source_file NOT LIKE 'synced/%'
           GROUP BY device_instance_id
         `).all({ currentId }) as any[]
 
         // Other devices from synced_records (exclude current device's copy)
         const syncedRows = db.prepare(`
-          SELECT device, device_instance_id AS deviceInstanceId, COUNT(*) AS recordCount
+          SELECT device, device_instance_id AS deviceInstanceId, platform, COUNT(*) AS recordCount
           FROM synced_records
           WHERE device_instance_id != @currentId
           GROUP BY device_instance_id
@@ -754,29 +753,50 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         function getDisplayName(device: string, deviceInstanceId: string): string {
           if (deviceInstanceId === currentId) return currentDeviceAlias
-          // device alias from parse: config.device || hostname() || UUID前8位
-          // If it looks like a hostname or user-set alias, use it directly
           if (device && device !== 'unknown' && !/^[0-9a-f]{8}$/.test(device)) return device
-          // UUID prefix — show first 8 chars
           if (/^[0-9a-f]{8}-/.test(deviceInstanceId)) return deviceInstanceId.slice(0, 8)
-          // deviceInstanceId is "unknown" or other non-UUID — try device field as last resort
           if (device && device !== 'unknown') return device
           return 'Unknown Device'
         }
 
+        function getPlatformLabel(p: string | undefined): string {
+          if (p === 'win32') return 'Windows'
+          if (p === 'darwin') return 'macOS'
+          if (p === 'linux') return 'Linux'
+          return ''
+        }
+
+        // Infer platform from device name when sync record has no platform field
+        function inferPlatform(device: string, deviceInstanceId: string): string {
+          const name = (device || '').toLowerCase()
+          const id = (deviceInstanceId || '').toLowerCase()
+          // Windows hostnames: DESKTOP-XXXXX, LAPTOP-XXXXX
+          if (/^(desktop|laptop)-/.test(name)) return 'Windows'
+          // macOS: .local suffix, "macbook", "imac", "mac-mini"
+          if (name.endsWith('.local') || /macbook|imac|mac\s*mini|mac\s*pro|mac\s*studio/.test(name)) return 'macOS'
+          // Linux common hostnames
+          if (/^(ubuntu|debian|centos|fedora|arch|linux|server|node|prod|dev|staging)/.test(name)) return 'Linux'
+          // If displayName is just a UUID prefix (8 hex chars), platform is unknown
+          return ''
+        }
+
+        // Current platform
+        const currentPlatform = config?.platform || platform()
+
         // Merge and deduplicate
-        const deviceMap = new Map<string, { device: string; deviceInstanceId: string; displayName: string; recordCount: number }>()
+        const deviceMap = new Map<string, { device: string; deviceInstanceId: string; displayName: string; platform: string; recordCount: number }>()
         for (const row of localRows) {
           const displayName = getDisplayName(row.device, row.deviceInstanceId)
-          deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, displayName, recordCount: row.recordCount })
+          deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, displayName, platform: getPlatformLabel(currentPlatform), recordCount: row.recordCount })
         }
         for (const row of syncedRows) {
           const displayName = getDisplayName(row.device, row.deviceInstanceId)
+          const platformLabel = getPlatformLabel(row.platform) || inferPlatform(row.device, row.deviceInstanceId)
           const existing = deviceMap.get(row.deviceInstanceId)
           if (existing) {
             existing.recordCount += row.recordCount
           } else {
-            deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, displayName, recordCount: row.recordCount })
+            deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, displayName, platform: platformLabel, recordCount: row.recordCount })
           }
         }
 

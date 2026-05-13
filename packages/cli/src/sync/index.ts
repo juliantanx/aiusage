@@ -70,8 +70,9 @@ export class SyncOrchestrator {
       for (const line of lines) {
         try {
           const record: SyncRecord = JSON.parse(line)
-          // Skip records from our own device
+          // Skip records from our own device and stale "unknown" records
           if (record.deviceInstanceId === localDeviceId) continue
+          if (record.deviceInstanceId === 'unknown') continue
           insertSyncedRecord(this.db, record)
           totalPulled++
         } catch {}
@@ -115,6 +116,13 @@ export class SyncOrchestrator {
         const existing = remoteRecords.get(record.id)
         if (!existing || record.updatedAt >= existing.updatedAt) {
           remoteRecords.set(record.id, record)
+        }
+      }
+
+      // Clean up stale "unknown" deviceInstanceId records from remote
+      for (const [id, record] of remoteRecords) {
+        if (record.deviceInstanceId === 'unknown') {
+          remoteRecords.delete(id)
         }
       }
 

@@ -18,6 +18,7 @@ export function mapStatsRecordToSyncRecord(record: StatsRecord): SyncRecord {
     sessionKey: generateSessionKey(record.device, record.sessionId),
     device: record.device,
     deviceInstanceId: record.deviceInstanceId,
+    platform: record.platform,
     updatedAt: record.updatedAt,
   }
 }

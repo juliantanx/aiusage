@@ -231,6 +231,7 @@
 
   nav {
     display: flex;
+    align-items: center;
     gap: 0.25rem;
     flex: 1;
   }
@@ -241,6 +242,7 @@
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
+    line-height: 1;
     transition: all 0.15s ease;
     white-space: nowrap;
   }

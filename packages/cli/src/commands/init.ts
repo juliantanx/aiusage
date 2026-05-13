@@ -1,3 +1,4 @@
+import { platform } from 'node:os'
 import { generateConsentFingerprint } from '../sync/consent.js'
 import { setState, getState } from '../init.js'
 import { loadConfig, saveConfig, buildConsentConfig, AIUSAGE_DIR, type Config } from '../config.js'
@@ -21,6 +22,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
   if (options.backend === 'skip' || !options.backend) {
     const config: Config = {
       device: options.device ?? existingConfig?.device,
+      platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays ?? 180,
       parseInterval: existingConfig?.parseInterval ?? 60,
       dashboardPollInterval: existingConfig?.dashboardPollInterval ?? 30,
@@ -45,6 +47,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
         credentialRef: `keychain://aiusage/github/${options.repo}`,
       },
       device: options.device ?? existingConfig?.device,
+      platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays ?? 180,
       parseInterval: existingConfig?.parseInterval ?? 60,
       dashboardPollInterval: existingConfig?.dashboardPollInterval ?? 30,
@@ -95,6 +98,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
         credentialRef: `keychain://aiusage/s3/${options.bucket}`,
       },
       device: options.device ?? existingConfig?.device,
+      platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays ?? 180,
       parseInterval: existingConfig?.parseInterval ?? 60,
       dashboardPollInterval: existingConfig?.dashboardPollInterval ?? 30,

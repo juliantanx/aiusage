@@ -96,6 +96,7 @@ export async function runParse(db: Database.Database, filterTool?: string): Prom
   const config = loadConfig()
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
   const deviceInstanceId = state?.deviceInstanceId ?? 'unknown'
+  const devicePlatform = config?.platform
 
   const watermarkPath = join(homedir(), '.aiusage', 'watermark.json')
   const wm = new WatermarkManager(watermarkPath)
@@ -142,6 +143,7 @@ export async function runParse(db: Database.Database, filterTool?: string): Prom
             sessionId,
             device,
             deviceInstanceId,
+            platform: devicePlatform,
           })
 
           const result = aggregator.parseLine(line, context)

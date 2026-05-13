@@ -6,11 +6,11 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
     INSERT OR REPLACE INTO synced_records (
       id, ts, tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
-      cost, cost_source, session_key, device, device_instance_id, updated_at
+      cost, cost_source, session_key, device, device_instance_id, platform, updated_at
     ) VALUES (
       @id, @ts, @tool, @model, @provider, @inputTokens, @outputTokens,
       @cacheReadTokens, @cacheWriteTokens, @thinkingTokens,
-      @cost, @costSource, @sessionKey, @device, @deviceInstanceId, @updatedAt
+      @cost, @costSource, @sessionKey, @device, @deviceInstanceId, @platform, @updatedAt
     )
   `).run({
     id: record.id,
@@ -28,6 +28,7 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
     sessionKey: record.sessionKey,
     device: record.device,
     deviceInstanceId: record.deviceInstanceId,
+    platform: record.platform ?? '',
     updatedAt: record.updatedAt,
   })
 }

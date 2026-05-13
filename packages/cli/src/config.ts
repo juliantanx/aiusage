@@ -26,6 +26,7 @@ export interface SyncConfig {
 export interface Config {
   sync?: SyncConfig
   device?: string
+  platform?: string                    // 'win32' | 'darwin' | 'linux'
   retentionDays?: number
   parseInterval?: number
   dashboardPollInterval?: number

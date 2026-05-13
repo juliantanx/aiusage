@@ -19,20 +19,33 @@ export class GitHubSyncBackend {
 
   async readFile(path: string): Promise<{ sha: string; content: string } | null> {
     const url = this.getFileUrl(path)
-    const response = await fetch(url, {
+
+    // First get the SHA via metadata
+    const metaResponse = await fetch(url, {
       headers: {
         Authorization: `Bearer ${this.token}`,
         Accept: 'application/vnd.github.v3+json',
       },
     })
 
-    if (response.status === 404) return null
-    if (!response.ok) throw new Error(`GitHub API error: ${response.status}`)
+    if (metaResponse.status === 404) return null
+    if (!metaResponse.ok) throw new Error(`GitHub API error: ${metaResponse.status}`)
 
-    const data = await response.json()
+    const meta = await metaResponse.json()
+
+    // Fetch raw content to avoid base64 truncation for files >1MB
+    const rawResponse = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github.raw',
+      },
+    })
+
+    if (!rawResponse.ok) throw new Error(`GitHub API error: ${rawResponse.status}`)
+
     return {
-      sha: data.sha,
-      content: Buffer.from(data.content, 'base64').toString('utf-8'),
+      sha: meta.sha,
+      content: await rawResponse.text(),
     }
   }
 

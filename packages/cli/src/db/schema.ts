@@ -56,6 +56,7 @@ export function createV1Schema(db: Database.Database): void {
       session_key       TEXT NOT NULL,
       device            TEXT NOT NULL,
       device_instance_id TEXT NOT NULL,
+      platform          TEXT NOT NULL DEFAULT '',
       updated_at        INTEGER NOT NULL
     );
 
