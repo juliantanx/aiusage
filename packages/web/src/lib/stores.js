@@ -2,6 +2,12 @@ import { writable } from 'svelte/store'
 
 export const dateRange = writable({ range: 'day' })
 
+export const selectedDevice = writable('') // '' = all devices, value = deviceInstanceId
+
+export function setDevice(deviceInstanceId) {
+  selectedDevice.set(deviceInstanceId)
+}
+
 export const pollingInterval = writable(30000) // 30 seconds default
 
 export function setRange(range) {

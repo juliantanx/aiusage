@@ -148,6 +148,10 @@ const translations = {
       lastSync: 'Last sync',
       never: 'Never',
     },
+    device: {
+      allDevices: 'All Devices',
+      loading: 'Loading...',
+    },
   },
   zh: {
     nav: {
@@ -295,6 +299,10 @@ const translations = {
       notConfigured: '未配置',
       lastSync: '上次同步',
       never: '从未',
+    },
+    device: {
+      allDevices: '全部设备',
+      loading: '加载中...',
     },
   },
 }
