@@ -177,7 +177,6 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           `).all({ ...dr.params, ...df.params }) as any[]
         } else if (df.where) {
           // Specific other device: query synced_records only
-          const syncedWhere = `AND device_instance_id = @deviceId`
           totals = db.prepare(`
             SELECT
               COALESCE(SUM(input_tokens), 0) AS inputTokens,
@@ -189,14 +188,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(cost), 0) AS totalCost,
               COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
               COUNT(DISTINCT session_key) AS totalSessions
-            FROM synced_records WHERE 1=1 ${dr.where} ${syncedWhere}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
           `).get({ ...dr.params, ...df.params }) as any
 
           byToolRows = db.prepare(`
             SELECT tool,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                    SUM(cost) AS cost
-            FROM synced_records WHERE 1=1 ${dr.where} ${syncedWhere}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
             GROUP BY tool ORDER BY cost DESC
           `).all({ ...dr.params, ...df.params }) as any[]
         } else {
