@@ -4,6 +4,72 @@ import { createApiServer } from '../../src/api/server.js'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
 
+function insertTestRecord(db: Database.Database, overrides: Record<string, unknown> = {}) {
+  const defaults = {
+    id: 'local00000001',
+    ts: new Date().toISOString(),
+    ingested_at: Date.now(),
+    synced_at: null,
+    updated_at: Date.now(),
+    line_offset: 0,
+    tool: 'claude-code',
+    model: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    input_tokens: 100,
+    output_tokens: 50,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    thinking_tokens: 0,
+    cost: 0.001,
+    cost_source: 'pricing',
+    session_id: 'session1',
+    source_file: '/test/file.jsonl',
+    device: 'local-device',
+    device_instance_id: 'local-uuid-0000',
+  }
+  const vals = { ...defaults, ...overrides }
+  db.prepare(`
+    INSERT INTO records (id, ts, ingested_at, synced_at, updated_at, line_offset,
+      tool, model, provider, input_tokens, output_tokens, cache_read_tokens,
+      cache_write_tokens, thinking_tokens, cost, cost_source, session_id,
+      source_file, device, device_instance_id)
+    VALUES (@id, @ts, @ingested_at, @synced_at, @updated_at, @line_offset,
+      @tool, @model, @provider, @input_tokens, @output_tokens, @cache_read_tokens,
+      @cache_write_tokens, @thinking_tokens, @cost, @cost_source, @session_id,
+      @source_file, @device, @device_instance_id)
+  `).run(vals)
+}
+
+function insertTestSyncedRecord(db: Database.Database, overrides: Record<string, unknown> = {}) {
+  const defaults = {
+    id: 'synced0000001',
+    ts: new Date().toISOString(),
+    tool: 'codex',
+    model: 'gpt-4.1',
+    provider: 'openai',
+    input_tokens: 200,
+    output_tokens: 100,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    thinking_tokens: 0,
+    cost: 0.003,
+    cost_source: 'pricing',
+    session_key: 'sessionkey1',
+    device: 'remote-device',
+    device_instance_id: 'remote-uuid-0001',
+    updated_at: Date.now(),
+  }
+  const vals = { ...defaults, ...overrides }
+  db.prepare(`
+    INSERT INTO synced_records (id, ts, tool, model, provider, input_tokens, output_tokens,
+      cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source,
+      session_key, device, device_instance_id, updated_at)
+    VALUES (@id, @ts, @tool, @model, @provider, @input_tokens, @output_tokens,
+      @cache_read_tokens, @cache_write_tokens, @thinking_tokens, @cost, @cost_source,
+      @session_key, @device, @device_instance_id, @updated_at)
+  `).run(vals)
+}
+
 describe('API Server', () => {
   let db: Database.Database
   let server: http.Server
@@ -47,5 +113,61 @@ describe('API Server', () => {
     expect(response.ok).toBe(true)
     const data = await response.json()
     expect(data.data).toEqual([])
+  })
+})
+
+describe('Device filtering', () => {
+  let db: Database.Database
+  let server: http.Server
+  let baseUrl: string
+  const CURRENT_DEVICE_ID = 'local-uuid-0000'
+
+  beforeEach(async () => {
+    db = new Database(':memory:')
+    initializeDatabase(db)
+    insertTestRecord(db)
+    insertTestSyncedRecord(db)
+    server = createApiServer(db, { currentDeviceInstanceId: CURRENT_DEVICE_ID })
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        baseUrl = `http://127.0.0.1:${address.port}`
+        resolve()
+      })
+    })
+  })
+
+  afterEach(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    db.close()
+  })
+
+  it('GET /api/devices returns device list', async () => {
+    const res = await fetch(`${baseUrl}/api/devices`)
+    expect(res.ok).toBe(true)
+    const data = await res.json()
+    expect(data.currentDeviceInstanceId).toBe(CURRENT_DEVICE_ID)
+    expect(data.devices.length).toBe(2)
+    expect(data.devices[0].deviceInstanceId).toBe(CURRENT_DEVICE_ID)
+  })
+
+  it('summary with no device param returns merged data', async () => {
+    const res = await fetch(`${baseUrl}/api/summary?range=all`)
+    const data = await res.json()
+    // local: 100 input + 50 output = 150 tokens
+    // remote synced: 200 input + 100 output = 300 tokens
+    expect(data.totalTokens).toBe(450)
+  })
+
+  it('summary with current device returns only local data', async () => {
+    const res = await fetch(`${baseUrl}/api/summary?range=all&device=${CURRENT_DEVICE_ID}`)
+    const data = await res.json()
+    expect(data.totalTokens).toBe(150)
+  })
+
+  it('summary with other device returns only that device synced data', async () => {
+    const res = await fetch(`${baseUrl}/api/summary?range=all&device=remote-uuid-0001`)
+    const data = await res.json()
+    expect(data.totalTokens).toBe(300)
   })
 })

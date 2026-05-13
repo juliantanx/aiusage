@@ -59,9 +59,50 @@ function extractProject(sourceFile: string): string {
 
 export interface ApiServerOptions {
   db: Database.Database
+  currentDeviceInstanceId?: string
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
   onSync?: () => Promise<{ status: string; pulledCount: number; uploadedCount: number; mergedCount: number; error?: string }>
   getSyncStatus?: () => { lastSyncAt?: number; lastSyncStatus?: string; lastSyncTarget?: string; lastSyncUploaded?: number; lastSyncPulled?: number } | null
+}
+
+interface DeviceFilter {
+  /** SQL fragment for WHERE clause (prepend with AND) */
+  where: string
+  /** Named parameters for the WHERE fragment */
+  params: Record<string, unknown>
+  /** True when query should UNION records + synced_records */
+  useUnion: boolean
+}
+
+function getDeviceFilter(
+  device: string | null | undefined,
+  currentDeviceInstanceId: string | undefined,
+): DeviceFilter {
+  if (!currentDeviceInstanceId) {
+    // No device instance ID available — query only records (legacy behavior)
+    return { where: '', params: {}, useUnion: false }
+  }
+
+  if (!device) {
+    // All devices: UNION records + synced_records (excluding current device's synced copy)
+    return {
+      where: '',
+      params: { currentDeviceId: currentDeviceInstanceId },
+      useUnion: true,
+    }
+  }
+
+  if (device === currentDeviceInstanceId) {
+    // Current device only: query records only
+    return { where: '', params: {}, useUnion: false }
+  }
+
+  // Specific other device: query synced_records only
+  return {
+    where: 'AND device_instance_id = @deviceId',
+    params: { deviceId: device },
+    useUnion: false,
+  }
 }
 
 export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
@@ -89,29 +130,99 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid range' } }, 400)
           return
         }
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
         const dr = getDateRangeFilter(range, from, to)
 
-        const totals = db.prepare(`
-          SELECT
-            COALESCE(SUM(input_tokens), 0) AS inputTokens,
-            COALESCE(SUM(output_tokens), 0) AS outputTokens,
-            COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
-            COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
-            COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
-            COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
-            COALESCE(SUM(cost), 0) AS totalCost,
-            COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
-            COUNT(DISTINCT session_id) AS totalSessions
-          FROM records WHERE 1=1 ${dr.where}
-        `).get(dr.params) as any
+        let totals: any
+        let byToolRows: any[]
 
-        const byToolRows = db.prepare(`
-          SELECT tool,
-                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
-                 SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where}
-          GROUP BY tool ORDER BY cost DESC
-        `).all(dr.params) as any[]
+        if (df.useUnion) {
+          // All devices: UNION records + synced_records (excluding current device's synced copy)
+          const unionSql = `
+            SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_id
+            FROM records WHERE 1=1 ${dr.where}
+            UNION ALL
+            SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_key AS session_id
+            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+          `
+          totals = db.prepare(`
+            SELECT
+              COALESCE(SUM(input_tokens), 0) AS inputTokens,
+              COALESCE(SUM(output_tokens), 0) AS outputTokens,
+              COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+              COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+              COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
+              COALESCE(SUM(cost), 0) AS totalCost,
+              COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+              COUNT(DISTINCT session_id) AS totalSessions
+            FROM (${unionSql})
+          `).get({ ...dr.params, ...df.params }) as any
+
+          byToolRows = db.prepare(`
+            SELECT tool, SUM(tokens) AS tokens, SUM(cost) AS cost FROM (
+              SELECT tool,
+                     SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+                     SUM(cost) AS cost
+              FROM records WHERE 1=1 ${dr.where}
+              GROUP BY tool
+              UNION ALL
+              SELECT tool,
+                     SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+                     SUM(cost) AS cost
+              FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+              GROUP BY tool
+            ) GROUP BY tool ORDER BY cost DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+        } else if (df.where) {
+          // Specific other device: query synced_records only
+          const syncedWhere = `AND device_instance_id = @deviceId`
+          totals = db.prepare(`
+            SELECT
+              COALESCE(SUM(input_tokens), 0) AS inputTokens,
+              COALESCE(SUM(output_tokens), 0) AS outputTokens,
+              COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+              COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+              COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
+              COALESCE(SUM(cost), 0) AS totalCost,
+              COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+              COUNT(DISTINCT session_key) AS totalSessions
+            FROM synced_records WHERE 1=1 ${dr.where} ${syncedWhere}
+          `).get({ ...dr.params, ...df.params }) as any
+
+          byToolRows = db.prepare(`
+            SELECT tool,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+                   SUM(cost) AS cost
+            FROM synced_records WHERE 1=1 ${dr.where} ${syncedWhere}
+            GROUP BY tool ORDER BY cost DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+        } else {
+          // Current device or legacy: query records only
+          totals = db.prepare(`
+            SELECT
+              COALESCE(SUM(input_tokens), 0) AS inputTokens,
+              COALESCE(SUM(output_tokens), 0) AS outputTokens,
+              COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+              COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+              COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
+              COALESCE(SUM(cost), 0) AS totalCost,
+              COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+              COUNT(DISTINCT session_id) AS totalSessions
+            FROM records WHERE 1=1 ${dr.where}
+          `).get(dr.params) as any
+
+          byToolRows = db.prepare(`
+            SELECT tool,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+                   SUM(cost) AS cost
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY tool ORDER BY cost DESC
+          `).all(dr.params) as any[]
+        }
 
         const byTool: Record<string, { tokens: number; cost: number }> = {}
         for (const row of byToolRows) {
@@ -470,6 +581,48 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         }
         const result = await options.onRefresh()
         json(res, result)
+        return
+      }
+
+      // ── /api/devices ──────────────────────────────────────────────
+      if (url.pathname === '/api/devices') {
+        const currentId = options?.currentDeviceInstanceId
+        if (!currentId) {
+          json(res, { currentDeviceInstanceId: null, devices: [] })
+          return
+        }
+
+        // Current device from records
+        const localRows = db.prepare(`
+          SELECT device, device_instance_id AS deviceInstanceId, COUNT(*) AS recordCount
+          FROM records
+          GROUP BY device_instance_id
+        `).all() as any[]
+
+        // Other devices from synced_records (exclude current device's copy)
+        const syncedRows = db.prepare(`
+          SELECT device, device_instance_id AS deviceInstanceId, COUNT(*) AS recordCount
+          FROM synced_records
+          WHERE device_instance_id != @currentId
+          GROUP BY device_instance_id
+        `).all({ currentId }) as any[]
+
+        // Merge and deduplicate
+        const deviceMap = new Map<string, { device: string; deviceInstanceId: string; recordCount: number }>()
+        for (const row of localRows) {
+          deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, recordCount: row.recordCount })
+        }
+        for (const row of syncedRows) {
+          const existing = deviceMap.get(row.deviceInstanceId)
+          if (existing) {
+            existing.recordCount += row.recordCount
+          } else {
+            deviceMap.set(row.deviceInstanceId, { device: row.device, deviceInstanceId: row.deviceInstanceId, recordCount: row.recordCount })
+          }
+        }
+
+        const devices = [...deviceMap.values()].sort((a, b) => b.recordCount - a.recordCount)
+        json(res, { currentDeviceInstanceId: currentId, devices })
         return
       }
 
