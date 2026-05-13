@@ -1,8 +1,9 @@
 <script>
-  import { dateRange, formatTokens, formatCost, formatDate } from '$lib/stores.js'
+  import { dateRange, selectedDevice, formatTokens, formatCost, formatDate } from '$lib/stores.js'
   import { fetchSessions } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
+  import DeviceSelector from '$lib/components/DeviceSelector.svelte'
 
   let data = null
   let error = null
@@ -17,6 +18,7 @@
     try {
       data = await fetchSessions({
         ...$dateRange,
+        device: $selectedDevice,
         tool: selectedTool || undefined,
         page,
         pageSize,
@@ -29,7 +31,7 @@
     }
   }
 
-  $: $dateRange, selectedTool, page, loadData()
+  $: $dateRange, $selectedDevice, selectedTool, page, loadData()
 
   function handleToolChange(e) {
     selectedTool = e.target.value
@@ -49,7 +51,10 @@
   <title>{$t('sessions.title')} — AIUsage</title>
 </svelte:head>
 
-<DateRangeSelector />
+<div class="filter-bar">
+  <DateRangeSelector />
+  <DeviceSelector />
+</div>
 
 <div class="filters">
   <label class="filter-label">
@@ -108,6 +113,13 @@
 {/if}
 
 <style>
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
   .filters {
     margin-bottom: 1rem;
   }

@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte'
-  import { dateRange, formatNumber, formatCost, formatTokens } from '$lib/stores.js'
+  import { dateRange, selectedDevice, formatNumber, formatCost, formatTokens } from '$lib/stores.js'
   import { fetchSummary, refreshData } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
+  import DeviceSelector from '$lib/components/DeviceSelector.svelte'
 
   let data = null
   let error = null
@@ -15,7 +16,7 @@
     loading = true
     error = null
     try {
-      data = await fetchSummary($dateRange)
+      data = await fetchSummary({ ...$dateRange, device: $selectedDevice })
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load data'
       data = null
@@ -30,14 +31,17 @@
     await loadData()
   })
 
-  $: $dateRange, loadData()
+  $: $dateRange, $selectedDevice, loadData()
 </script>
 
 <svelte:head>
   <title>{$t('overview.title')} — AIUsage</title>
 </svelte:head>
 
-<DateRangeSelector />
+<div class="filter-bar">
+  <DateRangeSelector />
+  <DeviceSelector />
+</div>
 
 {#if loading}
   <div class="state-msg">{$t('common.loading')}</div>
@@ -266,6 +270,14 @@
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
   }
 
   @media (max-width: 768px) {

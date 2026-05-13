@@ -1,8 +1,9 @@
 <script>
-  import { dateRange, formatTokens } from '$lib/stores.js'
+  import { dateRange, selectedDevice, formatTokens } from '$lib/stores.js'
   import { fetchTokens } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
+  import DeviceSelector from '$lib/components/DeviceSelector.svelte'
 
   let data = null
   let error = null
@@ -12,7 +13,7 @@
     loading = true
     error = null
     try {
-      data = await fetchTokens($dateRange)
+      data = await fetchTokens({ ...$dateRange, device: $selectedDevice })
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load data'
       data = null
@@ -21,7 +22,7 @@
     }
   }
 
-  $: $dateRange, loadData()
+  $: $dateRange, $selectedDevice, loadData()
 
   function getMaxTokens() {
     if (!data?.data.length) return 0
@@ -37,7 +38,10 @@
   <title>{$t('tokens.title')} — AIUsage</title>
 </svelte:head>
 
-<DateRangeSelector />
+<div class="filter-bar">
+  <DateRangeSelector />
+  <DeviceSelector />
+</div>
 
 {#if loading}
   <div class="state-msg">{$t('common.loading')}</div>
@@ -132,6 +136,13 @@
 {/if}
 
 <style>
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
   .chart-section {
     padding-bottom: 1.5rem;
   }
