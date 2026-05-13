@@ -170,4 +170,26 @@ describe('Device filtering', () => {
     const data = await res.json()
     expect(data.totalTokens).toBe(300)
   })
+
+  it('tokens with no device param returns merged data', async () => {
+    const res = await fetch(`${baseUrl}/api/tokens?range=all`)
+    const data = await res.json()
+    expect(data.data.length).toBeGreaterThan(0)
+    const totalInput = data.data.reduce((s: number, d: any) => s + d.inputTokens, 0)
+    expect(totalInput).toBe(300) // 100 local + 200 remote
+  })
+
+  it('tokens with current device returns only local', async () => {
+    const res = await fetch(`${baseUrl}/api/tokens?range=all&device=${CURRENT_DEVICE_ID}`)
+    const data = await res.json()
+    const totalInput = data.data.reduce((s: number, d: any) => s + d.inputTokens, 0)
+    expect(totalInput).toBe(100)
+  })
+
+  it('cost with no device param returns merged data', async () => {
+    const res = await fetch(`${baseUrl}/api/cost?range=all`)
+    const data = await res.json()
+    expect(data.byTool['claude-code']).toBeCloseTo(0.001)
+    expect(data.byTool['codex']).toBeCloseTo(0.003)
+  })
 })

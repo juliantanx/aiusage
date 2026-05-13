@@ -256,18 +256,52 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       // ── /api/tokens ───────────────────────────────────────────────
       if (url.pathname === '/api/tokens') {
         const dr = getDateRangeFilter(range, from, to)
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
 
-        const rows = db.prepare(`
-          SELECT substr(ts, 1, 10) AS date,
-                 SUM(input_tokens) AS inputTokens,
-                 SUM(output_tokens) AS outputTokens,
-                 SUM(cache_read_tokens) AS cacheReadTokens,
-                 SUM(cache_write_tokens) AS cacheWriteTokens,
-                 SUM(thinking_tokens) AS thinkingTokens
-          FROM records WHERE 1=1 ${dr.where}
-          GROUP BY date ORDER BY date
-        `).all(dr.params) as any[]
+        let sql: string
+        let params: Record<string, unknown>
 
+        if (df.useUnion) {
+          sql = `
+            SELECT substr(ts, 1, 10) AS date,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens
+            FROM (
+              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM records WHERE 1=1 ${dr.where}
+              UNION ALL
+              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            )
+            GROUP BY date ORDER BY date`
+          params = { ...dr.params, currentDeviceId: df.params.currentDeviceId }
+        } else if (device && device !== options?.currentDeviceInstanceId) {
+          sql = `
+            SELECT substr(ts, 1, 10) AS date,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY date ORDER BY date`
+          params = { ...df.params, ...dr.params }
+        } else {
+          sql = `
+            SELECT substr(ts, 1, 10) AS date,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY date ORDER BY date`
+          params = { ...dr.params }
+        }
+
+        const rows = db.prepare(sql).all(params) as any[]
         json(res, { data: rows })
         return
       }
@@ -275,27 +309,83 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       // ── /api/cost ─────────────────────────────────────────────────
       if (url.pathname === '/api/cost') {
         const dr = getDateRangeFilter(range, from, to)
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
 
-        const daily = db.prepare(`
-          SELECT substr(ts, 1, 10) AS date,
-                 SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where}
-          GROUP BY date ORDER BY date
-        `).all(dr.params) as any[]
+        let daily: any[]
+        let byToolRows: any[]
+        let byModelRows: any[]
 
-        const byToolRows = db.prepare(`
-          SELECT tool, SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where}
-          GROUP BY tool ORDER BY cost DESC
-        `).all(dr.params) as any[]
+        if (df.useUnion) {
+          daily = db.prepare(`
+            SELECT substr(ts, 1, 10) AS date,
+                   SUM(cost) AS cost
+            FROM (
+              SELECT cost, ts FROM records WHERE 1=1 ${dr.where}
+              UNION ALL
+              SELECT cost, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            )
+            GROUP BY date ORDER BY date
+          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
+
+          byToolRows = db.prepare(`
+            SELECT tool, SUM(cost) AS cost FROM (
+              SELECT tool, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} GROUP BY tool
+              UNION ALL
+              SELECT tool, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} GROUP BY tool
+            ) GROUP BY tool ORDER BY cost DESC
+          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
+
+          byModelRows = db.prepare(`
+            SELECT model, SUM(cost) AS cost FROM (
+              SELECT model, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} GROUP BY model
+              UNION ALL
+              SELECT model, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} GROUP BY model
+            ) GROUP BY model ORDER BY cost DESC
+          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
+        } else if (device && device !== options?.currentDeviceInstanceId) {
+          daily = db.prepare(`
+            SELECT substr(ts, 1, 10) AS date,
+                   SUM(cost) AS cost
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY date ORDER BY date
+          `).all({ ...df.params, ...dr.params }) as any[]
+
+          byToolRows = db.prepare(`
+            SELECT tool, SUM(cost) AS cost
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY tool ORDER BY cost DESC
+          `).all({ ...df.params, ...dr.params }) as any[]
+
+          byModelRows = db.prepare(`
+            SELECT model, SUM(cost) AS cost
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY model ORDER BY cost DESC
+          `).all({ ...df.params, ...dr.params }) as any[]
+        } else {
+          daily = db.prepare(`
+            SELECT substr(ts, 1, 10) AS date,
+                   SUM(cost) AS cost
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY date ORDER BY date
+          `).all(dr.params) as any[]
+
+          byToolRows = db.prepare(`
+            SELECT tool, SUM(cost) AS cost
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY tool ORDER BY cost DESC
+          `).all(dr.params) as any[]
+
+          byModelRows = db.prepare(`
+            SELECT model, SUM(cost) AS cost
+            FROM records WHERE 1=1 ${dr.where}
+            GROUP BY model ORDER BY cost DESC
+          `).all(dr.params) as any[]
+        }
+
         const byTool: Record<string, number> = {}
         for (const r of byToolRows) byTool[r.tool] = r.cost
 
-        const byModelRows = db.prepare(`
-          SELECT model, SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where}
-          GROUP BY model ORDER BY cost DESC
-        `).all(dr.params) as any[]
         const byModel: Record<string, number> = {}
         for (const r of byModelRows) byModel[r.model] = r.cost
 
