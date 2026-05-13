@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { dateRange, formatNumber, formatCost, formatTokens } from '$lib/stores.js'
   import { fetchSummary, type SummaryData } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
@@ -20,8 +19,6 @@
       loading = false
     }
   }
-
-  onMount(loadData)
 
   $: $dateRange, loadData()
 </script>

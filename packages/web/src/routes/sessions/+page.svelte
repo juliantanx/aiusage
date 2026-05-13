@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { dateRange, formatTokens, formatCost, formatDate } from '$lib/stores.js'
   import { fetchSessions, type SessionData } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
@@ -29,7 +28,6 @@
     }
   }
 
-  onMount(loadData)
   $: $dateRange, selectedTool, page, loadData()
 
   function handleToolChange(e: Event) {

@@ -2,6 +2,12 @@ import { Command } from 'commander'
 import { serve } from './commands/serve.js'
 import { runInit } from './commands/init.js'
 import { runSync } from './commands/sync.js'
+import { generateSummary } from './commands/summary.js'
+import { generateStatus } from './commands/status.js'
+import { exportData } from './commands/export.js'
+import { cleanOldData } from './commands/clean.js'
+import { recalcPricing } from './commands/recalc.js'
+import { runParse } from './commands/parse.js'
 import { createDatabase } from './db/index.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -16,7 +22,24 @@ program
 // Default command: summary
 program
   .action(() => {
-    console.log('Running summary...')
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const summary = generateSummary(db)
+    console.log(`Total Tokens: ${summary.totalTokens.toLocaleString()}`)
+    console.log(`Total Cost:   $${summary.totalCost.toFixed(4)}`)
+    console.log(`Records:      ${summary.records.length}`)
+    if (Object.keys(summary.byTool).length > 0) {
+      console.log('\nBy Tool:')
+      for (const [tool, stats] of Object.entries(summary.byTool)) {
+        console.log(`  ${tool}: ${stats.tokens.toLocaleString()} tokens, $${stats.cost.toFixed(4)}`)
+      }
+    }
+    if (summary.topToolCalls.length > 0) {
+      console.log('\nTop Tool Calls:')
+      for (const tc of summary.topToolCalls) {
+        console.log(`  ${tc.name}: ${tc.count}`)
+      }
+    }
+    db.close()
   })
 
 // summary command
@@ -27,8 +50,19 @@ program
   .option('--month', 'Show this month')
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
-  .action((options) => {
-    console.log('Running summary with options:', options)
+  .action(() => {
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const summary = generateSummary(db)
+    console.log(`Total Tokens: ${summary.totalTokens.toLocaleString()}`)
+    console.log(`Total Cost:   $${summary.totalCost.toFixed(4)}`)
+    console.log(`Records:      ${summary.records.length}`)
+    if (Object.keys(summary.byTool).length > 0) {
+      console.log('\nBy Tool:')
+      for (const [tool, stats] of Object.entries(summary.byTool)) {
+        console.log(`  ${tool}: ${stats.tokens.toLocaleString()} tokens, $${stats.cost.toFixed(4)}`)
+      }
+    }
+    db.close()
   })
 
 // status command
@@ -36,7 +70,17 @@ program
   .command('status')
   .description('Show current status')
   .action(() => {
-    console.log('Running status...')
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const status = generateStatus(db)
+    console.log(`Version:     ${status.version}`)
+    console.log(`Device:      ${status.deviceName}`)
+    console.log(`Records:     ${status.recordCount}`)
+    console.log(`DB Size:     ${status.databaseSize}`)
+    console.log(`Sync Status: ${status.syncStatus}`)
+    if (status.lastSyncAt) {
+      console.log(`Last Sync:   ${new Date(status.lastSyncAt).toISOString()}`)
+    }
+    db.close()
   })
 
 // export command
@@ -49,7 +93,42 @@ program
   .option('--to <date>', 'End date (YYYY-MM-DD)')
   .option('-o, --output <file>', 'Output file (default: stdout)')
   .action((options) => {
-    console.log('Running export with options:', options)
+    const format = options.format as 'csv' | 'json' | 'ndjson'
+    if (!['csv', 'json', 'ndjson'].includes(format)) {
+      console.error('Invalid format. Use csv, json, or ndjson.')
+      process.exit(1)
+    }
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const data = exportData(db, format)
+    if (options.output) {
+      const { writeFileSync } = require('node:fs')
+      writeFileSync(options.output, data, 'utf-8')
+      console.log(`Exported to ${options.output}`)
+    } else {
+      console.log(data)
+    }
+    db.close()
+  })
+
+// parse command
+program
+  .command('parse')
+  .description('Parse AI tool session logs')
+  .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw)')
+  .action(async (options) => {
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    try {
+      const result = await runParse(db, options.tool)
+      console.log(`Parsed ${result.parsedCount} records, ${result.toolCallCount} tool calls.`)
+      if (result.errors.length > 0) {
+        console.warn(`${result.errors.length} errors encountered.`)
+      }
+    } catch (e) {
+      console.error(`Parse failed: ${e instanceof Error ? e.message : e}`)
+      process.exit(1)
+    } finally {
+      db.close()
+    }
   })
 
 // clean command
@@ -62,7 +141,16 @@ program
   .option('--yes', 'Skip confirmation')
   .option('--approve-delete', 'Approve delete permission upgrade')
   .action((options) => {
-    console.log('Running clean with options:', options)
+    const daysMatch = options.before.match(/^(\d+)d$/)
+    if (!daysMatch) {
+      console.error('Invalid duration format. Use e.g. 30d, 180d.')
+      process.exit(1)
+    }
+    const days = parseInt(daysMatch[1], 10)
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const result = cleanOldData(db, days)
+    console.log(`Deleted ${result.deletedCount} records, ${result.deletedSyncedCount} synced records, ${result.deletedOrphanToolCalls} orphan tool calls.`)
+    db.close()
   })
 
 // recalc command
@@ -70,8 +158,11 @@ program
   .command('recalc')
   .description('Recalculate costs')
   .option('--pricing', 'Recalculate using latest pricing')
-  .action((options) => {
-    console.log('Running recalc with options:', options)
+  .action(() => {
+    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const result = recalcPricing(db)
+    console.log(`Updated ${result.updatedCount} records, skipped ${result.skippedCount}.`)
+    db.close()
   })
 
 // serve command

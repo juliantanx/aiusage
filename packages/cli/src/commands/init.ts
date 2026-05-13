@@ -1,70 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
-import { generateConsentFingerprint, type ConsentConfig } from '../sync/consent.js'
-import { getState, setState } from '../init.js'
-
-const AIUSAGE_DIR = join(homedir(), '.aiusage')
-const CONFIG_PATH = join(AIUSAGE_DIR, 'config.json')
-
-const SYNC_FIELDS = [
-  'ts', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens',
-  'thinkingTokens', 'cost', 'costSource', 'tool', 'model', 'provider',
-  'sessionKey', 'device', 'deviceInstanceId', 'updatedAt',
-]
-
-interface Config {
-  sync?: {
-    backend: 'github' | 's3'
-    repo?: string
-    bucket?: string
-    prefix?: string
-    endpoint?: string
-    region?: string
-    credentialRef?: string
-  }
-  device?: string
-  retentionDays?: number
-  parseInterval?: number
-  dashboardPollInterval?: number
-}
-
-export function loadConfig(): Config | null {
-  if (!existsSync(CONFIG_PATH)) return null
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
-  } catch {
-    return null
-  }
-}
-
-export function saveConfig(config: Config): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
-}
-
-export function buildConsentConfig(config: Config): ConsentConfig | null {
-  const sync = config.sync
-  if (!sync) return null
-
-  const backend = sync.backend
-  const target = backend === 'github'
-    ? sync.repo ?? ''
-    : `${sync.bucket}/${sync.prefix ?? 'aiusage/'}`
-  const endpoint = backend === 'github'
-    ? 'https://api.github.com'
-    : sync.endpoint ?? 'https://s3.amazonaws.com'
-  const region = sync.region ?? 'global'
-
-  return {
-    backend,
-    target,
-    endpoint,
-    region,
-    fields: SYNC_FIELDS,
-    operations: ['read', 'write'],
-    schemaVersion: 'v1',
-  }
-}
+import { generateConsentFingerprint } from '../sync/consent.js'
+import { setState, getState } from '../init.js'
+import { loadConfig, saveConfig, buildConsentConfig, AIUSAGE_DIR, type Config } from '../config.js'
 
 export interface InitOptions {
   backend?: 'github' | 's3' | 'skip'
@@ -83,12 +19,12 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
   const existingConfig = loadConfig()
 
   if (options.backend === 'skip' || !options.backend) {
-    // Save config without sync
     const config: Config = {
       device: options.device ?? existingConfig?.device,
       retentionDays: existingConfig?.retentionDays ?? 180,
       parseInterval: existingConfig?.parseInterval ?? 60,
       dashboardPollInterval: existingConfig?.dashboardPollInterval ?? 30,
+      credentials: existingConfig?.credentials,
     }
     saveConfig(config)
     return { success: true, message: 'Configuration saved without cloud sync.' }
@@ -112,19 +48,19 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       retentionDays: existingConfig?.retentionDays ?? 180,
       parseInterval: existingConfig?.parseInterval ?? 60,
       dashboardPollInterval: existingConfig?.dashboardPollInterval ?? 30,
+      credentials: {
+        ...existingConfig?.credentials,
+        [`github/${options.repo}/token`]: options.token,
+      },
     }
 
-    // Build consent config and generate fingerprint
     const consentConfig = buildConsentConfig(config)
     if (!consentConfig) {
       return { success: false, message: 'Failed to build consent configuration.' }
     }
     const fingerprint = generateConsentFingerprint(consentConfig)
 
-    // Save config
     saveConfig(config)
-
-    // Update state with consent
     setState(AIUSAGE_DIR, {
       syncConsentAt: Date.now(),
       syncConsentTarget: fingerprint,
@@ -162,6 +98,11 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       retentionDays: existingConfig?.retentionDays ?? 180,
       parseInterval: existingConfig?.parseInterval ?? 60,
       dashboardPollInterval: existingConfig?.dashboardPollInterval ?? 30,
+      credentials: {
+        ...existingConfig?.credentials,
+        [`s3/${options.bucket}/accessKeyId`]: options.accessKeyId,
+        [`s3/${options.bucket}/secretAccessKey`]: options.secretAccessKey,
+      },
     }
 
     const consentConfig = buildConsentConfig(config)

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { dateRange, formatTokens } from '$lib/stores.js'
   import { fetchTokens, type TokenData } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
@@ -21,7 +20,6 @@
     }
   }
 
-  onMount(loadData)
   $: $dateRange, loadData()
 
   function getMaxTokens(): number {
