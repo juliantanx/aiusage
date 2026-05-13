@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, formatTokens, formatNumber } from '$lib/stores.js'
-  import { fetchModels, type ModelData } from '$lib/api.js'
+  import { fetchModels } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
-  let data: ModelData | null = null
-  let error: string | null = null
+  let data = null
+  let error = null
   let loading = true
 
   async function loadData() {

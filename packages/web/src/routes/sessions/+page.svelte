@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, formatTokens, formatCost, formatDate } from '$lib/stores.js'
-  import { fetchSessions, type SessionData } from '$lib/api.js'
+  import { fetchSessions } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
-  let data: SessionData | null = null
-  let error: string | null = null
+  let data = null
+  let error = null
   let loading = true
   let selectedTool = ''
   let page = 1
@@ -30,8 +30,8 @@
 
   $: $dateRange, selectedTool, page, loadData()
 
-  function handleToolChange(e: Event) {
-    selectedTool = (e.target as HTMLSelectElement).value
+  function handleToolChange(e) {
+    selectedTool = e.target.value
     page = 1
   }
 

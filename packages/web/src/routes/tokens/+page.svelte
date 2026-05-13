@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, formatTokens } from '$lib/stores.js'
-  import { fetchTokens, type TokenData } from '$lib/api.js'
+  import { fetchTokens } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
-  let data: TokenData | null = null
-  let error: string | null = null
+  let data = null
+  let error = null
   let loading = true
 
   async function loadData() {
@@ -22,12 +22,12 @@
 
   $: $dateRange, loadData()
 
-  function getMaxTokens(): number {
+  function getMaxTokens() {
     if (!data?.data.length) return 0
     return Math.max(...data.data.map(d => d.inputTokens + d.outputTokens + d.thinkingTokens))
   }
 
-  function getBarHeight(tokens: number, max: number): number {
+  function getBarHeight(tokens, max) {
     return max > 0 ? (tokens / max) * 200 : 0
   }
 </script>

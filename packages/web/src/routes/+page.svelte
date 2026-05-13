@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, formatNumber, formatCost, formatTokens } from '$lib/stores.js'
-  import { fetchSummary, type SummaryData } from '$lib/api.js'
+  import { fetchSummary } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
-  let data: SummaryData | null = null
-  let error: string | null = null
+  let data = null
+  let error = null
   let loading = true
 
   async function loadData() {

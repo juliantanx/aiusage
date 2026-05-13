@@ -42,10 +42,10 @@ describe('API Server', () => {
     expect(data.error.code).toBe('INVALID_PARAM')
   })
 
-  it('returns 404 for empty data', async () => {
+  it('returns empty data array when no records exist', async () => {
     const response = await fetch(`${baseUrl}/api/tokens?range=day`)
-    expect(response.status).toBe(404)
+    expect(response.ok).toBe(true)
     const data = await response.json()
-    expect(data.error.code).toBe('NO_DATA')
+    expect(data.data).toEqual([])
   })
 })

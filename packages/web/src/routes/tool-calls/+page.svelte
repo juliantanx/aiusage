@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, formatNumber } from '$lib/stores.js'
-  import { fetchToolCalls, type ToolCallData } from '$lib/api.js'
+  import { fetchToolCalls } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
-  let data: ToolCallData | null = null
-  let error: string | null = null
+  let data = null
+  let error = null
   let loading = true
 
   async function loadData() {

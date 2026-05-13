@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, setRange, setCustomRange } from '../stores.js'
 
   let customFrom = ''
   let customTo = ''
 
-  function handleRangeChange(range: 'day' | 'week' | 'month') {
+  function handleRangeChange(range) {
     setRange(range)
   }
 

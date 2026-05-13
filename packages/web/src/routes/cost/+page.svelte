@@ -1,10 +1,10 @@
-<script lang="ts">
+<script>
   import { dateRange, formatCost } from '$lib/stores.js'
-  import { fetchCost, type CostData } from '$lib/api.js'
+  import { fetchCost } from '$lib/api.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
 
-  let data: CostData | null = null
-  let error: string | null = null
+  let data = null
+  let error = null
   let loading = true
 
   async function loadData() {
@@ -22,21 +22,21 @@
 
   $: $dateRange, loadData()
 
-  function getMaxCost(): number {
+  function getMaxCost() {
     if (!data?.data.length) return 0
     return Math.max(...data.data.map(d => d.cost))
   }
 
-  function getBarHeight(cost: number, max: number): number {
+  function getBarHeight(cost, max) {
     return max > 0 ? (cost / max) * 200 : 0
   }
 
-  function getTotalCost(): number {
+  function getTotalCost() {
     if (!data?.data.length) return 0
     return data.data.reduce((sum, d) => sum + d.cost, 0)
   }
 
-  function getTopEntries(obj: Record<string, number>, limit: number): Array<[string, number]> {
+  function getTopEntries(obj, limit) {
     return Object.entries(obj)
       .sort(([, a], [, b]) => b - a)
       .slice(0, limit)
