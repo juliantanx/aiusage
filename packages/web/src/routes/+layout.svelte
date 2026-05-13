@@ -10,6 +10,7 @@
     { path: '/cost', key: 'nav.cost' },
     { path: '/models', key: 'nav.models' },
     { path: '/tool-calls', key: 'nav.toolCalls' },
+    { path: '/projects', key: 'nav.projects' },
     { path: '/sessions', key: 'nav.sessions' },
   ]
 

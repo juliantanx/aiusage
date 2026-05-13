@@ -25,7 +25,7 @@
 
   function getMaxTokens() {
     if (!data?.data.length) return 0
-    return Math.max(...data.data.map(d => d.inputTokens + d.outputTokens + d.thinkingTokens))
+    return Math.max(...data.data.map(d => d.inputTokens + d.outputTokens + (d.cacheReadTokens || 0) + (d.cacheWriteTokens || 0) + d.thinkingTokens))
   }
 
   function getBarHeight(tokens, max) {
@@ -53,7 +53,6 @@
     <div class="section-title">{$t('tokens.chartTitle')}</div>
     <div class="chart">
       {#each data.data as day, i}
-        {@const total = day.inputTokens + day.outputTokens + day.thinkingTokens}
         {@const max = getMaxTokens()}
         <div class="bar-group" style="animation-delay: {i * 30}ms">
           <div class="bars">
@@ -67,6 +66,20 @@
               style="height: {getBarHeight(day.outputTokens, max)}px"
               title="{$t('tokens.output')}: {formatTokens(day.outputTokens)}"
             ></div>
+            {#if (day.cacheReadTokens || 0) > 0}
+              <div
+                class="bar cache-read"
+                style="height: {getBarHeight(day.cacheReadTokens, max)}px"
+                title="{$t('tokens.cacheRead')}: {formatTokens(day.cacheReadTokens)}"
+              ></div>
+            {/if}
+            {#if (day.cacheWriteTokens || 0) > 0}
+              <div
+                class="bar cache-write"
+                style="height: {getBarHeight(day.cacheWriteTokens, max)}px"
+                title="{$t('tokens.cacheWrite')}: {formatTokens(day.cacheWriteTokens)}"
+              ></div>
+            {/if}
             {#if day.thinkingTokens > 0}
               <div
                 class="bar thinking"
@@ -82,6 +95,8 @@
     <div class="legend">
       <span class="legend-item"><span class="dot input"></span> {$t('tokens.input')}</span>
       <span class="legend-item"><span class="dot output"></span> {$t('tokens.output')}</span>
+      <span class="legend-item"><span class="dot cache-read"></span> {$t('tokens.cacheRead')}</span>
+      <span class="legend-item"><span class="dot cache-write"></span> {$t('tokens.cacheWrite')}</span>
       <span class="legend-item"><span class="dot thinking"></span> {$t('tokens.thinking')}</span>
     </div>
   </div>
@@ -93,7 +108,8 @@
           <th>{$t('tokens.date')}</th>
           <th>{$t('tokens.input')}</th>
           <th>{$t('tokens.output')}</th>
-          <th>{$t('tokens.thinking')}</th>
+          <th>{$t('tokens.cacheRead')}</th>
+          <th>{$t('tokens.cacheWrite')}</th>
           <th>{$t('tokens.total')}</th>
         </tr>
       </thead>
@@ -103,9 +119,10 @@
             <td class="mono">{day.date}</td>
             <td class="mono green">{formatTokens(day.inputTokens)}</td>
             <td class="mono blue">{formatTokens(day.outputTokens)}</td>
-            <td class="mono purple">{formatTokens(day.thinkingTokens)}</td>
+            <td class="mono cache-color">{formatTokens(day.cacheReadTokens || 0)}</td>
+            <td class="mono cache-color">{formatTokens(day.cacheWriteTokens || 0)}</td>
             <td class="mono" style="color:var(--text-primary); font-weight:600">
-              {formatTokens(day.inputTokens + day.outputTokens + day.thinkingTokens)}
+              {formatTokens(day.inputTokens + day.outputTokens + (day.cacheReadTokens || 0) + (day.cacheWriteTokens || 0) + day.thinkingTokens)}
             </td>
           </tr>
         {/each}
@@ -146,7 +163,10 @@
   }
   .bar.input { background: var(--green); }
   .bar.output { background: var(--blue); }
+  .bar.cache-read { background: #d4a574; }
+  .bar.cache-write { background: #a0845e; }
   .bar.thinking { background: var(--purple); }
+  .cache-color { color: #d4a574; }
   .label {
     font-family: var(--mono);
     font-size: 0.6rem;
@@ -173,6 +193,8 @@
   }
   .dot.input { background: var(--green); }
   .dot.output { background: var(--blue); }
+  .dot.cache-read { background: #d4a574; }
+  .dot.cache-write { background: #a0845e; }
   .dot.thinking { background: var(--purple); }
 
   @keyframes fadeUp {

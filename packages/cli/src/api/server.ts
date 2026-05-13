@@ -38,6 +38,24 @@ function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.end(JSON.stringify(data))
 }
 
+function extractProject(sourceFile: string): string {
+  // Path: ~/.claude/projects/-Users-tjh-WebstormProjects-ai-bidding-assistant/uuid.jsonl
+  const match = sourceFile.match(/\.claude\/projects\/([^/]+)/)
+  if (!match) return 'unknown'
+  const raw = match[1]
+  // Convert path-encoded name: take last meaningful segment
+  // e.g. "-Users-tjh-WebstormProjects-ai-bidding-assistant" → "ai-bidding-assistant"
+  const parts = raw.split('-').filter(Boolean)
+  // Find the segment after "WebstormProjects" or "Documents"
+  const wpIdx = parts.indexOf('WebstormProjects')
+  if (wpIdx >= 0 && wpIdx < parts.length - 1) return parts.slice(wpIdx + 1).join('-')
+  const docIdx = parts.indexOf('Documents')
+  if (docIdx >= 0 && docIdx < parts.length - 1) return parts.slice(docIdx + 1).join('-')
+  // Fallback: if path is just user home dir, label as "~"
+  if (parts.length <= 3) return '~'
+  return parts.slice(-2).join('-') || raw
+}
+
 export function createApiServer(db: Database.Database): http.Server {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
@@ -67,15 +85,21 @@ export function createApiServer(db: Database.Database): http.Server {
 
         const totals = db.prepare(`
           SELECT
-            COALESCE(SUM(input_tokens + output_tokens + thinking_tokens), 0) AS totalTokens,
+            COALESCE(SUM(input_tokens), 0) AS inputTokens,
+            COALESCE(SUM(output_tokens), 0) AS outputTokens,
+            COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+            COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+            COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+            COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
             COALESCE(SUM(cost), 0) AS totalCost,
-            COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays
+            COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+            COUNT(DISTINCT session_id) AS totalSessions
           FROM records WHERE 1=1 ${dr.where}
         `).get(dr.params) as any
 
         const byToolRows = db.prepare(`
           SELECT tool,
-                 SUM(input_tokens + output_tokens + thinking_tokens) AS tokens,
+                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                  SUM(cost) AS cost
           FROM records WHERE 1=1 ${dr.where}
           GROUP BY tool ORDER BY cost DESC
@@ -96,9 +120,15 @@ export function createApiServer(db: Database.Database): http.Server {
         `).all(drJoin.params) as any[]
 
         json(res, {
+          inputTokens: totals.inputTokens,
+          outputTokens: totals.outputTokens,
+          cacheReadTokens: totals.cacheReadTokens,
+          cacheWriteTokens: totals.cacheWriteTokens,
+          thinkingTokens: totals.thinkingTokens,
           totalTokens: totals.totalTokens,
           totalCost: totals.totalCost,
           activeDays: totals.activeDays,
+          totalSessions: totals.totalSessions,
           byTool,
           topToolCalls,
         })
@@ -113,6 +143,8 @@ export function createApiServer(db: Database.Database): http.Server {
           SELECT substr(ts, 1, 10) AS date,
                  SUM(input_tokens) AS inputTokens,
                  SUM(output_tokens) AS outputTokens,
+                 SUM(cache_read_tokens) AS cacheReadTokens,
+                 SUM(cache_write_tokens) AS cacheWriteTokens,
                  SUM(thinking_tokens) AS thinkingTokens
           FROM records WHERE 1=1 ${dr.where}
           GROUP BY date ORDER BY date
@@ -165,7 +197,7 @@ export function createApiServer(db: Database.Database): http.Server {
         const rows = db.prepare(`
           SELECT model, provider,
                  COUNT(*) AS callCount,
-                 SUM(input_tokens + output_tokens + thinking_tokens) AS totalTokens
+                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
           FROM records WHERE 1=1 ${dr.where}
           GROUP BY model, provider ORDER BY callCount DESC
         `).all(dr.params) as any[]
@@ -237,6 +269,8 @@ export function createApiServer(db: Database.Database): http.Server {
                  MIN(ts) AS ts,
                  SUM(input_tokens) AS inputTokens,
                  SUM(output_tokens) AS outputTokens,
+                 SUM(cache_read_tokens) AS cacheReadTokens,
+                 SUM(cache_write_tokens) AS cacheWriteTokens,
                  SUM(cost) AS cost
           FROM records
           WHERE 1=1 ${dr.where} ${toolFilter}
@@ -251,6 +285,44 @@ export function createApiServer(db: Database.Database): http.Server {
           page,
           pageSize,
         })
+        return
+      }
+
+      // ── /api/projects ─────────────────────────────────────────────
+      if (url.pathname === '/api/projects') {
+        const dr = getDateRangeFilter(range, from, to)
+
+        const rows = db.prepare(`
+          SELECT source_file,
+                 COUNT(*) AS sessionCount,
+                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                 SUM(cost) AS cost
+          FROM records WHERE 1=1 ${dr.where}
+          GROUP BY source_file ORDER BY totalTokens DESC
+        `).all(dr.params) as any[]
+
+        // Aggregate by project
+        const projectMap: Record<string, { sessions: number; tokens: number; cost: number }> = {}
+        for (const row of rows) {
+          const project = extractProject(row.source_file)
+          if (!projectMap[project]) projectMap[project] = { sessions: 0, tokens: 0, cost: 0 }
+          projectMap[project].sessions += row.sessionCount
+          projectMap[project].tokens += row.totalTokens
+          projectMap[project].cost += row.cost
+        }
+
+        const totalTokens = Object.values(projectMap).reduce((s, p) => s + p.tokens, 0) || 1
+        const projects = Object.entries(projectMap)
+          .map(([name, data]) => ({
+            name,
+            sessions: data.sessions,
+            tokens: data.tokens,
+            cost: data.cost,
+            percentage: Math.round((data.tokens / totalTokens) * 1000) / 10,
+          }))
+          .sort((a, b) => b.tokens - a.tokens)
+
+        json(res, { projects })
         return
       }
 

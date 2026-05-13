@@ -43,3 +43,7 @@ export async function fetchSessions(params) {
     pageSize: params.pageSize?.toString(),
   }))
 }
+
+export async function fetchProjects(params) {
+  return apiFetch(buildUrl('/api/projects', params))
+}

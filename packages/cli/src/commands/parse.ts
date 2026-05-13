@@ -19,51 +19,39 @@ interface ToolPaths {
   paths: string[]
 }
 
+function findJsonlFiles(dir: string): string[] {
+  const results: string[] = []
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        results.push(...findJsonlFiles(fullPath))
+      } else if (entry.isFile() && extname(entry.name) === '.jsonl') {
+        results.push(fullPath)
+      }
+    }
+  } catch {}
+  return results
+}
+
 function discoverLogFiles(): ToolPaths[] {
   const home = homedir()
   const results: ToolPaths[] = []
 
-  // Claude Code: ~/.claude/projects/*/*.jsonl
+  // Claude Code: ~/.claude/projects/**/*.jsonl (recursive, includes subagents)
   const claudeDir = join(home, '.claude', 'projects')
   if (existsSync(claudeDir)) {
-    const claudePaths: string[] = []
-    try {
-      const projects = readdirSync(claudeDir)
-      for (const project of projects) {
-        const projectDir = join(claudeDir, project)
-        try {
-          const files = readdirSync(projectDir)
-          for (const file of files) {
-            if (extname(file) === '.jsonl') {
-              claudePaths.push(join(projectDir, file))
-            }
-          }
-        } catch {}
-      }
-    } catch {}
+    const claudePaths = findJsonlFiles(claudeDir)
     if (claudePaths.length > 0) {
       results.push({ tool: 'claude-code', paths: claudePaths })
     }
   }
 
-  // Codex: ~/.codex/sessions/*/*.jsonl
+  // Codex: ~/.codex/sessions/**/*.jsonl (recursive)
   const codexDir = join(home, '.codex', 'sessions')
   if (existsSync(codexDir)) {
-    const codexPaths: string[] = []
-    try {
-      const sessions = readdirSync(codexDir)
-      for (const session of sessions) {
-        const sessionDir = join(codexDir, session)
-        try {
-          const files = readdirSync(sessionDir)
-          for (const file of files) {
-            if (extname(file) === '.jsonl') {
-              codexPaths.push(join(sessionDir, file))
-            }
-          }
-        } catch {}
-      }
-    } catch {}
+    const codexPaths = findJsonlFiles(codexDir)
     if (codexPaths.length > 0) {
       results.push({ tool: 'codex', paths: codexPaths })
     }

@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { readFileSync, existsSync, statSync } from 'node:fs'
-import { join, extname } from 'node:path'
+import { join, extname, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
 import type Database from 'better-sqlite3'
 
@@ -22,9 +23,21 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
 }
 
+function findMonorepoRoot(): string {
+  // Try relative to this source file (dev mode)
+  const here = dirname(fileURLToPath(import.meta.url))
+  let dir = here
+  for (let i = 0; i < 5; i++) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir
+    dir = dirname(dir)
+  }
+  // Fallback to cwd
+  return process.cwd()
+}
+
 export function serve(options: ServeOptions): void {
   const apiServer = createApiServer(options.db)
-  const webBuildDir = join(process.cwd(), 'packages', 'web', 'build')
+  const webBuildDir = join(findMonorepoRoot(), 'packages', 'web', 'build')
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)

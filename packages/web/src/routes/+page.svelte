@@ -53,6 +53,29 @@
       <span class="hero-label">{$t('overview.activeDays')}</span>
       <span class="hero-value">{data.activeDays}</span>
     </div>
+    <div class="hero-card">
+      <span class="hero-label">{$t('overview.totalSessions')}</span>
+      <span class="hero-value">{formatNumber(data.totalSessions || 0)}</span>
+    </div>
+  </div>
+
+  <div class="token-breakdown">
+    <div class="token-item">
+      <span class="token-label">{$t('overview.inputTokens')}</span>
+      <span class="token-value">{formatTokens(data.inputTokens)}</span>
+    </div>
+    <div class="token-item">
+      <span class="token-label">{$t('overview.outputTokens')}</span>
+      <span class="token-value">{formatTokens(data.outputTokens)}</span>
+    </div>
+    <div class="token-item cache">
+      <span class="token-label">{$t('overview.cacheRead')}</span>
+      <span class="token-value">{formatTokens(data.cacheReadTokens)}</span>
+    </div>
+    <div class="token-item cache">
+      <span class="token-label">{$t('overview.cacheWrite')}</span>
+      <span class="token-value">{formatTokens(data.cacheWriteTokens)}</span>
+    </div>
   </div>
 
   <div class="grid-2">
@@ -104,7 +127,7 @@
 <style>
   .hero-stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
     margin-bottom: 1.5rem;
   }
@@ -144,6 +167,42 @@
   .hero-card.accent .hero-value {
     color: var(--accent);
     text-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .token-breakdown {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .token-item {
+    flex: 1;
+    min-width: 120px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .token-item.cache {
+    border-color: var(--border-subtle);
+    opacity: 0.85;
+  }
+  .token-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+  .token-value {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
   }
 
   .grid-2 {
@@ -201,7 +260,8 @@
   }
 
   @media (max-width: 768px) {
-    .hero-stats { grid-template-columns: 1fr; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
     .grid-2 { grid-template-columns: 1fr; }
+    .token-breakdown { flex-direction: column; }
   }
 </style>
