@@ -6,6 +6,77 @@ export function applyPragmas(db: Database.Database): void {
   db.pragma('busy_timeout = 5000')
 }
 
+export function createReadonlyViews(db: Database.Database): void {
+  db.exec(`
+    CREATE VIEW IF NOT EXISTS v_usage_records AS
+    SELECT
+      id,
+      datetime(ts / 1000, 'unixepoch') || '.' || printf('%03d', ts % 1000) || 'Z' AS timestamp,
+      ts,
+      tool,
+      model,
+      provider,
+      input_tokens,
+      output_tokens,
+      cache_read_tokens,
+      cache_write_tokens,
+      thinking_tokens,
+      (input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS total_tokens,
+      cost,
+      cost_source,
+      session_id,
+      source_file,
+      device,
+      device_instance_id,
+      ingested_at,
+      synced_at,
+      updated_at
+    FROM records;
+
+    CREATE VIEW IF NOT EXISTS v_tool_calls AS
+    SELECT
+      tc.id,
+      tc.record_id,
+      tc.name,
+      tc.tool AS tool_call_tool,
+      datetime(tc.ts / 1000, 'unixepoch') || '.' || printf('%03d', tc.ts % 1000) || 'Z' AS timestamp,
+      tc.ts,
+      tc.call_index,
+      r.tool,
+      r.model,
+      r.provider,
+      r.session_id,
+      r.source_file,
+      r.device,
+      r.device_instance_id
+    FROM tool_calls tc
+    LEFT JOIN records r ON r.id = tc.record_id;
+
+    CREATE VIEW IF NOT EXISTS v_sessions AS
+    SELECT
+      session_id,
+      tool,
+      model,
+      provider,
+      device,
+      device_instance_id,
+      COUNT(*) AS record_count,
+      MIN(ts) AS first_ts,
+      datetime(MIN(ts) / 1000, 'unixepoch') || '.' || printf('%03d', MIN(ts) % 1000) || 'Z' AS first_timestamp,
+      MAX(ts) AS last_ts,
+      datetime(MAX(ts) / 1000, 'unixepoch') || '.' || printf('%03d', MAX(ts) % 1000) || 'Z' AS last_timestamp,
+      SUM(input_tokens) AS input_tokens,
+      SUM(output_tokens) AS output_tokens,
+      SUM(cache_read_tokens) AS cache_read_tokens,
+      SUM(cache_write_tokens) AS cache_write_tokens,
+      SUM(thinking_tokens) AS thinking_tokens,
+      SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS total_tokens,
+      SUM(cost) AS total_cost
+    FROM records
+    GROUP BY session_id, tool, model, provider, device, device_instance_id;
+  `)
+}
+
 export function createSchemaVersionTable(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (

@@ -1,11 +1,13 @@
 import type Database from 'better-sqlite3'
 import { migrateV1 } from './v1.js'
 import { migrateV2 } from './v2.js'
+import { migrateV3 } from './v3.js'
 import { createSchemaVersionTable } from '../schema.js'
 
 const MIGRATIONS = [
   { version: 1, migrate: migrateV1 },
   { version: 2, migrate: migrateV2 },
+  { version: 3, migrate: migrateV3 },
 ]
 
 export function runMigrations(db: Database.Database): void {

@@ -7,6 +7,7 @@ import { runParse } from './parse.js'
 import { runSync } from './sync.js'
 import { getState } from '../init.js'
 import { AIUSAGE_DIR } from '../config.js'
+import { SyncRuntimeController } from '../sync/runtime.js'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
@@ -40,21 +41,16 @@ function findMonorepoRoot(): string {
 }
 
 export function serve(options: ServeOptions): void {
-  const state = getState(AIUSAGE_DIR)
+  const syncRuntime = new SyncRuntimeController({
+    runSync: (runtimeOptions) => runSync(options.db, runtimeOptions).then(() => undefined),
+    getPersistedState: () => getState(AIUSAGE_DIR),
+  })
+
   const apiServer = createApiServer(options.db, {
-    currentDeviceInstanceId: state?.deviceInstanceId,
+    currentDeviceInstanceId: getState(AIUSAGE_DIR)?.deviceInstanceId,
     onRefresh: () => runParse(options.db),
-    onSync: () => runSync(options.db),
-    getSyncStatus: () => {
-      if (!state) return null
-      return {
-        lastSyncAt: state.lastSyncAt,
-        lastSyncStatus: state.lastSyncStatus,
-        lastSyncTarget: state.lastSyncTarget,
-        lastSyncUploaded: state.lastSyncUploaded,
-        lastSyncPulled: state.lastSyncPulled,
-      }
-    },
+    onSyncStart: () => syncRuntime.start(),
+    getSyncStatus: () => syncRuntime.getStatus(),
   })
   const webBuildDir = join(findMonorepoRoot(), 'packages', 'web', 'build')
 

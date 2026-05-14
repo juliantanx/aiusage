@@ -142,6 +142,8 @@ const translations = {
     sync: {
       trigger: 'Sync',
       syncing: 'Syncing...',
+      started: 'Sync started',
+      inProgress: 'Sync already running',
       complete: 'Synced',
       failed: 'Sync failed',
       notConfigured: 'Not configured',
@@ -294,6 +296,8 @@ const translations = {
     sync: {
       trigger: '同步',
       syncing: '同步中...',
+      started: '已开始同步',
+      inProgress: '同步已在进行中',
       complete: '已同步',
       failed: '同步失败',
       notConfigured: '未配置',

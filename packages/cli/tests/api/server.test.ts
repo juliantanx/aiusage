@@ -3,6 +3,7 @@ import http from 'node:http'
 import { createApiServer } from '../../src/api/server.js'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
+import { SyncRuntimeController } from '../../src/sync/runtime.js'
 
 function insertTestRecord(db: Database.Database, overrides: Record<string, unknown> = {}) {
   const defaults = {
@@ -89,7 +90,11 @@ describe('API Server', () => {
   })
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (server?.listening) {
+      server.closeIdleConnections?.()
+      server.closeAllConnections?.()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
     db.close()
   })
 
@@ -138,7 +143,11 @@ describe('Device filtering', () => {
   })
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (server?.listening) {
+      server.closeIdleConnections?.()
+      server.closeAllConnections?.()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
     db.close()
   })
 
@@ -211,5 +220,110 @@ describe('Device filtering', () => {
     const res = await fetch(`${baseUrl}/api/projects?range=all`)
     const data = await res.json()
     expect(data.projects.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Sync API', () => {
+  let db: Database.Database
+  let server: http.Server
+  let baseUrl: string
+
+  beforeEach(async () => {
+    db = new Database(':memory:')
+    initializeDatabase(db)
+  })
+
+  afterEach(async () => {
+    if (server?.listening) {
+      server.closeIdleConnections?.()
+      server.closeAllConnections?.()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+    db.close()
+  })
+
+  it('starts sync in the background and reports running status', async () => {
+    let resolveSync: (() => void) | null = null
+    let persistedStatus = {
+      deviceInstanceId: 'dev-1',
+      lastSyncStatus: 'failed' as const,
+      lastSyncError: 'Previous failure',
+    }
+
+    const controller = new SyncRuntimeController({
+      runSync: ({ onProgress }) => new Promise<void>((resolve) => {
+        resolveSync = () => {
+          persistedStatus = {
+            ...persistedStatus,
+            lastSyncStatus: 'ok',
+            lastSyncError: undefined,
+            lastSyncAt: Date.now(),
+            lastSyncUploaded: 10,
+            lastSyncPulled: 2,
+          }
+          resolve()
+        }
+        onProgress?.({ phase: 'uploading', currentPath: '2026/05.ndjson', completedFiles: 0, totalFiles: 1, uploadedCount: 0 })
+      }),
+      getPersistedState: () => persistedStatus,
+    })
+
+    server = createApiServer(db, {
+      onSyncStart: () => controller.start(),
+      getSyncStatus: () => controller.getStatus(),
+    })
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        baseUrl = `http://127.0.0.1:${address.port}`
+        resolve()
+      })
+    })
+
+    const startRes = await fetch(`${baseUrl}/api/sync`, { method: 'POST' })
+    expect(startRes.status).toBe(202)
+    const startData = await startRes.json()
+    expect(startData.accepted).toBe(true)
+    expect(startData.status.isRunning).toBe(true)
+    expect(startData.status.phase).toBeUndefined()
+
+    const duplicateRes = await fetch(`${baseUrl}/api/sync`, { method: 'POST' })
+    expect(duplicateRes.status).toBe(200)
+    const duplicateData = await duplicateRes.json()
+    expect(duplicateData.accepted).toBe(false)
+    expect(duplicateData.alreadyRunning).toBe(true)
+    expect(duplicateData.status.phase).toBe('uploading')
+
+    resolveSync?.()
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const statusRes = await fetch(`${baseUrl}/api/sync`)
+    expect(statusRes.ok).toBe(true)
+    const statusData = await statusRes.json()
+    expect(statusData.status.isRunning).toBe(false)
+    expect(statusData.status.lastSyncStatus).toBe('ok')
+    expect(statusData.status.lastSyncUploaded).toBe(10)
+  })
+
+  it('defers sync work until after start returns', async () => {
+    let resolveSync: (() => void) | null = null
+    let started = false
+    const controller = new SyncRuntimeController({
+      runSync: () => new Promise<void>((resolve) => {
+        started = true
+        resolveSync = resolve
+      }),
+      getPersistedState: () => ({ deviceInstanceId: 'dev-1', lastSyncStatus: 'failed' as const }),
+    })
+
+    const result = controller.start()
+    expect(result.accepted).toBe(true)
+    expect(started).toBe(false)
+
+    await new Promise(resolve => setImmediate(resolve))
+    expect(started).toBe(true)
+
+    resolveSync?.()
   })
 })

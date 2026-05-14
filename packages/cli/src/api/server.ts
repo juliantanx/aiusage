@@ -3,6 +3,7 @@ import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
 import { loadConfig } from '../config.js'
+import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = ''): { where: string; params: Record<string, unknown> } {
   const ts = prefix ? `${prefix}.ts` : 'ts'
@@ -62,8 +63,8 @@ function extractProject(sourceFile: string): string {
 export interface ApiServerOptions {
   currentDeviceInstanceId?: string
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
-  onSync?: () => Promise<{ status: string; pulledCount: number; uploadedCount: number; mergedCount: number; error?: string }>
-  getSyncStatus?: () => { lastSyncAt?: number; lastSyncStatus?: string; lastSyncTarget?: string; lastSyncUploaded?: number; lastSyncPulled?: number } | null
+  onSyncStart?: () => SyncStartResult
+  getSyncStatus?: () => SyncStatusSnapshot | null
 }
 
 interface DeviceFilter {
@@ -118,7 +119,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
 
     res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
     if (req.method === 'OPTIONS') {
@@ -507,6 +508,16 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
         const tool = url.searchParams.get('tool')
 
+        if (device && !df.localOnly && !df.useUnion) {
+          json(res, {
+            sessions: [],
+            total: 0,
+            page,
+            pageSize,
+          })
+          return
+        }
+
         let toolFilter = ''
         const params: Record<string, unknown> = { ...dr.params }
         if (tool) {
@@ -699,12 +710,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       // ── /api/sync ──────────────────────────────────────────────────
       if (url.pathname === '/api/sync') {
         if (req.method === 'POST') {
-          if (!options?.onSync) {
+          if (!options?.onSyncStart) {
             json(res, { error: { code: 'NOT_AVAILABLE', message: 'Sync not configured' } }, 501)
             return
           }
-          const result = await options.onSync()
-          json(res, result)
+          const result = options.onSyncStart()
+          json(res, result, result.accepted ? 202 : 200)
           return
         }
         // GET: sync status

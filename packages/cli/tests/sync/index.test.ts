@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
-import { SyncOrchestrator } from '../../src/sync/index.js'
+import { SyncOrchestrator, getSyncPath } from '../../src/sync/index.js'
 import { generateSyncRecordId } from '@aiusage/core'
 import type { SyncRecord } from '@aiusage/core'
 
@@ -83,6 +83,7 @@ describe('SyncOrchestrator', () => {
     const result = await orchestrator.sync()
     expect(result.uploadedCount).toBe(1)
     expect(mockBackend.writeFile).toHaveBeenCalled()
+    expect(mockBackend.writeFile.mock.calls[0][0]).toBe('1970/01/01/00.ndjson')
 
     // Verify the written content contains only the unsynced record
     const written = mockBackend.writeFile.mock.calls[0][1] as string
@@ -91,6 +92,28 @@ describe('SyncOrchestrator', () => {
     // Sync record ID is generated from deviceInstanceId + sourceFile + lineOffset
     const expectedSyncId = generateSyncRecordId('di1', '/f1', 0)
     expect(records[0].id).toBe(expectedSyncId)
+  })
+
+  it('partitions uploads by hour to keep remote files smaller', async () => {
+    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', '2026-05-13T01:15:00.000Z', 1000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
+    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r2', '2026-05-13T02:45:00.000Z', 1000, 1000, 1, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
+
+    mockBackend.listFiles.mockResolvedValue([])
+    mockBackend.readFile.mockResolvedValue(null)
+    mockBackend.writeFile.mockResolvedValue(undefined)
+
+    const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
+      deviceInstanceId: 'di1',
+      consentVerified: true,
+    })
+
+    const result = await orchestrator.sync()
+    expect(result.uploadedCount).toBe(2)
+    expect(mockBackend.writeFile).toHaveBeenCalledTimes(2)
+    expect(mockBackend.writeFile.mock.calls.map(call => call[0]).sort()).toEqual([
+      '2026/05/13/01.ndjson',
+      '2026/05/13/02.ndjson',
+    ])
   })
 
   it('merges with remote data instead of overwriting', async () => {
@@ -117,7 +140,7 @@ describe('SyncOrchestrator', () => {
       updatedAt: 1000,
     }
 
-    mockBackend.listFiles.mockResolvedValue(['1970/01.ndjson'])
+    mockBackend.listFiles.mockResolvedValue(['1970/01/01/00.ndjson'])
     mockBackend.readFile.mockResolvedValue({
       sha: 'remote-sha',
       content: JSON.stringify(remoteRecord) + '\n',
@@ -169,7 +192,7 @@ describe('SyncOrchestrator', () => {
       updatedAt: 1000,
     }
 
-    mockBackend.listFiles.mockResolvedValue(['1970/01.ndjson'])
+    mockBackend.listFiles.mockResolvedValue(['1970/01/01/00.ndjson'])
     mockBackend.readFile.mockResolvedValue({
       sha: 'remote-sha',
       content: JSON.stringify(remoteRecord) + '\n',
@@ -190,5 +213,9 @@ describe('SyncOrchestrator', () => {
     expect(records).toHaveLength(1)
     expect(records[0].model).toBe('new-model')
     expect(records[0].updatedAt).toBe(3000)
+  })
+
+  it('derives an hourly sync path from timestamps', () => {
+    expect(getSyncPath('2026-05-13T09:27:00.000Z')).toBe('2026/05/13/09.ndjson')
   })
 })

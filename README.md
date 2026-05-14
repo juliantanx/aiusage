@@ -277,6 +277,28 @@ docker build -t aiusage .
 | Config | `~/.aiusage/config.json` |
 | State (watermarks, sync) | `~/.aiusage/state.json` |
 
+## Database Visualization
+
+The local database is a standard SQLite file, so you can open it directly in DBeaver, TablePlus, DataGrip, DB Browser for SQLite, or any similar tool.
+
+```bash
+aiusage status
+# Shows the exact DB Path, schema version, and object counts
+```
+
+- Open `~/.aiusage/cache.db` as a SQLite database.
+- Prefer read-only mode in your database tool. `aiusage` writes to the same file and uses WAL mode.
+- If your tool asks about sidecar files, keep `cache.db-wal` and `cache.db-shm` alongside the main database file.
+- Start with the read-only views:
+  - `v_usage_records`: one row per usage record with normalized timestamp and token totals
+  - `v_tool_calls`: tool call rows joined with their parent usage record
+  - `v_sessions`: session-level aggregates for pivoting and charting
+- Raw internal tables remain available for advanced inspection:
+  - `records`
+  - `tool_calls`
+  - `synced_records`
+  - `sync_tombstones`
+
 ## Tech Stack
 
 - **Runtime:** Node.js, TypeScript

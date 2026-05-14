@@ -277,6 +277,28 @@ docker build -t aiusage .
 | 配置文件 | `~/.aiusage/config.json` |
 | 状态文件（水位线、同步状态） | `~/.aiusage/state.json` |
 
+## 数据库可视化查看
+
+本地数据库就是标准 SQLite 文件，可以直接用 DBeaver、TablePlus、DataGrip、DB Browser for SQLite 等工具打开查看。
+
+```bash
+aiusage status
+# 可看到精确的 DB Path、schema 版本和对象数量
+```
+
+- 以 SQLite 数据库方式打开 `~/.aiusage/cache.db`
+- 推荐在数据库工具里使用只读模式；`aiusage` 会持续写入该文件，并启用了 WAL 模式
+- 如果工具提示关联文件，请保留 `cache.db-wal` 和 `cache.db-shm` 与主库同目录
+- 优先查看只读视图：
+  - `v_usage_records`：usage 明细，包含标准化时间和总 token
+  - `v_tool_calls`：工具调用明细，并关联所属 usage 记录
+  - `v_sessions`：按会话聚合后的统计，便于透视和做图
+- 如需排查底层数据，也可以直接查看原始表：
+  - `records`
+  - `tool_calls`
+  - `synced_records`
+  - `sync_tombstones`
+
 ## 技术栈
 
 - **运行时：** Node.js、TypeScript

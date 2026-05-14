@@ -6,11 +6,13 @@ export interface State {
   deviceInstanceId: string
   lastSyncAt?: number
   lastSyncStatus: 'ok' | 'failed' | 'conflict_resolved' | 'blocked_pending_consent'
+  lastSyncError?: string
   syncConsentAt?: number
   syncConsentTarget?: string
   lastSyncTarget?: string
   lastSyncUploaded?: number
   lastSyncPulled?: number
+  lastSyncDurationMs?: number
   lastRemoteCleanAt?: number
   lastRemoteCleanSummary?: string
 }

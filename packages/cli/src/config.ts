@@ -1,8 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { generateConsentFingerprint, type ConsentConfig } from './sync/consent.js'
-import { getState, setState } from './init.js'
+import type { ConsentConfig } from './sync/consent.js'
 
 export const AIUSAGE_DIR = join(homedir(), '.aiusage')
 export const CONFIG_PATH = join(AIUSAGE_DIR, 'config.json')

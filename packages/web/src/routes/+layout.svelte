@@ -1,8 +1,8 @@
 <script>
   import { page } from '$app/stores'
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
-  import { userPref, resolvedTheme, cycleTheme, initTheme } from '$lib/theme.js'
+  import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
   import { triggerSync, fetchSyncStatus } from '$lib/api.js'
 
   const navItems = [
@@ -25,33 +25,54 @@
   let syncStatus = null
   let syncing = false
   let syncResult = ''
+  let syncPollTimer = null
 
   async function loadSyncStatus() {
     try {
       const data = await fetchSyncStatus()
       syncStatus = data.status
+      syncing = Boolean(syncStatus?.isRunning)
+      updateSyncPolling()
     } catch {
       syncStatus = null
+      syncing = false
+      updateSyncPolling()
     }
   }
 
   async function handleSync() {
-    syncing = true
     syncResult = ''
     try {
       const result = await triggerSync()
-      if (result.status === 'ok') {
-        syncResult = $t('sync.complete')
-      } else {
-        syncResult = result.error || $t('sync.failed')
-      }
-      await loadSyncStatus()
+      syncStatus = result.status
+      syncing = Boolean(result.status?.isRunning)
+      syncResult = result.alreadyRunning ? $t('sync.inProgress') : $t('sync.started')
+      updateSyncPolling()
     } catch {
       syncResult = $t('sync.failed')
-    } finally {
       syncing = false
-      setTimeout(() => { syncResult = '' }, 3000)
+      updateSyncPolling()
     }
+    setTimeout(() => {
+      if (!syncing) syncResult = ''
+    }, 3000)
+  }
+
+  function updateSyncPolling() {
+    if (syncPollTimer) {
+      clearInterval(syncPollTimer)
+      syncPollTimer = null
+    }
+    if (!syncing) return
+    syncPollTimer = setInterval(async () => {
+      await loadSyncStatus()
+      if (!syncStatus?.isRunning) {
+        syncResult = syncStatus?.lastSyncStatus === 'ok'
+          ? $t('sync.complete')
+          : (syncStatus?.lastSyncError || $t('sync.failed'))
+        setTimeout(() => { syncResult = '' }, 5000)
+      }
+    }, 2000)
   }
 
   function formatSyncTime(ts) {
@@ -63,6 +84,10 @@
   onMount(() => {
     initTheme()
     loadSyncStatus()
+  })
+
+  onDestroy(() => {
+    if (syncPollTimer) clearInterval(syncPollTimer)
   })
 </script>
 

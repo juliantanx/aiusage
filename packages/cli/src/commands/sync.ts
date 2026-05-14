@@ -1,10 +1,11 @@
 import type Database from 'better-sqlite3'
 import { getState, setState } from '../init.js'
 import { SyncOrchestrator, type SyncBackend, type SyncResult } from '../sync/index.js'
-import { verifyConsent, generateConsentFingerprint } from '../sync/consent.js'
+import { verifyConsent } from '../sync/consent.js'
 import { GitHubSyncBackend } from '../sync/github.js'
 import { S3SyncBackend } from '../sync/s3.js'
 import { loadConfig, buildConsentConfig, loadCredential, AIUSAGE_DIR } from '../config.js'
+import type { SyncProgress } from '../sync/runtime.js'
 
 function createBackend(config: import('../config.js').Config): SyncBackend | null {
   const sync = config.sync
@@ -43,7 +44,10 @@ function blockedResult(error: string): SyncResult {
   return { status: 'blocked_pending_consent', pulledCount: 0, uploadedCount: 0, mergedCount: 0, error }
 }
 
-export async function runSync(db: Database.Database): Promise<SyncResult> {
+export async function runSync(
+  db: Database.Database,
+  options?: { onProgress?: (progress: SyncProgress) => void },
+): Promise<SyncResult> {
   const config = loadConfig()
   if (!config?.sync) {
     return failedResult('Cloud sync not configured. Run "aiusage init" first.')
@@ -73,17 +77,21 @@ export async function runSync(db: Database.Database): Promise<SyncResult> {
   const orchestrator = new SyncOrchestrator(db, backend, {
     deviceInstanceId: state.deviceInstanceId,
     consentVerified: true,
+    onProgress: options?.onProgress,
   })
 
+  const startedAt = Date.now()
   const result = await orchestrator.sync()
 
   const now = Date.now()
   setState(AIUSAGE_DIR, {
     lastSyncAt: now,
     lastSyncStatus: result.status === 'ok' ? 'ok' : result.status,
+    lastSyncError: result.error,
     lastSyncTarget: `${config.sync.backend}:${config.sync.repo ?? config.sync.bucket}`,
     lastSyncUploaded: result.uploadedCount,
     lastSyncPulled: result.pulledCount,
+    lastSyncDurationMs: now - startedAt,
   })
 
   return result
