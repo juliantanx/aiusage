@@ -166,7 +166,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
               COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
               COALESCE(SUM(cost), 0) AS totalCost,
-              COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+              COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
               COUNT(DISTINCT session_id) AS totalSessions
             FROM (${unionSql})
           `).get({ ...dr.params, ...df.params }) as any
@@ -197,7 +197,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
               COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
               COALESCE(SUM(cost), 0) AS totalCost,
-              COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+              COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
               COUNT(DISTINCT session_key) AS totalSessions
             FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
           `).get({ ...dr.params, ...df.params }) as any
@@ -220,7 +220,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
               COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
               COALESCE(SUM(cost), 0) AS totalCost,
-              COUNT(DISTINCT substr(ts, 1, 10)) AS activeDays,
+              COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
               COUNT(DISTINCT session_id) AS totalSessions
             FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
           `).get(dr.params) as any
@@ -276,7 +276,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         if (df.useUnion) {
           sql = `
-            SELECT substr(ts, 1, 10) AS date,
+            SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(input_tokens) AS inputTokens,
                    SUM(output_tokens) AS outputTokens,
                    SUM(cache_read_tokens) AS cacheReadTokens,
@@ -291,7 +291,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           params = { ...dr.params, currentDeviceId: df.params.currentDeviceId }
         } else if (device && device !== options?.currentDeviceInstanceId) {
           sql = `
-            SELECT substr(ts, 1, 10) AS date,
+            SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(input_tokens) AS inputTokens,
                    SUM(output_tokens) AS outputTokens,
                    SUM(cache_read_tokens) AS cacheReadTokens,
@@ -302,7 +302,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           params = { ...df.params, ...dr.params }
         } else {
           sql = `
-            SELECT substr(ts, 1, 10) AS date,
+            SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(input_tokens) AS inputTokens,
                    SUM(output_tokens) AS outputTokens,
                    SUM(cache_read_tokens) AS cacheReadTokens,
@@ -330,7 +330,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         if (df.useUnion) {
           daily = db.prepare(`
-            SELECT substr(ts, 1, 10) AS date,
+            SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(cost) AS cost
             FROM (
               SELECT cost, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
@@ -357,7 +357,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
         } else if (device && device !== options?.currentDeviceInstanceId) {
           daily = db.prepare(`
-            SELECT substr(ts, 1, 10) AS date,
+            SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(cost) AS cost
             FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
             GROUP BY date ORDER BY date
@@ -376,7 +376,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           `).all({ ...df.params, ...dr.params }) as any[]
         } else {
           daily = db.prepare(`
-            SELECT substr(ts, 1, 10) AS date,
+            SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(cost) AS cost
             FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
             GROUP BY date ORDER BY date
