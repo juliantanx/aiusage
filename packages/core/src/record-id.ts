@@ -1,22 +1,20 @@
 import { createHash } from 'node:crypto'
 import type { Tool } from './types.js'
 
-export function generateRecordId(sourceFile: string, lineOffset: number): string {
+export function generateRecordId(deviceInstanceId: string, sourceFile: string, lineOffset: number): string {
   const hash = createHash('sha256')
-    .update(sourceFile + lineOffset)
+    .update(deviceInstanceId + sourceFile + lineOffset)
     .digest('hex')
   return hash.slice(0, 16)
 }
 
+/** @deprecated Use generateRecordId instead — they are now identical */
 export function generateSyncRecordId(
   deviceInstanceId: string,
   sourceFile: string,
   lineOffset: number
 ): string {
-  const hash = createHash('sha256')
-    .update(deviceInstanceId + sourceFile + lineOffset)
-    .digest('hex')
-  return hash.slice(0, 16)
+  return generateRecordId(deviceInstanceId, sourceFile, lineOffset)
 }
 
 export function generateToolCallId(

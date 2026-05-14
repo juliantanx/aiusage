@@ -1,4 +1,5 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { ConflictError } from './index.js'
 
 export interface S3Config {
   bucket: string
@@ -64,7 +65,14 @@ export class S3SyncBackend {
       ContentType: 'application/x-ndjson',
       ...(sha ? { IfMatch: `"${sha}"` } : {}),
     })
-    await this.client.send(command)
+    try {
+      await this.client.send(command)
+    } catch (error: any) {
+      if (error.name === 'PreconditionFailed' || error.$metadata?.httpStatusCode === 412) {
+        throw new ConflictError(path)
+      }
+      throw error
+    }
   }
 
   async listFiles(): Promise<string[]> {

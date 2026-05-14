@@ -21,8 +21,8 @@ export class OpenClawParser implements Parser {
     const usage = parsed.message.usage
     const model = parsed.message.model ?? 'unknown'
     const rawTs = parsed.message.timestamp ?? context.now
-    // Normalize timestamp to ISO string (OpenClaw stores Unix ms)
-    const ts = typeof rawTs === 'number' ? new Date(rawTs).toISOString() : rawTs
+    // Normalize timestamp to Unix milliseconds (parsers must always produce integer ts)
+    const ts = typeof rawTs === 'number' ? rawTs : new Date(rawTs).getTime()
 
     const inputTokens = usage.input ?? 0
     const outputTokens = usage.output ?? 0
@@ -58,7 +58,7 @@ export class OpenClawParser implements Parser {
     const provider = parsed.message.provider ?? inferProvider(model)
 
     const record: StatsRecord = {
-      id: generateRecordId(context.sourceFile, context.lineOffset),
+      id: generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset),
       ts,
       ingestedAt: context.now,
       updatedAt: context.now,

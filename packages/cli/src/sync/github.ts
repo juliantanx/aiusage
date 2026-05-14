@@ -1,3 +1,5 @@
+import { ConflictError } from './index.js'
+
 export interface GitHubConfig {
   repo: string
   token: string
@@ -107,6 +109,7 @@ export class GitHubSyncBackend {
       body: JSON.stringify(body),
     })
 
+    if (response.status === 409) throw new ConflictError(path)
     if (!response.ok) await this.githubError('write', response)
   }
 

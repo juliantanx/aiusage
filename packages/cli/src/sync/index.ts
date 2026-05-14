@@ -11,6 +11,14 @@ export interface SyncBackend {
   listFiles(): Promise<string[]>
 }
 
+/** Thrown by backends when a write conflicts (stale sha/ETag). */
+export class ConflictError extends Error {
+  constructor(path: string) {
+    super(`Conflict writing ${path}: remote was modified concurrently`)
+    this.name = 'ConflictError'
+  }
+}
+
 export interface SyncOptions {
   deviceInstanceId: string
   consentVerified: boolean
@@ -28,6 +36,52 @@ export interface SyncResult {
 export function getSyncPath(ts: string | number): string {
   const d = new Date(ts)
   return `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCHours()).padStart(2, '0')}.ndjson`
+}
+
+const MAX_CONFLICT_RETRIES = 1
+
+/** Parse ndjson content into a Map<id, SyncRecord>, normalizing string timestamps */
+function parseNdjson(content: string): Map<string, SyncRecord> {
+  const records = new Map<string, SyncRecord>()
+  for (const line of content.split('\n').filter(Boolean)) {
+    try {
+      const record: SyncRecord = JSON.parse(line)
+      // Normalize string timestamps to integers (legacy remote data may have ISO strings)
+      if (typeof record.ts === 'string') {
+        (record as any).ts = new Date(record.ts).getTime()
+      }
+      if (typeof record.updatedAt === 'string') {
+        (record as any).updatedAt = new Date(record.updatedAt).getTime()
+      }
+      records.set(record.id, record)
+    } catch {}
+  }
+  return records
+}
+
+/** Merge local sync records into remote map; returns count of actually new/updated records */
+function mergeRecordsIntoRemote(
+  remoteRecords: Map<string, SyncRecord>,
+  localSyncRecords: SyncRecord[],
+): number {
+  let changed = 0
+  for (const record of localSyncRecords) {
+    const existing = remoteRecords.get(record.id)
+    if (!existing || record.updatedAt > existing.updatedAt) {
+      remoteRecords.set(record.id, record)
+      changed++
+    }
+  }
+  return changed
+}
+
+/** Clean up stale "unknown" deviceInstanceId records from remote */
+function removeUnknownRecords(remoteRecords: Map<string, SyncRecord>): void {
+  for (const [id, record] of remoteRecords) {
+    if (record.deviceInstanceId === 'unknown') {
+      remoteRecords.delete(id)
+    }
+  }
 }
 
 export class SyncOrchestrator {
@@ -92,6 +146,13 @@ export class SyncOrchestrator {
       for (const line of lines) {
         try {
           const record: SyncRecord = JSON.parse(line)
+          // Normalize string timestamps to integers (legacy remote data may have ISO strings)
+          if (typeof record.ts === 'string') {
+            (record as any).ts = new Date(record.ts).getTime()
+          }
+          if (typeof record.updatedAt === 'string') {
+            (record as any).updatedAt = new Date(record.updatedAt).getTime()
+          }
           // Skip records from our own device and stale "unknown" records
           if (record.deviceInstanceId === localDeviceId) continue
           if (record.deviceInstanceId === 'unknown') continue
@@ -112,11 +173,51 @@ export class SyncOrchestrator {
     return totalPulled
   }
 
+  private async uploadFileWithRetry(
+    path: string,
+    localSyncRecords: SyncRecord[],
+  ): Promise<number> {
+    for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt++) {
+      // Read current remote state
+      const remote = await this.backend.readFile(path)
+      if (attempt > 0 && !remote) {
+        // On retry, if remote suddenly disappears, abort rather than risk data loss
+        throw new Error(`Remote file ${path} disappeared during conflict retry`)
+      }
+      const remoteRecords = remote ? parseNdjson(remote.content) : new Map<string, SyncRecord>()
+
+      // Merge local into remote
+      const changedCount = mergeRecordsIntoRemote(remoteRecords, localSyncRecords)
+      removeUnknownRecords(remoteRecords)
+
+      // Nothing actually new or updated — skip write
+      if (changedCount === 0) return 0
+
+      // Write merged data
+      const allRecords = Array.from(remoteRecords.values())
+      const content = allRecords.map(r => JSON.stringify(r)).join('\n') + '\n'
+
+      try {
+        await this.backend.writeFile(path, content, remote?.sha)
+        return changedCount
+      } catch (error) {
+        if (error instanceof ConflictError && attempt < MAX_CONFLICT_RETRIES) {
+          // Remote was modified concurrently — re-read and retry once
+          continue
+        }
+        throw error
+      }
+    }
+
+    // Should not reach here, but satisfy type checker
+    return 0
+  }
+
   private async upload(): Promise<number> {
     const unsynced = getUnsyncedRecords(this.db)
     if (unsynced.length === 0) return 0
 
-    // Group records by day to keep remote GitHub objects small enough to update reliably.
+    // Group records by hour to keep remote GitHub objects small enough to update reliably.
     const byPath = new Map<string, typeof unsynced>()
     for (const record of unsynced) {
       const path = getSyncPath(record.ts)
@@ -134,7 +235,7 @@ export class SyncOrchestrator {
       uploadedCount: 0,
     })
 
-    for (const [index, [path, monthRecords]] of uploads.entries()) {
+    for (const [index, [path, localRecords]] of uploads.entries()) {
       this.options.onProgress?.({
         phase: 'uploading',
         currentPath: path,
@@ -142,40 +243,11 @@ export class SyncOrchestrator {
         totalFiles: uploads.length,
         uploadedCount: totalUploaded,
       })
-      // Read existing remote data to merge (never overwrite)
-      const remote = await this.backend.readFile(path)
-      const remoteRecords = new Map<string, SyncRecord>()
-      if (remote) {
-        for (const line of remote.content.split('\n').filter(Boolean)) {
-          try {
-            const record: SyncRecord = JSON.parse(line)
-            remoteRecords.set(record.id, record)
-          } catch {}
-        }
-      }
 
-      // Merge: add new records, update existing if local is newer
-      const localSyncRecords = monthRecords.map(mapStatsRecordToSyncRecord)
-      for (const record of localSyncRecords) {
-        const existing = remoteRecords.get(record.id)
-        if (!existing || record.updatedAt >= existing.updatedAt) {
-          remoteRecords.set(record.id, record)
-        }
-      }
+      const localSyncRecords = localRecords.map(mapStatsRecordToSyncRecord)
+      const changedCount = await this.uploadFileWithRetry(path, localSyncRecords)
+      totalUploaded += changedCount
 
-      // Clean up stale "unknown" deviceInstanceId records from remote
-      for (const [id, record] of remoteRecords) {
-        if (record.deviceInstanceId === 'unknown') {
-          remoteRecords.delete(id)
-        }
-      }
-
-      // Write merged data in a single operation
-      const allRecords = Array.from(remoteRecords.values())
-      const content = allRecords.map(r => JSON.stringify(r)).join('\n') + '\n'
-      await this.backend.writeFile(path, content, remote?.sha)
-
-      totalUploaded += monthRecords.length
       this.options.onProgress?.({
         phase: 'uploading',
         currentPath: path,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
-import { SyncOrchestrator, getSyncPath } from '../../src/sync/index.js'
+import { SyncOrchestrator, getSyncPath, ConflictError } from '../../src/sync/index.js'
 import { generateSyncRecordId } from '@aiusage/core'
 import type { SyncRecord } from '@aiusage/core'
 
@@ -95,8 +95,8 @@ describe('SyncOrchestrator', () => {
   })
 
   it('partitions uploads by hour to keep remote files smaller', async () => {
-    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', '2026-05-13T01:15:00.000Z', 1000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
-    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r2', '2026-05-13T02:45:00.000Z', 1000, 1000, 1, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
+    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', 1778634900000, 1000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
+    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r2', 1778640300000, 1000, 1000, 1, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
 
     mockBackend.listFiles.mockResolvedValue([])
     mockBackend.readFile.mockResolvedValue(null)
@@ -216,6 +216,98 @@ describe('SyncOrchestrator', () => {
   })
 
   it('derives an hourly sync path from timestamps', () => {
-    expect(getSyncPath('2026-05-13T09:27:00.000Z')).toBe('2026/05/13/09.ndjson')
+    expect(getSyncPath(1778664420000)).toBe('2026/05/13/09.ndjson')
+  })
+
+  it('retries on conflict and merges with updated remote', async () => {
+    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', 1000, 1000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run()
+
+    const conflictingRecord: SyncRecord = {
+      id: 'other-device-record',
+      ts: 1500,
+      tool: 'claude-code',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.002,
+      costSource: 'pricing',
+      sessionKey: 'def',
+      device: 'other',
+      deviceInstanceId: 'other-di',
+      updatedAt: 1500,
+    }
+
+    // First write attempt: conflict
+    mockBackend.listFiles.mockResolvedValue([])
+    mockBackend.readFile
+      .mockResolvedValueOnce(null) // initial read: no remote
+      .mockResolvedValueOnce({    // retry read: another device wrote in the meantime
+        sha: 'new-sha',
+        content: JSON.stringify(conflictingRecord) + '\n',
+      })
+    mockBackend.writeFile
+      .mockRejectedValueOnce(new ConflictError('1970/01/01/00.ndjson'))
+      .mockResolvedValueOnce(undefined)
+
+    const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
+      deviceInstanceId: 'di1',
+      consentVerified: true,
+    })
+
+    const result = await orchestrator.sync()
+    expect(result.status).toBe('ok')
+    expect(result.uploadedCount).toBe(1) // only our record was actually new
+    expect(mockBackend.writeFile).toHaveBeenCalledTimes(2)
+
+    // Second write should include both records
+    const written = mockBackend.writeFile.mock.calls[1][1] as string
+    const records = written.trim().split('\n').map((l: string) => JSON.parse(l))
+    expect(records).toHaveLength(2)
+  })
+
+  it('does not count already-existing remote records as uploaded', async () => {
+    const syncId = generateSyncRecordId('di1', '/f1', 0)
+
+    db.prepare(`INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', 2000, 2000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')`).run()
+
+    // Remote already has the same record with the same updatedAt (not newer)
+    const remoteRecord: SyncRecord = {
+      id: syncId,
+      ts: 1000,
+      tool: 'claude-code',
+      model: 'test',
+      provider: 'test',
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.001,
+      costSource: 'pricing',
+      sessionKey: 'abc',
+      device: 'd1',
+      deviceInstanceId: 'di1',
+      updatedAt: 1000,
+    }
+
+    mockBackend.listFiles.mockResolvedValue(['1970/01/01/00.ndjson'])
+    mockBackend.readFile.mockResolvedValue({
+      sha: 'remote-sha',
+      content: JSON.stringify(remoteRecord) + '\n',
+    })
+    mockBackend.writeFile.mockResolvedValue(undefined)
+
+    const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
+      deviceInstanceId: 'di1',
+      consentVerified: true,
+    })
+
+    const result = await orchestrator.sync()
+    // Local updatedAt (1000) is not > remote updatedAt (1000), so it's not actually updated
+    expect(result.uploadedCount).toBe(0)
   })
 })

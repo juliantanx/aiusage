@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
-import { insertSyncedRecord, getSyncedRecordById, upsertSyncedRecord } from '../../src/db/synced-records.js'
+import { insertSyncedRecord, getSyncedRecordById } from '../../src/db/synced-records.js'
 import type { SyncRecord } from '@aiusage/core'
 
 function createTestSyncRecord(overrides: Partial<SyncRecord> = {}): SyncRecord {
@@ -49,7 +49,7 @@ describe('Synced Records', () => {
   it('upserts synced record with newer updatedAt', () => {
     const record = createTestSyncRecord()
     insertSyncedRecord(db, record)
-    upsertSyncedRecord(db, { ...record, model: 'gpt-4o', updatedAt: 1776738085800 })
+    insertSyncedRecord(db, { ...record, model: 'gpt-4o', updatedAt: 1776738085800 })
 
     const retrieved = getSyncedRecordById(db, 'sync-1')
     expect(retrieved!.model).toBe('gpt-4o')
@@ -59,7 +59,7 @@ describe('Synced Records', () => {
   it('does not overwrite with older updatedAt', () => {
     const record = createTestSyncRecord({ updatedAt: 1776738085800 })
     insertSyncedRecord(db, record)
-    upsertSyncedRecord(db, { ...record, model: 'gpt-4o', updatedAt: 1776738085700 })
+    insertSyncedRecord(db, { ...record, model: 'gpt-4o', updatedAt: 1776738085700 })
 
     const retrieved = getSyncedRecordById(db, 'sync-1')
     expect(retrieved!.model).toBe('claude-sonnet-4-6')

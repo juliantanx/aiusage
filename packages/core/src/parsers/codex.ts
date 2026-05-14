@@ -42,9 +42,10 @@ export class CodexParser implements Parser {
 
     // Store function_call as pending
     if (payload.type === 'function_call') {
+      const rawFcTs = parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now
       this.pendingToolCalls.push({
         name: payload.function?.name ?? 'unknown',
-        ts: parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now,
+        ts: typeof rawFcTs === 'number' ? rawFcTs : new Date(rawFcTs).getTime(),
       })
       return null
     }
@@ -56,7 +57,8 @@ export class CodexParser implements Parser {
     }
 
     const model = payload.model ?? parsed.model ?? this.currentModel ?? 'unknown'
-    const ts = parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now
+    const rawTs = parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now
+    const ts = typeof rawTs === 'number' ? rawTs : new Date(rawTs).getTime()
 
     const inputTokens = usage.input_tokens ?? 0
     const outputTokens = usage.output_tokens ?? 0
@@ -75,7 +77,7 @@ export class CodexParser implements Parser {
     const costSource = model === 'unknown' ? 'unknown' as const : 'pricing' as const
     const provider = inferProvider(model)
 
-    const recordId = generateRecordId(context.sourceFile, context.lineOffset)
+    const recordId = generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset)
 
     const record: StatsRecord = {
       id: recordId,

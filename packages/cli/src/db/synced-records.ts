@@ -2,8 +2,10 @@ import type Database from 'better-sqlite3'
 import type { SyncRecord } from '@aiusage/core'
 
 export function insertSyncedRecord(db: Database.Database, record: SyncRecord): void {
+  // Only replace if the incoming record is newer than what we already have.
+  // Without this check, a stale remote record could silently overwrite a newer one.
   db.prepare(`
-    INSERT OR REPLACE INTO synced_records (
+    INSERT INTO synced_records (
       id, ts, tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
       cost, cost_source, session_key, device, device_instance_id, platform, updated_at
@@ -12,6 +14,24 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
       @cacheReadTokens, @cacheWriteTokens, @thinkingTokens,
       @cost, @costSource, @sessionKey, @device, @deviceInstanceId, @platform, @updatedAt
     )
+    ON CONFLICT(id) DO UPDATE SET
+      ts = excluded.ts,
+      tool = excluded.tool,
+      model = excluded.model,
+      provider = excluded.provider,
+      input_tokens = excluded.input_tokens,
+      output_tokens = excluded.output_tokens,
+      cache_read_tokens = excluded.cache_read_tokens,
+      cache_write_tokens = excluded.cache_write_tokens,
+      thinking_tokens = excluded.thinking_tokens,
+      cost = excluded.cost,
+      cost_source = excluded.cost_source,
+      session_key = excluded.session_key,
+      device = excluded.device,
+      device_instance_id = excluded.device_instance_id,
+      platform = excluded.platform,
+      updated_at = excluded.updated_at
+    WHERE excluded.updated_at > synced_records.updated_at
   `).run({
     id: record.id,
     ts: record.ts,
@@ -39,13 +59,6 @@ export function getSyncedRecordById(db: Database.Database, id: string): SyncReco
   return mapRowToSyncRecord(row)
 }
 
-export function upsertSyncedRecord(db: Database.Database, record: SyncRecord): void {
-  const existing = getSyncedRecordById(db, record.id)
-  if (!existing || record.updatedAt > existing.updatedAt) {
-    insertSyncedRecord(db, record)
-  }
-}
-
 /**
  * Merge synced_records into records table so API queries can see them.
  * Only inserts records that don't already exist in records.
@@ -62,7 +75,7 @@ export function mergeSyncedRecordsIntoRecords(db: Database.Database): number {
   if (newRows.length === 0) return 0
 
   const insertStmt = db.prepare(`
-    INSERT OR REPLACE INTO records (
+    INSERT OR IGNORE INTO records (
       id, ts, ingested_at, synced_at, updated_at, line_offset,
       tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
@@ -122,6 +135,7 @@ function mapRowToSyncRecord(row: Record<string, unknown>): SyncRecord {
     sessionKey: row.session_key as string,
     device: row.device as string,
     deviceInstanceId: row.device_instance_id as string,
+    platform: row.platform as string | undefined,
     updatedAt: row.updated_at as number,
   }
 }

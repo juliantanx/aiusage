@@ -23,7 +23,8 @@ export class ClaudeCodeParser implements Parser {
 
     // Skip synthetic messages (Claude Code internal, zero token usage)
     if (model === '<synthetic>') return null
-    const ts = parsed.message.timestamp ?? parsed.timestamp ?? context.now
+    const rawTs = parsed.message.timestamp ?? parsed.timestamp ?? context.now
+    const ts = typeof rawTs === 'number' ? rawTs : new Date(rawTs).getTime()
 
     const inputTokens = usage.input_tokens ?? 0
     const outputTokens = usage.output_tokens ?? 0
@@ -44,7 +45,7 @@ export class ClaudeCodeParser implements Parser {
     const provider = inferProvider(model)
 
     const record: StatsRecord = {
-      id: generateRecordId(context.sourceFile, context.lineOffset),
+      id: generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset),
       ts,
       ingestedAt: context.now,
       updatedAt: context.now,
