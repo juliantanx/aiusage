@@ -9,7 +9,9 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
   const ts = prefix ? `${prefix}.ts` : 'ts'
 
   if (from && to) {
-    return { where: `AND ${ts} >= @start AND ${ts} < @end`, params: { start: from, end: to + 'T23:59:59.999Z' } }
+    const startMs = new Date(from).getTime()
+    const endMs = new Date(to + 'T23:59:59.999Z').getTime()
+    return { where: `AND ${ts} >= @start AND ${ts} < @end`, params: { start: startMs, end: endMs } }
   }
 
   const now = new Date()
@@ -19,22 +21,22 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
     const dayOfWeek = today.getDay()
     const startOfWeek = new Date(today)
     startOfWeek.setDate(today.getDate() - dayOfWeek)
-    return { where: `AND ${ts} >= @start`, params: { start: startOfWeek.toISOString() } }
+    return { where: `AND ${ts} >= @start`, params: { start: startOfWeek.getTime() } }
   }
   if (range === 'month') {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    return { where: `AND ${ts} >= @start`, params: { start: startOfMonth.toISOString() } }
+    return { where: `AND ${ts} >= @start`, params: { start: startOfMonth.getTime() } }
   }
   if (range === 'last30') {
     const start = new Date(today)
     start.setDate(start.getDate() - 30)
-    return { where: `AND ${ts} >= @start`, params: { start: start.toISOString() } }
+    return { where: `AND ${ts} >= @start`, params: { start: start.getTime() } }
   }
   if (range === 'all') {
     return { where: '', params: {} }
   }
   // default: day
-  return { where: `AND ${ts} >= @start`, params: { start: today.toISOString() } }
+  return { where: `AND ${ts} >= @start`, params: { start: today.getTime() } }
 }
 
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
