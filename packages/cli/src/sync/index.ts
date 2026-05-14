@@ -180,10 +180,6 @@ export class SyncOrchestrator {
     for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt++) {
       // Read current remote state
       const remote = await this.backend.readFile(path)
-      if (attempt > 0 && !remote) {
-        // On retry, if remote suddenly disappears, abort rather than risk data loss
-        throw new Error(`Remote file ${path} disappeared during conflict retry`)
-      }
       const remoteRecords = remote ? parseNdjson(remote.content) : new Map<string, SyncRecord>()
 
       // Merge local into remote

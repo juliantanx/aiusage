@@ -114,35 +114,19 @@ export class GitHubSyncBackend {
   }
 
   async listFiles(): Promise<string[]> {
-    const files = await this.listDirectory('data')
-    return files
-      .filter(path => path.endsWith('.ndjson'))
-      .map(path => path.replace(/^data\//, ''))
-      .sort()
-  }
-
-  private async listDirectory(path: string): Promise<string[]> {
-    const url = `${this.baseUrl}/repos/${this.repo}/contents/${path}/`
+    // Use Git Trees API (single request) instead of recursive Contents API (N+1 requests)
+    const url = `${this.baseUrl}/repos/${this.repo}/git/trees/main?recursive=1`
     const response = await this.authedFetch(url, {
       headers: { Accept: 'application/vnd.github.v3+json' },
     })
 
     if (response.status === 404) return []
-    if (!response.ok) await this.githubError(`list-${path}`, response)
+    if (!response.ok) await this.githubError('list-tree', response)
 
-    const entries = await response.json()
-    const files: string[] = []
-
-    for (const entry of entries) {
-      if (entry.type === 'file') {
-        files.push(entry.path)
-        continue
-      }
-      if (entry.type === 'dir') {
-        files.push(...await this.listDirectory(entry.path))
-      }
-    }
-
-    return files
+    const data = await response.json()
+    return (data.tree as { path: string; type: string }[])
+      .filter(entry => entry.type === 'blob' && entry.path.startsWith('data/') && entry.path.endsWith('.ndjson'))
+      .map(entry => entry.path.replace(/^data\//, ''))
+      .sort()
   }
 }
