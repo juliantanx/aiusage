@@ -9,6 +9,10 @@ export interface SyncBackend {
   readFile(path: string): Promise<{ sha: string; content: string } | null>
   writeFile(path: string, content: string, sha?: string): Promise<void>
   listFiles(): Promise<string[]>
+  /** Optional: called before sync to fetch latest remote state (e.g. git pull) */
+  prepare?(): Promise<void>
+  /** Optional: called after all writes to push changes (e.g. git commit + push) */
+  flush?(): Promise<boolean>
 }
 
 /** Thrown by backends when a write conflicts (stale sha/ETag). */
@@ -101,10 +105,12 @@ export class SyncOrchestrator {
     }
 
     try {
+      await this.backend.prepare?.()
       const pulledCount = await this.pull()
       this.options.onProgress?.({ phase: 'merging', pulledCount })
       const mergedCount = mergeSyncedRecordsIntoRecords(this.db)
       const uploadedCount = await this.upload()
+      await this.backend.flush?.()
       this.options.onProgress?.({ phase: 'finalizing', pulledCount, uploadedCount })
       return { status: 'ok', pulledCount, uploadedCount, mergedCount }
     } catch (error) {

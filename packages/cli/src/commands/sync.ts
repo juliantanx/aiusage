@@ -1,8 +1,9 @@
+import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { getState, setState } from '../init.js'
 import { SyncOrchestrator, type SyncBackend, type SyncResult } from '../sync/index.js'
 import { verifyConsent } from '../sync/consent.js'
-import { GitHubSyncBackend } from '../sync/github.js'
+import { GitSyncBackend } from '../sync/git.js'
 import { S3SyncBackend } from '../sync/s3.js'
 import { loadConfig, buildConsentConfig, loadCredential, AIUSAGE_DIR } from '../config.js'
 import type { SyncProgress } from '../sync/runtime.js'
@@ -15,7 +16,11 @@ function createBackend(config: import('../config.js').Config): SyncBackend | nul
     if (!sync.repo) return null
     const token = loadCredential(`github/${sync.repo}/token`)
     if (!token) return null
-    return new GitHubSyncBackend({ repo: sync.repo, token })
+    return new GitSyncBackend({
+      repo: sync.repo,
+      token,
+      cacheDir: join(AIUSAGE_DIR, 'sync-repo'),
+    })
   }
 
   if (sync.backend === 's3') {
