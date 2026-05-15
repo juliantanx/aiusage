@@ -186,21 +186,24 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   if ((!filterTool || filterTool === 'opencode') && existsSync(openCodeDbPath)) {
     try {
       const openCodeDb = new Database(openCodeDbPath, { readonly: true })
-      const result = runParseOpenCode(openCodeDb, {
-        dbPath: openCodeDbPath,
-        device,
-        deviceInstanceId,
-        now: Date.now(),
-        cursor: wm.getOpenCodeCursor(),
-      })
-      openCodeDb.close()
+      try {
+        const result = runParseOpenCode(openCodeDb, {
+          dbPath: openCodeDbPath,
+          device,
+          deviceInstanceId,
+          now: Date.now(),
+          cursor: wm.getOpenCodeCursor(),
+        })
 
-      for (const record of result.records) insertRecord(db, record)
-      for (const tc of result.toolCalls) insertToolCall(db, tc)
-      if (result.nextCursor) wm.setOpenCodeCursor(result.nextCursor)
-      parsedCount += result.records.length
-      toolCallCount += result.toolCalls.length
-      errors.push(...result.errors)
+        for (const record of result.records) insertRecord(db, record)
+        for (const tc of result.toolCalls) insertToolCall(db, tc)
+        if (result.nextCursor) wm.setOpenCodeCursor(result.nextCursor)
+        parsedCount += result.records.length
+        toolCallCount += result.toolCalls.length
+        errors.push(...result.errors)
+      } finally {
+        openCodeDb.close()
+      }
     } catch (e) {
       errors.push(`${openCodeDbPath}: ${e instanceof Error ? e.message : e}`)
     }
