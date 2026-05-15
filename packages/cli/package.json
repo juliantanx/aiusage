@@ -1,5 +1,5 @@
 {
-  "name": "aiusage",
+  "name": "@juliantanx/aiusage",
   "version": "0.0.1",
   "type": "module",
   "description": "Track and analyze AI coding assistant usage across Claude Code, Codex, and more",

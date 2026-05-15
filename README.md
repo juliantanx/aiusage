@@ -18,7 +18,7 @@ English | [中文](./README_zh.md)
 
 ```bash
 # Install
-npm install -g aiusage
+npm install -g @juliantanx/aiusage
 
 # Parse local session logs
 aiusage parse
@@ -142,7 +142,7 @@ On **every** machine that uses Claude Code / Codex / OpenClaw:
 
 ```bash
 # Install aiusage CLI
-npm install -g aiusage
+npm install -g @juliantanx/aiusage
 
 # Configure sync backend — GitHub
 aiusage init --backend github \

@@ -18,7 +18,7 @@
 
 ```bash
 # 安装
-npm install -g aiusage
+npm install -g @juliantanx/aiusage
 
 # 解析本地会话日志
 aiusage parse
@@ -142,7 +142,7 @@ aiusage serve
 
 ```bash
 # 安装 aiusage CLI
-npm install -g aiusage
+npm install -g @juliantanx/aiusage
 
 # 配置同步后端 — GitHub
 aiusage init --backend github \

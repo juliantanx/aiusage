@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter aiusage build",
+    "build": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter @juliantanx/aiusage build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"
   }
