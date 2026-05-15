@@ -42,9 +42,11 @@ aiusage serve
 Day-to-day usage is just two commands:
 
 ```bash
-aiusage parse   # ingest new data
+aiusage parse   # import newly appended local log data
 aiusage serve   # open dashboard
 ```
+
+`aiusage` does not run a built-in background parser. If you want automatic imports, schedule `aiusage parse` with cron or Task Scheduler.
 
 **Automate parsing (optional):**
 
@@ -80,6 +82,8 @@ schtasks /create /tn "AiusageParse" /tr "aiusage parse" /sc minute /mo 30
 aiusage serve
 # Open http://localhost:3847
 ```
+
+On the overview page's first load, the dashboard triggers `/api/refresh`, which runs one incremental local parse before loading summary data.
 
 - **Overview** — total tokens, cost, active days, per-tool breakdown
 - **Tokens** — daily token usage chart (input/output/thinking)
@@ -185,9 +189,10 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 **How sync works:**
 
 - Each machine has a unique `deviceInstanceId` (generated on first run)
-- Each device writes to its own daily files (`{deviceId}/YYYY/MM/DD.ndjson`) in the remote backend
-- Pull reads other devices' files into local `synced_records` table; Upload writes only to own device's files
+- Each device writes to its own daily file (`{deviceInstanceId}/YYYY/MM/DD.ndjson`) in the remote backend
+- Pull reads other devices' files into the local `synced_records` table; upload writes only this device's files
 - Device-partitioned files eliminate write conflicts — no locking needed
+- Sync frequency comes from your external scheduler or manual runs; aiusage does not include a built-in sync daemon
 - Session IDs are anonymized via `sha256(device + sessionId)`
 
 ---

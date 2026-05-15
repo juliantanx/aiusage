@@ -24,9 +24,9 @@
   │           Cloud Storage (GitHub / S3)             │
   │                                                   │
   │  data/                                            │
-  │  ├── 2026/05/13/00.ndjson   ← 按小时分区          │
-  │  ├── 2026/05/13/01.ndjson                        │
-  │  ├── 2026/05/13/02.ndjson                        │
+  │  ├── {deviceInstanceId}/2026/05/13.ndjson        │
+  │  ├── {deviceInstanceId}/2026/05/14.ndjson        │
+  │  └── ...                                         │
   │  └── ...                                         │
   └──────────────────────────────────────────────────┘
 ```
@@ -195,26 +195,23 @@ sync()
   │
   ├── 1. pull()          拉取云端数据
   │     ├── backend.listFiles()   列出所有 .ndjson 文件
+  │     ├── 过滤当前设备前缀文件 (`${deviceInstanceId}/`)
   │     └── 逐文件处理:
   │           ├── 读取远端文件内容
   │           ├── 逐行 JSON.parse → SyncRecord
-  │           ├── 跳过本设备记录 (deviceInstanceId === localDeviceId)
-  │           ├── 跳过 unknown 设备记录
   │           └── insertSyncedRecord(db, record) → 写入 synced_records
   │
   ├── 2. mergeSyncedRecordsIntoRecords()   合并到 records
   │     ├── LEFT JOIN 找出 synced_records 中不存在于 records 的记录
-  │     └── INSERT OR REPLACE → 写入 records（source_file = "synced/{deviceInstanceId}"）
+  │     └── INSERT OR IGNORE → 写入 records（source_file = "synced/{deviceInstanceId}"）
   │
   ├── 3. upload()        上传本地数据
   │     ├── getUnsyncedRecords()   查找 synced_at IS NULL OR updated_at > synced_at
-  │     ├── 按 getSyncPath(ts) 小时分组
+  │     ├── 按 getSyncPath(ts, deviceInstanceId) 按天分组
   │     └── 逐文件:
   │           ├── 读取远端已有内容 → Map<id, SyncRecord>
   │           ├── 合并: 新增 + updatedAt 较新时覆盖
-  │           ├── 清理 unknown 设备的记录
-  │           ├── 写回远端 (writeFile with sha/ETag)
-  │           └── 标记本地记录 synced_at = Date.now()
+  │           └── 写回远端 (writeFile with sha/ETag)
   │
   └── 返回 SyncResult { status, pulledCount, uploadedCount, mergedCount }
 ```
@@ -222,12 +219,19 @@ sync()
 ### 4.4 远端文件结构
 
 ```
-data/YYYY/MM/DD/HH.ndjson
+{deviceInstanceId}/YYYY/MM/DD.ndjson
 
-示例: data/2026/05/13/09.ndjson
+示例: 550e8400-e29b-41d4-a716-446655440000/2026/05/13.ndjson
 ```
 
-每行一条 JSON 记录 (SyncRecord)，按小时分区以保持文件大小可控。
+每行一条 JSON 记录 (SyncRecord)。当前实现按设备隔离、按天分文件。
+
+### 4.4.1 自动化与刷新频率
+
+- 项目本身不内建定时同步或定时解析能力
+- `aiusage parse` 与 `aiusage sync` 的执行频率由用户手动触发或外部 cron / 任务计划控制
+- Web 概览页首次加载时会调用 `/api/refresh`，触发一次本地增量 parse
+- Web Sync 按钮触发后，前端会每 2 秒轮询 `/api/sync` 查询进度；这不是新的数据采集周期
 
 ### 4.5 冲突解决策略
 
@@ -236,8 +240,8 @@ data/YYYY/MM/DD/HH.ndjson
 | 同一 record ID, 本地更新 | `updatedAt > remote.updatedAt` → 本地覆盖远端 |
 | 同一 record ID, 远端更新 | 远端 updatedAt 更新 → 保留远端 |
 | 同一 record ID, 同步更新 | updatedAt 相等 → 任一版本均可（幂等） |
-| 本设备记录出现在远端 | pull 时跳过 (`deviceInstanceId === localDeviceId`) |
-| unknown 设备记录 | pull 时跳过; upload 时从远端清理 |
+| 本设备文件出现在远端 | pull 时在文件级跳过当前设备前缀 |
+| unknown 设备记录 | 当前实现无专门清理逻辑，文档不做额外保证 |
 
 ### 4.6 同步后端
 
@@ -249,7 +253,7 @@ data/YYYY/MM/DD/HH.ndjson
 **GitHub 特殊处理**:
 - 手动跟随 302 重定向（Node.js fetch 会丢弃 Authorization header）
 - 请求超时 120 秒
-- 递归遍历目录树（支持任意深度的年/月/日/时结构）
+- 递归遍历目录树（支持按设备前缀、年/月/日层级组织的同步文件）
 
 ## 五、数据一致性保证
 
@@ -258,7 +262,7 @@ data/YYYY/MM/DD/HH.ndjson
 1. **SyncRecord.id 包含 deviceInstanceId**: 不同设备的记录天然隔离
 2. **updatedAt 比较**: 合并时以较新版本为准
 3. **sha/ETag 传递**: 写入时携带版本标识
-4. **本设备记录跳过**: pull 时忽略自己上传的数据
+4. **本设备文件跳过**: pull 时在文件级忽略当前设备前缀的数据文件
 
 ### 5.2 已修复的问题
 
@@ -283,7 +287,7 @@ data/YYYY/MM/DD/HH.ndjson
 |------|------|------|
 | `/api/sync` | POST | 触发同步，返回 202 (已接受) 或 200 (已在运行) |
 | `/api/sync` | GET | 获取同步状态和进度 |
-| `/api/refresh` | POST | 重新解析本地日志 |
+| `/api/refresh` | GET | 重新解析本地日志 |
 | `/api/devices` | GET | 列出所有设备及其记录数 |
 
 ### 同步状态响应格式
@@ -294,7 +298,7 @@ data/YYYY/MM/DD/HH.ndjson
     "isRunning": true,
     "startedAt": 1715683200000,
     "phase": "uploading",
-    "currentPath": "2026/05/13/09.ndjson",
+    "currentPath": "550e8400-e29b-41d4-a716-446655440000/2026/05/13.ndjson",
     "completedFiles": 2,
     "totalFiles": 5,
     "uploadedCount": 30,
@@ -313,5 +317,5 @@ data/YYYY/MM/DD/HH.ndjson
 
 1. **用户同意**: 首次同步需通过 `aiusage init` 确认，指纹 (SHA-256) 绑定配置
 2. **会话键**: `sha256(device + sessionId)[0:24]` — 不暴露原始 sessionId
-3. **凭证管理**: GitHub token / S3 密钥存储在 `~/.aiusage/credentials/`
+3. **凭证管理**: GitHub token / S3 密钥存储在 `~/.aiusage/config.json` 的 `credentials` 字段中
 4. **数据内容**: 不上传 tool_calls 详情、source_file 原始路径、session_id 原文

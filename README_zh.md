@@ -42,9 +42,11 @@ aiusage serve
 日常使用只需两条命令：
 
 ```bash
-aiusage parse   # 导入新数据
+aiusage parse   # 增量导入本地日志中新追加的数据
 aiusage serve   # 打开仪表盘
 ```
+
+`aiusage` 本身不运行内建后台解析任务。如需自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`。
 
 **自动化解析（可选）：**
 
@@ -80,6 +82,8 @@ schtasks /create /tn "AiusageParse" /tr "aiusage parse" /sc minute /mo 30
 aiusage serve
 # 打开 http://localhost:3847
 ```
+
+概览页首次加载时会调用 `/api/refresh`，触发一次本地增量 parse，然后再加载统计数据。
 
 - **概览** — 总 token 数、费用、活跃天数、按工具分类
 - **Token** — 每日 token 用量图表（输入/输出/思考）
@@ -185,9 +189,10 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 **同步原理：**
 
 - 每台机器有唯一的 `deviceInstanceId`（首次运行时生成）
-- 每台设备写入自己的按天文件（`{deviceId}/YYYY/MM/DD.ndjson`）到远端后端
-- Pull 读取其他设备的文件到本地 `synced_records` 表，Upload 仅写入自己设备的文件
+- 每台设备写入自己的按天文件（`{deviceInstanceId}/YYYY/MM/DD.ndjson`）到远端后端
+- Pull 读取其他设备的文件到本地 `synced_records` 表，Upload 仅写入当前设备自己的文件
 - 按设备分文件，从根本上消除写冲突，无需加锁
+- 自动化频率由外部 cron / 任务计划控制，aiusage 本身不内建常驻同步进程
 - Session ID 通过 `sha256(device + sessionId)` 匿名化
 
 ---
