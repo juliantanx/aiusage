@@ -39,16 +39,13 @@ describe('S3SyncBackend', () => {
     expect(b.getObjectKey('test.ndjson')).toBe('my-prefix/test.ndjson')
   })
 
-  it('reads file and returns content with etag', async () => {
+  it('reads file and returns content', async () => {
     mockSend.mockResolvedValueOnce({
       Body: { transformToString: () => Promise.resolve('{"id":"r1"}\n') },
-      ETag: '"abc123"',
     })
 
     const result = await backend.readFile('2026/05.ndjson')
-    expect(result).not.toBeNull()
-    expect(result!.content).toBe('{"id":"r1"}\n')
-    expect(result!.sha).toBe('abc123')
+    expect(result).toBe('{"id":"r1"}\n')
   })
 
   it('returns null for non-existent file', async () => {
@@ -75,26 +72,6 @@ describe('S3SyncBackend', () => {
         Body: '{"id":"r1"}\n',
         ContentType: 'application/x-ndjson',
       })
-    )
-  })
-
-  it('writes file with IfMatch for optimistic locking', async () => {
-    mockSend.mockResolvedValueOnce({})
-
-    await backend.writeFile('2026/05.ndjson', '{"id":"r1"}\n', 'abc123')
-    expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        IfMatch: '"abc123"',
-      })
-    )
-  })
-
-  it('writes file without IfMatch when no sha', async () => {
-    mockSend.mockResolvedValueOnce({})
-
-    await backend.writeFile('2026/05.ndjson', '{"id":"r1"}\n')
-    expect(mockSend).toHaveBeenCalledWith(
-      expect.not.objectContaining({ IfMatch: expect.anything() })
     )
   })
 

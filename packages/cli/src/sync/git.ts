@@ -55,17 +55,16 @@ export class GitSyncBackend {
     }
   }
 
-  async readFile(path: string): Promise<{ sha: string; content: string } | null> {
+  async readFile(path: string): Promise<string | null> {
     try {
       const fullPath = join(this.dataDir, path)
-      const content = await readFile(fullPath, 'utf-8')
-      return { sha: '', content }
+      return await readFile(fullPath, 'utf-8')
     } catch {
       return null
     }
   }
 
-  async writeFile(path: string, content: string, _sha?: string): Promise<void> {
+  async writeFile(path: string, content: string): Promise<void> {
     const fullPath = join(this.dataDir, path)
     await mkdir(join(fullPath, '..'), { recursive: true })
     await writeFile(fullPath, content, 'utf-8')

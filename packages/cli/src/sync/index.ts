@@ -6,21 +6,13 @@ import { mapStatsRecordToSyncRecord } from './mapper.js'
 import type { SyncProgress } from './runtime.js'
 
 export interface SyncBackend {
-  readFile(path: string): Promise<{ sha: string; content: string } | null>
-  writeFile(path: string, content: string, sha?: string): Promise<void>
+  readFile(path: string): Promise<string | null>
+  writeFile(path: string, content: string): Promise<void>
   listFiles(): Promise<string[]>
   /** Optional: called before sync to fetch latest remote state (e.g. git pull) */
   prepare?(): Promise<void>
   /** Optional: called after all writes to push changes (e.g. git commit + push) */
   flush?(): Promise<boolean>
-}
-
-/** Thrown by backends when a write conflicts (stale sha/ETag). */
-export class ConflictError extends Error {
-  constructor(path: string) {
-    super(`Conflict writing ${path}: remote was modified concurrently`)
-    this.name = 'ConflictError'
-  }
 }
 
 export interface SyncOptions {
@@ -41,8 +33,6 @@ export function getSyncPath(ts: string | number): string {
   const d = new Date(ts)
   return `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCHours()).padStart(2, '0')}.ndjson`
 }
-
-const MAX_CONFLICT_RETRIES = 1
 
 /** Parse ndjson content into a Map<id, SyncRecord>, normalizing string timestamps */
 function parseNdjson(content: string): Map<string, SyncRecord> {
@@ -148,7 +138,7 @@ export class SyncOrchestrator {
       const remote = await this.backend.readFile(path)
       if (!remote) continue
 
-      const lines = remote.content.split('\n').filter(Boolean)
+      const lines = remote.split('\n').filter(Boolean)
       for (const line of lines) {
         try {
           const record: SyncRecord = JSON.parse(line)
@@ -183,36 +173,23 @@ export class SyncOrchestrator {
     path: string,
     localSyncRecords: SyncRecord[],
   ): Promise<number> {
-    for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt++) {
-      // Read current remote state
-      const remote = await this.backend.readFile(path)
-      const remoteRecords = remote ? parseNdjson(remote.content) : new Map<string, SyncRecord>()
+    // Read current remote state
+    const remote = await this.backend.readFile(path)
+    const remoteRecords = remote ? parseNdjson(remote) : new Map<string, SyncRecord>()
 
-      // Merge local into remote
-      const changedCount = mergeRecordsIntoRemote(remoteRecords, localSyncRecords)
-      removeUnknownRecords(remoteRecords)
+    // Merge local into remote
+    const changedCount = mergeRecordsIntoRemote(remoteRecords, localSyncRecords)
+    removeUnknownRecords(remoteRecords)
 
-      // Nothing actually new or updated — skip write
-      if (changedCount === 0) return 0
+    // Nothing actually new or updated — skip write
+    if (changedCount === 0) return 0
 
-      // Write merged data
-      const allRecords = Array.from(remoteRecords.values())
-      const content = allRecords.map(r => JSON.stringify(r)).join('\n') + '\n'
+    // Write merged data
+    const allRecords = Array.from(remoteRecords.values())
+    const content = allRecords.map(r => JSON.stringify(r)).join('\n') + '\n'
 
-      try {
-        await this.backend.writeFile(path, content, remote?.sha)
-        return changedCount
-      } catch (error) {
-        if (error instanceof ConflictError && attempt < MAX_CONFLICT_RETRIES) {
-          // Remote was modified concurrently — re-read and retry once
-          continue
-        }
-        throw error
-      }
-    }
-
-    // Should not reach here, but satisfy type checker
-    return 0
+    await this.backend.writeFile(path, content)
+    return changedCount
   }
 
   private async upload(): Promise<number> {

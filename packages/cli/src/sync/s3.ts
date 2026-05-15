@@ -1,5 +1,4 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
-import { ConflictError } from './index.js'
 
 export interface S3Config {
   bucket: string
@@ -33,7 +32,7 @@ export class S3SyncBackend {
     return `${this.prefix}${path}`
   }
 
-  async readFile(path: string): Promise<{ sha: string; content: string } | null> {
+  async readFile(path: string): Promise<string | null> {
     const key = this.getObjectKey(path)
     try {
       const command = new GetObjectCommand({
@@ -41,13 +40,8 @@ export class S3SyncBackend {
         Key: key,
       })
       const response = await this.client.send(command)
-
       if (!response.Body) return null
-
-      const content = await response.Body.transformToString('utf-8')
-      const etag = response.ETag?.replace(/"/g, '') ?? ''
-
-      return { sha: etag, content }
+      return await response.Body.transformToString('utf-8')
     } catch (error: any) {
       if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
         return null
@@ -56,23 +50,15 @@ export class S3SyncBackend {
     }
   }
 
-  async writeFile(path: string, content: string, sha?: string): Promise<void> {
+  async writeFile(path: string, content: string): Promise<void> {
     const key = this.getObjectKey(path)
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       Body: content,
       ContentType: 'application/x-ndjson',
-      ...(sha ? { IfMatch: `"${sha}"` } : {}),
     })
-    try {
-      await this.client.send(command)
-    } catch (error: any) {
-      if (error.name === 'PreconditionFailed' || error.$metadata?.httpStatusCode === 412) {
-        throw new ConflictError(path)
-      }
-      throw error
-    }
+    await this.client.send(command)
   }
 
   async listFiles(): Promise<string[]> {
