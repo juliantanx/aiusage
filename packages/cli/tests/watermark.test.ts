@@ -94,4 +94,27 @@ describe('WatermarkManager', () => {
       lastMessageId: 'msg_1',
     })
   })
+
+  it('migrates legacy flat watermark format to new envelope', () => {
+    const legacyData = {
+      'claude-code': { '/path/file.jsonl': { offset: 500, size: 500, mtime: 1000 } },
+      'codex': {},
+      'openclaw': {},
+    }
+    writeFileSync(watermarkPath, JSON.stringify(legacyData), 'utf-8')
+
+    const wm = new WatermarkManager(watermarkPath)
+    expect(wm.getEntry('claude-code', '/path/file.jsonl')!.offset).toBe(500)
+    expect(wm.getOpenCodeCursor()).toBeNull()
+
+    // Verify it round-trips into new format
+    wm.save()
+    const wm2 = new WatermarkManager(watermarkPath)
+    expect(wm2.getEntry('claude-code', '/path/file.jsonl')!.offset).toBe(500)
+  })
+
+  it('returns null when no opencode cursor has been set', () => {
+    const wm = new WatermarkManager(watermarkPath)
+    expect(wm.getOpenCodeCursor()).toBeNull()
+  })
 })
