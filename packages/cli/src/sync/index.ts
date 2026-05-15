@@ -29,18 +29,18 @@ export interface SyncResult {
   error?: string
 }
 
-export function getSyncPath(ts: string | number): string {
+export function getSyncPath(ts: string | number, deviceInstanceId: string): string {
   const d = new Date(ts)
-  return `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCHours()).padStart(2, '0')}.ndjson`
+  const date = `${d.getUTCFullYear()}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}`
+  return `${deviceInstanceId}/${date}.ndjson`
 }
 
-/** Parse ndjson content into a Map<id, SyncRecord>, normalizing string timestamps */
+/** Parse ndjson content into a Map<id, SyncRecord> */
 function parseNdjson(content: string): Map<string, SyncRecord> {
   const records = new Map<string, SyncRecord>()
   for (const line of content.split('\n').filter(Boolean)) {
     try {
       const record: SyncRecord = JSON.parse(line)
-      // Normalize string timestamps to integers (legacy remote data may have ISO strings)
       if (typeof record.ts === 'string') {
         (record as any).ts = new Date(record.ts).getTime()
       }
@@ -53,29 +53,20 @@ function parseNdjson(content: string): Map<string, SyncRecord> {
   return records
 }
 
-/** Merge local sync records into remote map; returns count of actually new/updated records */
-function mergeRecordsIntoRemote(
-  remoteRecords: Map<string, SyncRecord>,
-  localSyncRecords: SyncRecord[],
+/** Merge new records into existing map; returns count of actually new/updated records */
+function mergeRecords(
+  existing: Map<string, SyncRecord>,
+  newRecords: SyncRecord[],
 ): number {
   let changed = 0
-  for (const record of localSyncRecords) {
-    const existing = remoteRecords.get(record.id)
-    if (!existing || record.updatedAt > existing.updatedAt) {
-      remoteRecords.set(record.id, record)
+  for (const record of newRecords) {
+    const prev = existing.get(record.id)
+    if (!prev || record.updatedAt > prev.updatedAt) {
+      existing.set(record.id, record)
       changed++
     }
   }
   return changed
-}
-
-/** Clean up stale "unknown" deviceInstanceId records from remote */
-function removeUnknownRecords(remoteRecords: Map<string, SyncRecord>): void {
-  for (const [id, record] of remoteRecords) {
-    if (record.deviceInstanceId === 'unknown') {
-      remoteRecords.delete(id)
-    }
-  }
 }
 
 export class SyncOrchestrator {
@@ -169,25 +160,17 @@ export class SyncOrchestrator {
     return totalPulled
   }
 
-  private async uploadFileWithRetry(
+  private async uploadFile(
     path: string,
     localSyncRecords: SyncRecord[],
   ): Promise<number> {
-    // Read current remote state
-    const remote = await this.backend.readFile(path)
-    const remoteRecords = remote ? parseNdjson(remote) : new Map<string, SyncRecord>()
+    const existingContent = await this.backend.readFile(path)
+    const existing = existingContent ? parseNdjson(existingContent) : new Map<string, SyncRecord>()
 
-    // Merge local into remote
-    const changedCount = mergeRecordsIntoRemote(remoteRecords, localSyncRecords)
-    removeUnknownRecords(remoteRecords)
-
-    // Nothing actually new or updated — skip write
+    const changedCount = mergeRecords(existing, localSyncRecords)
     if (changedCount === 0) return 0
 
-    // Write merged data
-    const allRecords = Array.from(remoteRecords.values())
-    const content = allRecords.map(r => JSON.stringify(r)).join('\n') + '\n'
-
+    const content = Array.from(existing.values()).map(r => JSON.stringify(r)).join('\n') + '\n'
     await this.backend.writeFile(path, content)
     return changedCount
   }
@@ -196,10 +179,10 @@ export class SyncOrchestrator {
     const unsynced = getUnsyncedRecords(this.db)
     if (unsynced.length === 0) return 0
 
-    // Group records by hour to keep remote GitHub objects small enough to update reliably.
+    // Group records by day per device.
     const byPath = new Map<string, typeof unsynced>()
     for (const record of unsynced) {
-      const path = getSyncPath(record.ts)
+      const path = getSyncPath(record.ts, this.options.deviceInstanceId)
       if (!byPath.has(path)) byPath.set(path, [])
       byPath.get(path)!.push(record)
     }
@@ -224,7 +207,7 @@ export class SyncOrchestrator {
       })
 
       const localSyncRecords = localRecords.map(mapStatsRecordToSyncRecord)
-      const changedCount = await this.uploadFileWithRetry(path, localSyncRecords)
+      const changedCount = await this.uploadFile(path, localSyncRecords)
       totalUploaded += changedCount
 
       this.options.onProgress?.({
