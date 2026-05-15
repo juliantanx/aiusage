@@ -116,6 +116,13 @@ export function runParseOpenCode(
 
     const recordId = generateRecordId(deviceInstanceId, dbPath + ':' + message.id, message.time_created)
 
+    const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens: reasoningTokens }
+    const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs) : 0
+    // OpenCode often logs cost:0 even for paid models; fall back to pricing table when that happens
+    const logCostValid = parsed.cost != null && parsed.cost > 0
+    const cost = logCostValid ? parsed.cost : calculatedCost
+    const costSource: StatsRecord['costSource'] = logCostValid ? 'log' : calculatedCost > 0 ? 'pricing' : 'unknown'
+
     const record: StatsRecord = {
       id: recordId,
       ts,
@@ -130,8 +137,8 @@ export function runParseOpenCode(
       cacheReadTokens,
       cacheWriteTokens,
       thinkingTokens: reasoningTokens,
-      cost: parsed.cost ?? (model !== 'unknown' ? calculateCost(model, { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens: reasoningTokens }) : 0),
-      costSource: parsed.cost != null ? 'log' : model !== 'unknown' ? 'pricing' : 'unknown',
+      cost,
+      costSource,
       sessionId: message.session_id,
       sourceFile: dbPath,
       device,
