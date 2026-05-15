@@ -183,6 +183,39 @@ describe('parse-opencode', () => {
     expect(result.records[0].provider).toBe('zhipu')
   })
 
+  it('includes messages that only have cache tokens', () => {
+    const messageData = JSON.stringify({
+      role: 'assistant',
+      modelID: 'glm-5.1',
+      providerID: 'qianfan',
+      cost: 0,
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 50, write: 0 },
+      },
+      time: { created: 1778821880545, completed: 1778821881000 },
+    })
+
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_cache', 'sess_1', 1778821880545, messageData)
+
+    const result = runParseOpenCode(db, {
+      dbPath: '/home/user/.local/share/opencode/opencode.db',
+      device: 'macbook',
+      deviceInstanceId: 'device-123',
+      now: 1778822000000,
+      cursor: null,
+    })
+
+    expect(result.records).toHaveLength(1)
+    expect(result.records[0].cacheReadTokens).toBe(50)
+    expect(result.records[0].inputTokens).toBe(0)
+    expect(result.records[0].outputTokens).toBe(0)
+  })
+
   it('returns errors for malformed data', () => {
     db.prepare(
       'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'

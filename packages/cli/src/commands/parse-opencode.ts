@@ -101,13 +101,13 @@ export function runParseOpenCode(
     const cacheWriteTokens = parsed.tokens.cache?.write ?? 0
 
     // Skip messages with no token usage
-    if (inputTokens === 0 && outputTokens === 0 && reasoningTokens === 0) continue
+    if (inputTokens === 0 && outputTokens === 0 && reasoningTokens === 0 && cacheReadTokens === 0 && cacheWriteTokens === 0) continue
 
     const model = parsed.modelID ?? 'unknown'
     const provider = parsed.providerID ?? inferProvider(model)
     const ts = parsed.time?.created ?? message.time_created
 
-    const recordId = generateRecordId(deviceInstanceId, dbPath, message.time_created)
+    const recordId = generateRecordId(deviceInstanceId, dbPath + ':' + message.id, message.time_created)
 
     const record: StatsRecord = {
       id: recordId,
