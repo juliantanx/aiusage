@@ -80,6 +80,12 @@ interface DeviceFilter {
   localOnly: boolean
 }
 
+function getToolFilter(tool: string | null, prefix = ''): { where: string; params: Record<string, unknown> } {
+  if (!tool) return { where: '', params: {} }
+  const col = prefix ? `${prefix}.tool` : 'tool'
+  return { where: `AND ${col} = @tool`, params: { tool } }
+}
+
 const LOCAL_ONLY_FILTER = "AND source_file NOT LIKE 'synced/%'"
 
 function getDeviceFilter(
@@ -144,6 +150,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const device = url.searchParams.get('device')
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
         const dr = getDateRangeFilter(range, from, to)
+        const tool = url.searchParams.get('tool')
+        const tf = getToolFilter(tool)
 
         let totals: any
         let byToolRows: any[]
@@ -152,10 +160,10 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           // All devices: UNION records + synced_records (excluding current device's synced copy)
           const unionSql = `
             SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_id
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             UNION ALL
             SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_key AS session_id
-            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
           `
           totals = db.prepare(`
             SELECT
@@ -169,23 +177,23 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
               COUNT(DISTINCT session_id) AS totalSessions
             FROM (${unionSql})
-          `).get({ ...dr.params, ...df.params }) as any
+          `).get({ ...dr.params, ...df.params, ...tf.params }) as any
 
           byToolRows = db.prepare(`
             SELECT tool, SUM(tokens) AS tokens, SUM(cost) AS cost FROM (
               SELECT tool,
                      SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                      SUM(cost) AS cost
-              FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+              FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
               GROUP BY tool
               UNION ALL
               SELECT tool,
                      SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                      SUM(cost) AS cost
-              FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+              FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
               GROUP BY tool
             ) GROUP BY tool ORDER BY cost DESC
-          `).all({ ...dr.params, ...df.params }) as any[]
+          `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
         } else if (df.where) {
           // Specific other device: query synced_records only
           totals = db.prepare(`
@@ -199,16 +207,16 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(cost), 0) AS totalCost,
               COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
               COUNT(DISTINCT session_key) AS totalSessions
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
-          `).get({ ...dr.params, ...df.params }) as any
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
+          `).get({ ...dr.params, ...df.params, ...tf.params }) as any
 
           byToolRows = db.prepare(`
             SELECT tool,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                    SUM(cost) AS cost
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
             GROUP BY tool ORDER BY cost DESC
-          `).all({ ...dr.params, ...df.params }) as any[]
+          `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
         } else {
           // Current device or legacy: query records only
           totals = db.prepare(`
@@ -222,16 +230,16 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               COALESCE(SUM(cost), 0) AS totalCost,
               COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
               COUNT(DISTINCT session_id) AS totalSessions
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
-          `).get(dr.params) as any
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+          `).get({ ...dr.params, ...tf.params }) as any
 
           byToolRows = db.prepare(`
             SELECT tool,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
                    SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY tool ORDER BY cost DESC
-          `).all(dr.params) as any[]
+          `).all({ ...dr.params, ...tf.params }) as any[]
         }
 
         const byTool: Record<string, { tokens: number; cost: number }> = {}
@@ -241,13 +249,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         const drJoin = getDateRangeFilter(range, from, to, 'r')
         const dfJoin = df.where ? df.where.replace(/device_instance_id/g, 'r.device_instance_id') : ''
+        const tfJoin = getToolFilter(tool, 'r')
         const topToolCalls = db.prepare(`
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
           JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${dfJoin} ${drJoin.where}
+          WHERE 1=1 ${dfJoin} ${drJoin.where} ${tfJoin.where}
           GROUP BY tc.name ORDER BY count DESC LIMIT 10
-        `).all({ ...drJoin.params, ...df.params }) as any[]
+        `).all({ ...drJoin.params, ...df.params, ...tfJoin.params }) as any[]
 
         json(res, {
           inputTokens: totals.inputTokens,
@@ -270,6 +279,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const dr = getDateRangeFilter(range, from, to)
         const device = url.searchParams.get('device')
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
+        const tool = url.searchParams.get('tool')
+        const tf = getToolFilter(tool)
 
         let sql: string
         let params: Record<string, unknown>
@@ -283,12 +294,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                    SUM(cache_write_tokens) AS cacheWriteTokens,
                    SUM(thinking_tokens) AS thinkingTokens
             FROM (
-              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
               UNION ALL
-              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+              SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
             )
             GROUP BY date ORDER BY date`
-          params = { ...dr.params, currentDeviceId: df.params.currentDeviceId }
+          params = { ...dr.params, currentDeviceId: df.params.currentDeviceId, ...tf.params }
         } else if (device && device !== options?.currentDeviceInstanceId) {
           sql = `
             SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
@@ -297,9 +308,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                    SUM(cache_read_tokens) AS cacheReadTokens,
                    SUM(cache_write_tokens) AS cacheWriteTokens,
                    SUM(thinking_tokens) AS thinkingTokens
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
             GROUP BY date ORDER BY date`
-          params = { ...df.params, ...dr.params }
+          params = { ...df.params, ...dr.params, ...tf.params }
         } else {
           sql = `
             SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
@@ -308,9 +319,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                    SUM(cache_read_tokens) AS cacheReadTokens,
                    SUM(cache_write_tokens) AS cacheWriteTokens,
                    SUM(thinking_tokens) AS thinkingTokens
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY date ORDER BY date`
-          params = { ...dr.params }
+          params = { ...dr.params, ...tf.params }
         }
 
         const rows = db.prepare(sql).all(params) as any[]
@@ -323,6 +334,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const dr = getDateRangeFilter(range, from, to)
         const device = url.searchParams.get('device')
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
+        const tool = url.searchParams.get('tool')
+        const tf = getToolFilter(tool)
 
         let daily: any[]
         let byToolRows: any[]
@@ -333,66 +346,66 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(cost) AS cost
             FROM (
-              SELECT cost, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+              SELECT cost, ts FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
               UNION ALL
-              SELECT cost, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+              SELECT cost, ts FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
             )
             GROUP BY date ORDER BY date
-          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
+          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId, ...tf.params }) as any[]
 
           byToolRows = db.prepare(`
             SELECT tool, SUM(cost) AS cost FROM (
-              SELECT tool, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} GROUP BY tool
+              SELECT tool, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where} GROUP BY tool
               UNION ALL
-              SELECT tool, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} GROUP BY tool
+              SELECT tool, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where} GROUP BY tool
             ) GROUP BY tool ORDER BY cost DESC
-          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
+          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId, ...tf.params }) as any[]
 
           byModelRows = db.prepare(`
             SELECT model, SUM(cost) AS cost FROM (
-              SELECT model, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} GROUP BY model
+              SELECT model, SUM(cost) AS cost FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where} GROUP BY model
               UNION ALL
-              SELECT model, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} GROUP BY model
+              SELECT model, SUM(cost) AS cost FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where} GROUP BY model
             ) GROUP BY model ORDER BY cost DESC
-          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId }) as any[]
+          `).all({ ...dr.params, currentDeviceId: df.params.currentDeviceId, ...tf.params }) as any[]
         } else if (device && device !== options?.currentDeviceInstanceId) {
           daily = db.prepare(`
             SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(cost) AS cost
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
             GROUP BY date ORDER BY date
-          `).all({ ...df.params, ...dr.params }) as any[]
+          `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
 
           byToolRows = db.prepare(`
             SELECT tool, SUM(cost) AS cost
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
             GROUP BY tool ORDER BY cost DESC
-          `).all({ ...df.params, ...dr.params }) as any[]
+          `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
 
           byModelRows = db.prepare(`
             SELECT model, SUM(cost) AS cost
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
             GROUP BY model ORDER BY cost DESC
-          `).all({ ...df.params, ...dr.params }) as any[]
+          `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
         } else {
           daily = db.prepare(`
             SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS date,
                    SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY date ORDER BY date
-          `).all(dr.params) as any[]
+          `).all({ ...dr.params, ...tf.params }) as any[]
 
           byToolRows = db.prepare(`
             SELECT tool, SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY tool ORDER BY cost DESC
-          `).all(dr.params) as any[]
+          `).all({ ...dr.params, ...tf.params }) as any[]
 
           byModelRows = db.prepare(`
             SELECT model, SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY model ORDER BY cost DESC
-          `).all(dr.params) as any[]
+          `).all({ ...dr.params, ...tf.params }) as any[]
         }
 
         const byTool: Record<string, number> = {}
@@ -410,6 +423,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const dr = getDateRangeFilter(range, from, to)
         const device = url.searchParams.get('device')
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
+        const tool = url.searchParams.get('tool')
+        const tf = getToolFilter(tool)
 
         let total: number
         let rows: any[]
@@ -418,19 +433,19 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           const unionSql = `
             SELECT model, provider, COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY model, provider
             UNION ALL
             SELECT model, provider, COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
             GROUP BY model, provider
           `
           const mergedRows = db.prepare(`
             SELECT model, provider, SUM(callCount) AS callCount, SUM(totalTokens) AS totalTokens
             FROM (${unionSql})
             GROUP BY model, provider ORDER BY callCount DESC
-          `).all({ ...dr.params, ...df.params }) as any[]
+          `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
           total = mergedRows.reduce((s, r) => s + r.callCount, 0) || 1
           rows = mergedRows
         } else if (device && device !== options?.currentDeviceInstanceId) {
@@ -438,18 +453,18 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             SELECT model, provider,
                    COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
             GROUP BY model, provider ORDER BY callCount DESC
-          `).all({ ...df.params, ...dr.params }) as any[]
+          `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
           total = rows.reduce((s, r) => s + r.callCount, 0) || 1
         } else {
           rows = db.prepare(`
             SELECT model, provider,
                    COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY model, provider ORDER BY callCount DESC
-          `).all(dr.params) as any[]
+          `).all({ ...dr.params, ...tf.params }) as any[]
           total = rows.reduce((s, r) => s + r.callCount, 0) || 1
         }
 
@@ -474,21 +489,23 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         }
 
         const dr = getDateRangeFilter(range, from, to, 'r')
+        const tool = url.searchParams.get('tool')
+        const tf = getToolFilter(tool, 'r')
 
         const totalRow = db.prepare(`
           SELECT COUNT(*) AS total FROM tool_calls tc
           JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${dr.where}
-        `).get(dr.params) as any
+          WHERE 1=1 ${dr.where} ${tf.where}
+        `).get({ ...dr.params, ...tf.params }) as any
         const total = totalRow.total || 1
 
         const rows = db.prepare(`
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
           JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${dr.where}
+          WHERE 1=1 ${dr.where} ${tf.where}
           GROUP BY tc.name ORDER BY count DESC
-        `).all(dr.params) as any[]
+        `).all({ ...dr.params, ...tf.params }) as any[]
 
         const toolCalls = rows.map(r => ({
           name: r.name,
@@ -563,15 +580,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const dr = getDateRangeFilter(range, from, to)
         const device = url.searchParams.get('device')
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
+        const tool = url.searchParams.get('tool')
+        const tf = getToolFilter(tool)
 
         const rows = db.prepare(`
           SELECT source_file,
                  COUNT(*) AS sessionCount,
                  SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
                  SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
           GROUP BY source_file ORDER BY totalTokens DESC
-        `).all(dr.params) as any[]
+        `).all({ ...dr.params, ...tf.params }) as any[]
 
         // Aggregate by project
         const projectMap: Record<string, { sessions: number; tokens: number; cost: number }> = {}

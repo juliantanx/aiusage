@@ -221,6 +221,42 @@ describe('Device filtering', () => {
     const data = await res.json()
     expect(data.projects.length).toBeGreaterThan(0)
   })
+
+  it('summary applies tool filter across merged devices', async () => {
+    // Insert a second local record with tool 'opencode'
+    insertTestRecord(db, { id: 'local00000002', tool: 'opencode', input_tokens: 300, output_tokens: 150, cost: 0.005, session_id: 'session2' })
+
+    const res = await fetch(`${baseUrl}/api/summary?range=all&tool=opencode`)
+    const data = await res.json()
+    // Only the opencode record should be counted: 300 + 150 = 450
+    expect(data.totalTokens).toBe(450)
+    expect(Object.keys(data.byTool)).toEqual(['opencode'])
+  })
+
+  it('tokens applies tool filter across merged devices', async () => {
+    insertTestRecord(db, { id: 'local00000002', tool: 'opencode', input_tokens: 300, output_tokens: 150, cost: 0.005, session_id: 'session2' })
+    insertTestSyncedRecord(db, { id: 'synced0000002', tool: 'opencode', input_tokens: 400, output_tokens: 200, cost: 0.007, session_key: 'sessionkey2' })
+
+    const res = await fetch(`${baseUrl}/api/tokens?range=all&tool=opencode`)
+    const data = await res.json()
+    const totalInput = data.data.reduce((s: number, d: any) => s + d.inputTokens, 0)
+    // opencode: 300 local + 400 remote = 700
+    expect(totalInput).toBe(700)
+  })
+
+  it('cost applies tool and device filter together', async () => {
+    const res = await fetch(`${baseUrl}/api/cost?range=all&device=remote-uuid-0001&tool=opencode`)
+    const data = await res.json()
+    // remote synced record has tool 'codex' by default, so opencode filter returns nothing
+    expect(Object.keys(data.byTool)).toEqual([])
+  })
+
+  it('cost with tool filter returns matching tool only', async () => {
+    const res = await fetch(`${baseUrl}/api/cost?range=all&tool=codex`)
+    const data = await res.json()
+    expect(data.byTool['codex']).toBeCloseTo(0.003)
+    expect(Object.keys(data.byTool)).toEqual(['codex'])
+  })
 })
 
 describe('Sync API', () => {
