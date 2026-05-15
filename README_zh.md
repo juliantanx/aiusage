@@ -1,16 +1,16 @@
 # aiusage
 
-追踪和分析 AI 编程助手（Claude Code、Codex、OpenClaw、OpenCode）的使用情况。从本地会话日志中聚合 token 消耗、费用和工具调用统计。
+在一个地方追踪 Claude Code、Codex、OpenClaw、OpenCode 的 AI 编程助手使用情况，包括 token 消耗、费用和工具调用。
 
 [English](./README.md) | 中文
 
-## 功能
+## 为什么使用 aiusage
 
-- 解析 Claude Code / Codex / OpenClaw / OpenCode 的本地会话日志
-- 按工具、模型、日期聚合 token 用量和费用
-- 工具调用频率统计
-- 多设备数据同步（GitHub / S3 / R2）
-- Web 仪表盘可视化
+- 将多个 AI 编程助手的本地会话日志汇总到同一个视图中。
+- 分析 token 用量、费用、模型分布和工具调用活跃度。
+- 通过本地 Web 仪表盘查看按周、按月的趋势和汇总。
+- 通过 GitHub、S3 或 R2 在多台设备之间同步数据。
+- 默认本地优先，只有在需要共享视图时才启用云同步。
 
 ## 快速开始
 
@@ -23,13 +23,19 @@ npm install -g @juliantanx/aiusage
 # 解析本地会话日志
 aiusage parse
 
-# 查看用量摘要
-aiusage summary
-
-# 启动 Web 仪表盘
+# 启动仪表盘
 aiusage serve
 # 打开 http://localhost:3847
 ```
+
+日常使用通常只需要：
+
+```bash
+aiusage parse
+aiusage serve
+```
+
+`aiusage` 不会内建后台解析任务。如果你需要自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`。
 
 <details>
 <summary>从源码构建</summary>
@@ -45,42 +51,25 @@ npm link
 
 </details>
 
-日常使用只需两条命令：
+## 截图
 
-```bash
-aiusage parse   # 增量导入本地日志中新追加的数据
-aiusage serve   # 打开仪表盘
-```
+![本周概览仪表盘](./docs/assets/readme/weekly-overview.png)
 
-`aiusage` 本身不运行内建后台解析任务。如需自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`。
+按“本周”筛选后的概览页，展示费用、token、活跃天数和工具使用分布。
 
-**自动化解析（可选）：**
+## 常用命令
 
-```bash
-# Linux/macOS — 每 30 分钟
-crontab -e
-# 添加：
-*/30 * * * * /usr/local/bin/aiusage parse >> ~/.aiusage/cron.log 2>&1
-
-# Windows
-schtasks /create /tn "AiusageParse" /tr "aiusage parse" /sc minute /mo 30
-```
-
----
-
-## CLI 命令
-
-| 命令 | 说明 |
-|------|------|
-| `aiusage parse` | 解析本地 AI 会话日志到数据库（支持 `--tool claude-code\|codex\|openclaw\|opencode`） |
-| `aiusage summary` | 显示用量摘要（支持 `--week` `--month`） |
-| `aiusage status` | 显示当前状态 |
-| `aiusage serve` | 启动 Web 仪表盘（支持 `--port`） |
-| `aiusage sync` | 与远程后端同步数据 |
-| `aiusage export` | 导出数据（`--format csv/json/ndjson`） |
-| `aiusage clean` | 清理旧数据（`--before 30d`） |
-| `aiusage recalc` | 重新计算费用（`--pricing`） |
-| `aiusage init` | 配置同步后端（`--backend github/s3`） |
+| 命令 | 用途 |
+| --- | --- |
+| `aiusage parse` | 导入本地新追加的会话数据 |
+| `aiusage serve` | 启动本地仪表盘 |
+| `aiusage summary` | 在终端输出用量摘要 |
+| `aiusage status` | 显示数据库路径、schema 版本和记录数 |
+| `aiusage sync` | 与已配置的远程后端双向同步数据 |
+| `aiusage export` | 导出 CSV、JSON 或 NDJSON 数据 |
+| `aiusage clean` | 清理旧数据 |
+| `aiusage recalc` | 按最新定价重新计算费用 |
+| `aiusage init` | 配置同步后端 |
 
 ## Web 仪表盘
 
@@ -89,56 +78,58 @@ aiusage serve
 # 打开 http://localhost:3847
 ```
 
-概览页首次加载时会调用 `/api/refresh`，触发一次本地增量 parse，然后再加载统计数据。
+概览页首次加载时会调用 `/api/refresh`，先执行一次本地增量 parse，再加载统计数据。
 
-- **概览** — 总 token 数、费用、活跃天数、按工具分类
-- **Token** — 每日 token 用量图表（输入/输出/思考）
-- **费用** — 每日费用图表，按工具和模型分类
-- **模型** — 模型分布及使用占比
-- **工具调用** — 工具调用频率排行
-- **会话** — 会话列表，支持筛选和分页
+- **概览** — 按周或按月查看总量、费用、活跃天数和按工具分组的汇总。
+- **Token** — token 用量随时间的变化趋势。
+- **费用** — 费用趋势，以及按工具、按模型拆分的统计。
+- **模型** — 模型占比和分布。
+- **工具调用** — 工具调用频率和排行。
+- **Projects** — 按项目汇总的使用数据。
+- **会话** — 支持筛选和分页的会话浏览。
+- **Pricing** — 当前模型定价参考。
 
 ---
 
 ## 部署
 
-需要多机汇总或云端访问？根据场景选择：
+如果你需要多机汇总或云端访问，可以按场景选择：
 
 | 场景 | 方式 | 说明 |
 |------|------|------|
-| 多台机器，汇总数据 | [多机同步](#多机同步) | 通过 GitHub/S3 同步 |
-| 多台机器 + 统一看板 | [Docker 部署](#docker-部署) | 拉镜像即用，24/7 仪表盘 |
+| 多台机器汇总数据 | [多机同步](#多机同步) | 通过 GitHub / S3 / R2 同步 |
+| 多台机器 + 统一看板 | [Docker 部署](#docker-部署) | 基于同步数据运行 24/7 仪表盘 |
 
-单机使用只需按上方"快速开始"操作即可，无需额外部署。
+如果只是单机使用，按照上面的快速开始即可。
 
 ### 多机同步
 
-适合有多台机器使用 Claude Code / Codex / OpenClaw / OpenCode，需要汇总所有机器的 token 用量。
+适合把多台机器上的 Claude Code、Codex、OpenClaw、OpenCode 使用数据聚合到同一个仪表盘中。
 
 **架构：**
 
 ```
 机器 A ──┐
-机器 B ──┼──▶ GitHub / S3（共享存储）──▶ 任意机器：aiusage summary / serve
+机器 B ──┼──▶ GitHub / S3 / R2（共享存储）──▶ 任意机器：aiusage summary / serve
 机器 C ──┘
 ```
 
-**第一步 — 选择同步后端：**
+**第一步 — 选择同步后端**
 
 **方案 A：GitHub（推荐）**
 
-1. 在 GitHub 上创建一个**私有**仓库（如 `aiusage-data`）
-2. 生成 [Personal Access Token](https://github.com/settings/tokens)，勾选 `repo` 权限
+1. 在 GitHub 上创建一个**私有**仓库（例如 `aiusage-data`）
+2. 生成 [Personal Access Token](https://github.com/settings/tokens) 并授予 `repo` 权限
 
 **方案 B：AWS S3 / Cloudflare R2**
 
-1. 创建一个 S3 或 R2 存储桶
-2. 创建具有读写权限的 IAM 用户/角色
-3. 记下 Access Key ID、Secret Access Key 和 Endpoint
+1. 创建一个 S3 或 R2 bucket
+2. 创建具备读写权限的 IAM 用户或角色
+3. 记录 access key ID、secret access key 和 endpoint
 
-**第二步 — 在每台机器上安装并配置：**
+**第二步 — 在每台机器上安装并配置**
 
-在**每一台**使用 AI 编程助手的机器上执行：
+在每一台使用 Claude Code、Codex、OpenClaw 或 OpenCode 的机器上执行：
 
 ```bash
 # 安装 aiusage CLI
@@ -159,22 +150,22 @@ aiusage init --backend s3 \
   --secret-access-key xxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-**第三步 — 解析并同步（每台机器）：**
+**第三步 — 在每台机器上解析并同步**
 
 ```bash
 aiusage parse
 aiusage sync
 ```
 
-**第四步 — 查看汇总数据（任意机器）：**
+**第四步 — 在任意机器上查看汇总数据**
 
 ```bash
-aiusage sync      # 拉取其他机器的最新数据
-aiusage summary   # 查看汇总
-aiusage serve     # 或启动仪表盘
+aiusage sync
+aiusage summary
+aiusage serve
 ```
 
-**自动化（推荐）：**
+**自动化（推荐）**
 
 ```bash
 # Linux/macOS
@@ -186,46 +177,46 @@ crontab -e
 schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minute /mo 30
 ```
 
-**同步原理：**
+**同步原理**
 
-- 每台机器有唯一的 `deviceInstanceId`（首次运行时生成）
-- 每台设备写入自己的按天文件（`{deviceInstanceId}/YYYY/MM/DD.ndjson`）到远端后端
-- Pull 读取其他设备的文件到本地 `synced_records` 表，Upload 仅写入当前设备自己的文件
-- 按设备分文件，从根本上消除写冲突，无需加锁
-- 自动化频率由外部 cron / 任务计划控制，aiusage 本身不内建常驻同步进程
-- Session ID 通过 `sha256(device + sessionId)` 匿名化
+- 每台机器在首次运行时都会生成唯一的 `deviceInstanceId`。
+- 每台设备都会向远端后端写入自己的按日文件（`{deviceInstanceId}/YYYY/MM/DD.ndjson`）。
+- Pull 会把其他设备的文件读入本地 `synced_records` 表；upload 只写当前设备自己的文件。
+- 按设备拆分文件可避免写冲突，因此不需要加锁。
+- 同步频率由外部定时任务或手动执行决定；aiusage 不内建常驻同步进程。
+- Session ID 会通过 `sha256(device + sessionId)` 匿名化。
 
 ---
 
 ### Docker 部署
 
-在云端服务器拉取镜像运行，24/7 提供统一仪表盘。Docker 容器本身**不运行**任何 AI 编程工具，它仅提供 Web 仪表盘并从同步后端拉取数据。你必须配置同步后端（GitHub/S3），容器才有数据可展示。
+你可以在服务器上运行预构建镜像，提供 24/7 仪表盘。容器本身**不会**运行任何 AI 编程工具，它只负责提供 Web 仪表盘，并从 GitHub、S3 或 R2 拉取同步数据。
 
 **架构：**
 
 ```
 机器 A ──┐                             ┌── 浏览器：https://aiusage.your-domain.com
-机器 B ──┼──▶ GitHub / S3 ──▶ 云端服务器（Docker）
+机器 B ──┼──▶ GitHub / S3 / R2 ──▶ 云端服务器（Docker）
 机器 C ──┘                             └── 端口 3847
 ```
 
-**数据流向：**
+**数据流向**
 
-1. 每台开发机器运行 `aiusage parse && aiusage sync`，将本地用量数据上传到 GitHub/S3
-2. Docker 容器运行 `aiusage sync`，从远端拉取数据到本地 SQLite 数据库
-3. Web 仪表盘读取本地数据库，展示聚合统计
+1. 每台开发机器运行 `aiusage parse && aiusage sync` 上传本地用量数据。
+2. Docker 容器运行 `aiusage sync` 将远端数据拉取到本地 SQLite 数据库。
+3. Web 仪表盘读取本地数据库并展示聚合统计。
 
-**Docker 中的数据存储：**
+**Docker 中的数据存储**
 
 | 项目 | 容器内路径 | 说明 |
 |------|-----------|------|
-| 数据库 | `/root/.aiusage/cache.db` | SQLite 数据库（所有用量数据） |
-| 配置文件 | `/root/.aiusage/config.json` | 同步后端配置及凭证 |
+| 数据库 | `/root/.aiusage/cache.db` | 存放聚合用量数据的 SQLite 数据库 |
+| 配置文件 | `/root/.aiusage/config.json` | 同步后端配置和凭证 |
 | 状态文件 | `/root/.aiusage/state.json` | 水位线和同步状态 |
 
-所有数据位于 `/root/.aiusage` 下，已在 Dockerfile 中声明为 `VOLUME`。**必须**挂载 volume 才能在容器重启后保留数据。
+所有数据都位于 `/root/.aiusage` 下，并被声明为 `VOLUME`。你**必须**挂载 volume，才能在容器重启后保留数据。
 
-**第一步 — 拉取镜像并运行：**
+**第一步 — 拉取镜像并运行**
 
 ```bash
 # 拉取镜像
@@ -248,9 +239,9 @@ docker exec -it aiusage aiusage init \
 docker exec -it aiusage aiusage sync
 ```
 
-> 如果不加 `-v` 参数，容器删除后数据将丢失。
+> 如果不加 `-v` 参数，删除容器后数据会丢失。
 
-**第二步 — 定时同步：**
+**第二步 — 定时同步**
 
 ```bash
 # 在容器内安装 cron 并创建定时任务
@@ -260,13 +251,13 @@ docker exec -it aiusage bash -c \
 docker restart aiusage
 ```
 
-> 注意：这里不需要 `parse` — 容器内没有本地 AI 会话日志。只需 `sync` 从远端后端拉取数据即可。
+> 注意：这里不需要 `parse`，因为容器内没有本地 AI 会话日志，只需要 `sync` 从远端拉取数据。
 
-**第三步 — 访问：**
+**第三步 — 访问**
 
 打开 `http://<服务器IP>:3847`。
 
-如需 HTTPS + 自定义域名：
+如果你需要 HTTPS + 自定义域名：
 
 ```bash
 # Caddy（自动 HTTPS，推荐）
@@ -284,9 +275,9 @@ server {
 }
 ```
 
-**自行构建镜像（可选）：**
+**自行构建镜像（可选）**
 
-如果需要自行构建，项目根目录已包含 `Dockerfile`：
+项目根目录已经包含 `Dockerfile`：
 
 ```bash
 docker build -t aiusage .
@@ -304,7 +295,7 @@ docker build -t aiusage .
 
 ### 默认日志来源路径
 
-`aiusage parse` 会自动从以下默认位置查找会话日志：
+`aiusage parse` 会自动从以下默认位置发现会话日志：
 
 | 工具 | macOS | Linux | Windows |
 |------|-------|-------|---------|
@@ -313,11 +304,11 @@ docker build -t aiusage .
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
 
-> Linux 下 OpenCode 会优先读取 `$XDG_DATA_HOME`（未设置时 fallback 到 `~/.local/share`）。
+> 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 
 ### 自定义来源路径
 
-如果你将某个工具安装到了非默认路径，可以在 `~/.aiusage/config.json` 中覆盖：
+如果某个工具安装在非默认位置，可以在 `~/.aiusage/config.json` 中覆盖路径：
 
 ```json
 {
@@ -330,25 +321,25 @@ docker build -t aiusage .
 }
 ```
 
-只有显式指定的工具路径会被覆盖，未指定的工具仍使用默认路径。
+只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。
 
 ## 数据库可视化查看
 
-本地数据库就是标准 SQLite 文件，可以直接用 DBeaver、TablePlus、DataGrip、DB Browser for SQLite 等工具打开查看。
+本地数据库是标准 SQLite 文件，因此可以直接用 DBeaver、TablePlus、DataGrip、DB Browser for SQLite 等工具打开。
 
 ```bash
 aiusage status
-# 可看到精确的 DB Path、schema 版本和对象数量
+# 显示精确的 DB Path、schema 版本和对象数量
 ```
 
-- 以 SQLite 数据库方式打开 `~/.aiusage/cache.db`
-- 推荐在数据库工具里使用只读模式；`aiusage` 会持续写入该文件，并启用了 WAL 模式
-- 如果工具提示关联文件，请保留 `cache.db-wal` 和 `cache.db-shm` 与主库同目录
-- 优先查看只读视图：
-  - `v_usage_records`：usage 明细，包含标准化时间和总 token
+- 以 SQLite 数据库方式打开 `~/.aiusage/cache.db`。
+- 推荐在数据库工具中使用只读模式；`aiusage` 会持续写入同一个文件，并启用了 WAL 模式。
+- 如果工具提示关联文件，请保留 `cache.db-wal` 和 `cache.db-shm` 与主库同目录。
+- 优先查看这些只读视图：
+  - `v_usage_records`：每条 usage 记录一行，包含标准化时间和总 token
   - `v_tool_calls`：工具调用明细，并关联所属 usage 记录
-  - `v_sessions`：按会话聚合后的统计，便于透视和做图
-- 如需排查底层数据，也可以直接查看原始表：
+  - `v_sessions`：按会话聚合后的统计，便于透视和图表分析
+- 如需排查底层数据，也可以查看原始表：
   - `records`
   - `tool_calls`
   - `synced_records`
@@ -365,7 +356,7 @@ aiusage status
 
 ## 项目结构
 
-```
+```text
 packages/
   core/     - 共享类型、数据库 schema、定价数据
   cli/      - CLI 工具，用于解析日志、查询数据、云端同步

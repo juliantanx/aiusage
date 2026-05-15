@@ -1,16 +1,16 @@
 # aiusage
 
-Track and analyze AI coding assistant usage across Claude Code, Codex, OpenClaw, and OpenCode. Aggregates token consumption, costs, and tool call statistics from local session logs.
+Track AI coding assistant usage, token consumption, cost, and tool calls in one place across Claude Code, Codex, OpenClaw, and OpenCode.
 
 English | [中文](./README_zh.md)
 
-## Features
+## Why aiusage
 
-- Parse session logs from Claude Code / Codex / OpenClaw / OpenCode
-- Aggregate token usage and cost by tool, model, and date
-- Tool call frequency statistics
-- Multi-device data sync via GitHub / S3 / R2
-- Web dashboard with charts
+- Aggregate local session logs from multiple AI coding assistants into one view.
+- Analyze token usage, cost, model mix, and tool call activity.
+- Explore the data through a local dashboard with weekly and monthly views.
+- Sync usage data across multiple machines with GitHub, S3, or R2.
+- Keep everything local-first, with optional cloud sync when you need shared visibility.
 
 ## Quick Start
 
@@ -23,13 +23,19 @@ npm install -g @juliantanx/aiusage
 # Parse local session logs
 aiusage parse
 
-# View usage summary
-aiusage summary
-
-# Start web dashboard
+# Start the dashboard
 aiusage serve
 # Open http://localhost:3847
 ```
+
+Day-to-day usage is usually just:
+
+```bash
+aiusage parse
+aiusage serve
+```
+
+`aiusage` does not run a built-in background parser. If you want automatic imports, schedule `aiusage parse` with cron or Task Scheduler.
 
 <details>
 <summary>Build from source</summary>
@@ -45,42 +51,25 @@ npm link
 
 </details>
 
-Day-to-day usage is just two commands:
+## Screenshot
 
-```bash
-aiusage parse   # import newly appended local log data
-aiusage serve   # open dashboard
-```
+![Weekly overview dashboard](./docs/assets/readme/weekly-overview.png)
 
-`aiusage` does not run a built-in background parser. If you want automatic imports, schedule `aiusage parse` with cron or Task Scheduler.
+Weekly overview of cost, tokens, active days, and tool usage across assistants.
 
-**Automate parsing (optional):**
+## Common Commands
 
-```bash
-# Linux/macOS — every 30 minutes
-crontab -e
-# Add:
-*/30 * * * * /usr/local/bin/aiusage parse >> ~/.aiusage/cron.log 2>&1
-
-# Windows
-schtasks /create /tn "AiusageParse" /tr "aiusage parse" /sc minute /mo 30
-```
-
----
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `aiusage parse` | Parse local AI session logs into database (supports `--tool claude-code\|codex\|openclaw\|opencode`) |
-| `aiusage summary` | Show usage summary (supports `--week` `--month`) |
-| `aiusage status` | Show current status |
-| `aiusage serve` | Start web dashboard (supports `--port`) |
-| `aiusage sync` | Sync data with remote backend |
-| `aiusage export` | Export data (`--format csv/json/ndjson`) |
-| `aiusage clean` | Clean old data (`--before 30d`) |
-| `aiusage recalc` | Recalculate costs (`--pricing`) |
-| `aiusage init` | Configure sync backend (`--backend github/s3`) |
+| Command | Purpose |
+| --- | --- |
+| `aiusage parse` | Import newly appended local session data |
+| `aiusage serve` | Start the local dashboard |
+| `aiusage summary` | Print a usage summary in the terminal |
+| `aiusage status` | Show database path, schema version, and record counts |
+| `aiusage sync` | Push and pull data with a configured remote backend |
+| `aiusage export` | Export records as CSV, JSON, or NDJSON |
+| `aiusage clean` | Remove old data |
+| `aiusage recalc` | Recalculate costs with updated pricing |
+| `aiusage init` | Configure a sync backend |
 
 ## Web Dashboard
 
@@ -91,12 +80,14 @@ aiusage serve
 
 On the overview page's first load, the dashboard triggers `/api/refresh`, which runs one incremental local parse before loading summary data.
 
-- **Overview** — total tokens, cost, active days, per-tool breakdown
-- **Tokens** — daily token usage chart (input/output/thinking)
-- **Cost** — daily cost chart with by-tool and by-model breakdowns
-- **Models** — model distribution with usage share
-- **Tool Calls** — tool call frequency ranking
-- **Sessions** — session list with filtering and pagination
+- **Overview** — weekly or monthly totals, cost, active days, and per-tool breakdowns.
+- **Tokens** — token usage trends over time.
+- **Cost** — cost trends with by-tool and by-model breakdowns.
+- **Models** — model share and distribution.
+- **Tool Calls** — tool call frequency and ranking.
+- **Projects** — project-level usage rollups.
+- **Sessions** — session browsing with filters and pagination.
+- **Pricing** — active model pricing reference.
 
 ---
 
@@ -106,10 +97,10 @@ Need multi-machine aggregation or cloud access? Choose your scenario:
 
 | Scenario | Method | Description |
 |----------|--------|-------------|
-| Multiple machines, aggregate data | [Multi-Machine Sync](#multi-machine-sync) | Sync via GitHub/S3 |
-| Multiple machines + unified dashboard | [Docker](#docker-deployment) | Pull image, 24/7 dashboard |
+| Multiple machines, aggregate data | [Multi-Machine Sync](#multi-machine-sync) | Sync via GitHub/S3/R2 |
+| Multiple machines + unified dashboard | [Docker Deployment](#docker-deployment) | Run a 24/7 dashboard from synced data |
 
-For single-machine usage, just follow the Quick Start above — no extra setup needed.
+For single-machine usage, Quick Start is enough.
 
 ### Multi-Machine Sync
 
@@ -119,26 +110,26 @@ Use this to aggregate token usage from multiple machines into one dashboard. Wor
 
 ```
 Machine A ──┐
-Machine B ──┼──▶ GitHub / S3 (shared storage) ──▶ Any machine: aiusage summary / serve
+Machine B ──┼──▶ GitHub / S3 / R2 (shared storage) ──▶ Any machine: aiusage summary / serve
 Machine C ──┘
 ```
 
-**Step 1 — Choose a sync backend:**
+**Step 1 — Choose a sync backend**
 
 **Option A: GitHub (recommended)**
 
-1. Create a **private** repository on GitHub (e.g. `aiusage-data`)
+1. Create a **private** repository on GitHub (for example `aiusage-data`)
 2. Generate a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope
 
 **Option B: AWS S3 / Cloudflare R2**
 
 1. Create an S3 or R2 bucket
-2. Create an IAM user/role with read/write permissions
+2. Create an IAM user or role with read/write permissions
 3. Note the access key ID, secret access key, and endpoint
 
-**Step 2 — Install and configure on each machine:**
+**Step 2 — Install and configure on each machine**
 
-On **every** machine that uses Claude Code / Codex / OpenClaw:
+On every machine that uses Claude Code, Codex, OpenClaw, or OpenCode:
 
 ```bash
 # Install aiusage CLI
@@ -159,22 +150,22 @@ aiusage init --backend s3 \
   --secret-access-key xxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-**Step 3 — Parse and sync (each machine):**
+**Step 3 — Parse and sync on each machine**
 
 ```bash
 aiusage parse
 aiusage sync
 ```
 
-**Step 4 — View aggregated data (any machine):**
+**Step 4 — View aggregated data on any machine**
 
 ```bash
-aiusage sync      # pull latest data from all machines
-aiusage summary   # view summary
-aiusage serve     # or start dashboard
+aiusage sync
+aiusage summary
+aiusage serve
 ```
 
-**Automate (recommended):**
+**Automate (recommended)**
 
 ```bash
 # Linux/macOS
@@ -186,46 +177,46 @@ crontab -e
 schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minute /mo 30
 ```
 
-**How sync works:**
+**How sync works**
 
-- Each machine has a unique `deviceInstanceId` (generated on first run)
-- Each device writes to its own daily file (`{deviceInstanceId}/YYYY/MM/DD.ndjson`) in the remote backend
-- Pull reads other devices' files into the local `synced_records` table; upload writes only this device's files
-- Device-partitioned files eliminate write conflicts — no locking needed
-- Sync frequency comes from your external scheduler or manual runs; aiusage does not include a built-in sync daemon
-- Session IDs are anonymized via `sha256(device + sessionId)`
+- Each machine has a unique `deviceInstanceId` generated on first run.
+- Each device writes to its own daily file (`{deviceInstanceId}/YYYY/MM/DD.ndjson`) in the remote backend.
+- Pull reads other devices' files into the local `synced_records` table; upload writes only this device's files.
+- Device-partitioned files avoid write conflicts, so no locking is needed.
+- Sync frequency comes from your external scheduler or manual runs; aiusage does not include a built-in sync daemon.
+- Session IDs are anonymized via `sha256(device + sessionId)`.
 
 ---
 
 ### Docker Deployment
 
-Run on a cloud server with the pre-built image for a 24/7 dashboard. The Docker container itself does **not** run any AI coding tools — it only serves the web dashboard and pulls data from the sync backend. You must configure a sync backend (GitHub/S3) so the container has data to display.
+Run the pre-built image on a server for a 24/7 dashboard. The container does **not** run any AI coding tools itself — it only serves the web dashboard and pulls synced data from GitHub, S3, or R2.
 
 **Architecture:**
 
 ```
 Machine A ──┐                           ┌── Browser: https://aiusage.your-domain.com
-Machine B ──┼──▶ GitHub / S3 ──▶ Cloud Server (Docker)
+Machine B ──┼──▶ GitHub / S3 / R2 ──▶ Cloud Server (Docker)
 Machine C ──┘                           └── port 3847
 ```
 
-**How data flows:**
+**How data flows**
 
-1. Each dev machine runs `aiusage parse && aiusage sync` to upload local usage data to GitHub/S3
-2. The Docker container runs `aiusage sync` to pull that data into its local SQLite database
-3. The web dashboard reads from the local database and displays aggregated stats
+1. Each dev machine runs `aiusage parse && aiusage sync` to upload local usage data.
+2. The Docker container runs `aiusage sync` to pull that data into its local SQLite database.
+3. The web dashboard reads from the local database and displays aggregated stats.
 
-**Data storage in Docker:**
+**Data storage in Docker**
 
 | Item | Container path | Description |
 |------|---------------|-------------|
-| Database | `/root/.aiusage/cache.db` | SQLite database (all usage data) |
+| Database | `/root/.aiusage/cache.db` | SQLite database with aggregated usage data |
 | Config | `/root/.aiusage/config.json` | Sync backend config and credentials |
 | State | `/root/.aiusage/state.json` | Watermarks and sync state |
 
 All data lives under `/root/.aiusage`, which is declared as a `VOLUME`. You **must** mount this volume to persist data across container restarts.
 
-**Step 1 — Pull image and run:**
+**Step 1 — Pull image and run**
 
 ```bash
 # Pull image
@@ -250,7 +241,7 @@ docker exec -it aiusage aiusage sync
 
 > Without the `-v` flag, data is lost when the container is removed.
 
-**Step 2 — Scheduled sync:**
+**Step 2 — Scheduled sync**
 
 ```bash
 # Install cron in container and create scheduled task
@@ -262,7 +253,7 @@ docker restart aiusage
 
 > Note: `parse` is not needed here — the container has no local AI session logs. Only `sync` is needed to pull data from the remote backend.
 
-**Step 3 — Access:**
+**Step 3 — Access**
 
 Open `http://<server-ip>:3847`.
 
@@ -284,7 +275,7 @@ server {
 }
 ```
 
-**Build image yourself (optional):**
+**Build image yourself (optional)**
 
 A `Dockerfile` is included in the project root:
 
@@ -365,7 +356,7 @@ aiusage status
 
 ## Project Structure
 
-```
+```text
 packages/
   core/     - Shared types, database schema, pricing data
   cli/      - CLI tool for parsing logs, querying data, cloud sync
