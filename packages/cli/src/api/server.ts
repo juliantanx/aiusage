@@ -537,16 +537,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           return
         }
 
-        let toolFilter = ''
-        const params: Record<string, unknown> = { ...dr.params }
-        if (tool) {
-          toolFilter = 'AND tool = @tool'
-          params.tool = tool
-        }
+        const tf = getToolFilter(tool)
+        const params: Record<string, unknown> = { ...dr.params, ...tf.params }
 
         const totalRow = db.prepare(`
           SELECT COUNT(DISTINCT session_id) AS total
-          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${toolFilter}
+          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
         `).get(params) as any
 
         const sessions = db.prepare(`
@@ -560,7 +556,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                  SUM(cache_write_tokens) AS cacheWriteTokens,
                  SUM(cost) AS cost
           FROM records
-          WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${toolFilter}
+          WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
           GROUP BY session_id
           ORDER BY ts DESC
           LIMIT @limit OFFSET @offset
