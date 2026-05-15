@@ -60,12 +60,14 @@ program
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
   .option('--device <id>', 'Filter by device instance ID')
+  .option('--tool <tool>', 'Filter by tool type')
   .action((options) => {
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
     const state = getState(AIUSAGE_DIR)
     const summary = generateSummary(db, {
       currentDeviceInstanceId: state?.deviceInstanceId,
       device: options.device,
+      tool: options.tool,
     })
     if (summary.deviceLabel) {
       console.log(`设备：${summary.deviceLabel}`)
