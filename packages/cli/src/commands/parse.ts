@@ -1,12 +1,12 @@
 import Database from 'better-sqlite3'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, extname } from 'node:path'
-import { homedir, hostname } from 'node:os'
+import { homedir, hostname, platform } from 'node:os'
 import { Aggregator, type Tool } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
-import { loadConfig } from '../config.js'
+import { loadConfig, AIUSAGE_DIR } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
 import { runParseOpenCode } from './parse-opencode.js'
 
@@ -37,12 +37,29 @@ function findJsonlFiles(dir: string): string[] {
   return results
 }
 
-function discoverLogFiles(): ToolPaths[] {
+function defaultOpenCodeDbPath(): string {
+  const home = homedir()
+  const plat = platform()
+  if (plat === 'win32') {
+    // Windows: %APPDATA%\opencode\opencode.db
+    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    return join(appData, 'opencode', 'opencode.db')
+  }
+  if (plat === 'darwin') {
+    // macOS: ~/Library/Application Support/opencode/opencode.db
+    return join(home, 'Library', 'Application Support', 'opencode', 'opencode.db')
+  }
+  // Linux: $XDG_DATA_HOME/opencode/opencode.db (defaults to ~/.local/share)
+  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
+  return join(xdgDataHome, 'opencode', 'opencode.db')
+}
+
+function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
   const home = homedir()
   const results: ToolPaths[] = []
 
   // Claude Code: ~/.claude/projects/**/*.jsonl (recursive, includes subagents)
-  const claudeDir = join(home, '.claude', 'projects')
+  const claudeDir = sources?.['claude-code'] ?? join(home, '.claude', 'projects')
   if (existsSync(claudeDir)) {
     const claudePaths = findJsonlFiles(claudeDir)
     if (claudePaths.length > 0) {
@@ -51,7 +68,7 @@ function discoverLogFiles(): ToolPaths[] {
   }
 
   // Codex: ~/.codex/sessions/**/*.jsonl (recursive)
-  const codexDir = join(home, '.codex', 'sessions')
+  const codexDir = sources?.['codex'] ?? join(home, '.codex', 'sessions')
   if (existsSync(codexDir)) {
     const codexPaths = findJsonlFiles(codexDir)
     if (codexPaths.length > 0) {
@@ -59,10 +76,27 @@ function discoverLogFiles(): ToolPaths[] {
     }
   }
 
-  // OpenClaw: ~/.openclaw/agents/main/sessions/*.jsonl (skip checkpoint files)
-  const openclawDir = join(home, '.openclaw', 'agents', 'main', 'sessions')
-  if (existsSync(openclawDir)) {
-    const openclawPaths = findJsonlFiles(openclawDir).filter(p => !p.includes('.checkpoint.'))
+  // OpenClaw: ~/.openclaw/agents/*/sessions/*.jsonl (all agents, skip checkpoint files)
+  const openclawBase = sources?.['openclaw'] ?? join(home, '.openclaw', 'agents')
+  if (existsSync(openclawBase)) {
+    // If user provided a custom path, treat it directly as the sessions dir
+    // Otherwise scan all agents under ~/.openclaw/agents/*/sessions/
+    let openclawPaths: string[]
+    if (sources?.['openclaw']) {
+      openclawPaths = findJsonlFiles(openclawBase).filter(p => !p.includes('.checkpoint.'))
+    } else {
+      openclawPaths = []
+      try {
+        const agentEntries = readdirSync(openclawBase, { withFileTypes: true })
+        for (const agentEntry of agentEntries) {
+          if (!agentEntry.isDirectory()) continue
+          const sessionsDir = join(openclawBase, agentEntry.name, 'sessions')
+          if (existsSync(sessionsDir)) {
+            openclawPaths.push(...findJsonlFiles(sessionsDir).filter(p => !p.includes('.checkpoint.')))
+          }
+        }
+      } catch {}
+    }
     if (openclawPaths.length > 0) {
       results.push({ tool: 'openclaw', paths: openclawPaths })
     }
@@ -93,16 +127,16 @@ function extractSessionId(filePath: string, tool: Tool): string {
 }
 
 export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string }): Promise<ParseResult> {
-  const state = getState(join(homedir(), '.aiusage'))
+  const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
   const deviceInstanceId = state?.deviceInstanceId ?? 'unknown'
   const devicePlatform = config?.platform
 
-  const watermarkPath = join(homedir(), '.aiusage', 'watermark.json')
+  const watermarkPath = join(AIUSAGE_DIR, 'watermark.json')
   const wm = new WatermarkManager(watermarkPath)
 
-  const toolPaths = discoverLogFiles()
+  const toolPaths = discoverLogFiles(config?.sources)
   const aggregator = new Aggregator()
 
   let parsedCount = 0
@@ -183,7 +217,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // OpenCode: SQLite database
-  const openCodeDbPath = options?.openCodeDbPath ?? join(homedir(), '.local', 'share', 'opencode', 'opencode.db')
+  const openCodeDbPath = options?.openCodeDbPath ?? config?.sources?.['opencode'] ?? defaultOpenCodeDbPath()
   if ((!filterTool || filterTool === 'opencode') && existsSync(openCodeDbPath)) {
     try {
       const openCodeDb = new Database(openCodeDbPath, { readonly: true })

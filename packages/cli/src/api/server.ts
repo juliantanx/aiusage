@@ -2,7 +2,7 @@ import http from 'node:http'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
-import { loadConfig } from '../config.js'
+import { loadConfig, saveConfig } from '../config.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = ''): { where: string; params: Record<string, unknown> } {
@@ -680,13 +680,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               json(res, { error: { code: 'INVALID_PARAM', message: 'model, input, output required' } }, 400)
               return
             }
-            setPriceOverride(data.model, {
+            const entry = {
               input: data.input,
               output: data.output,
               cacheRead: data.cacheRead,
               cacheWrite: data.cacheWrite,
               thinking: data.thinking,
-            })
+            }
+            setPriceOverride(data.model, entry)
+            const cfg = loadConfig() ?? {}
+            cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
+            saveConfig(cfg)
             json(res, { ok: true })
           } catch {
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
@@ -701,6 +705,11 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return
           }
           removePriceOverride(model)
+          const cfg = loadConfig() ?? {}
+          if (cfg.priceOverrides) {
+            delete cfg.priceOverrides[model]
+            saveConfig(cfg)
+          }
           json(res, { ok: true })
           return
         }

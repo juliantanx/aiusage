@@ -6,8 +6,9 @@ import { createApiServer } from '../api/server.js'
 import { runParse } from './parse.js'
 import { runSync } from './sync.js'
 import { getState } from '../init.js'
-import { AIUSAGE_DIR } from '../config.js'
+import { AIUSAGE_DIR, loadConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
+import { setPriceOverride } from '@aiusage/core'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
@@ -29,6 +30,14 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 export function serve(options: ServeOptions): void {
+  // Restore persisted price overrides
+  const config = loadConfig()
+  if (config?.priceOverrides) {
+    for (const [model, entry] of Object.entries(config.priceOverrides)) {
+      setPriceOverride(model, entry)
+    }
+  }
+
   const syncRuntime = new SyncRuntimeController({
     runSync: (runtimeOptions) => runSync(options.db, runtimeOptions).then(() => undefined),
     getPersistedState: () => getState(AIUSAGE_DIR),

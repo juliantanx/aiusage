@@ -1,12 +1,12 @@
 # aiusage
 
-Track and analyze AI coding assistant usage across Claude Code, Codex, and OpenClaw. Aggregates token consumption, costs, and tool call statistics from local session logs.
+Track and analyze AI coding assistant usage across Claude Code, Codex, OpenClaw, and OpenCode. Aggregates token consumption, costs, and tool call statistics from local session logs.
 
 English | [中文](./README_zh.md)
 
 ## Features
 
-- Parse JSONL session logs from Claude Code / Codex / OpenClaw
+- Parse session logs from Claude Code / Codex / OpenClaw / OpenCode
 - Aggregate token usage and cost by tool, model, and date
 - Tool call frequency statistics
 - Multi-device data sync via GitHub / S3 / R2
@@ -72,7 +72,7 @@ schtasks /create /tn "AiusageParse" /tr "aiusage parse" /sc minute /mo 30
 
 | Command | Description |
 |---------|-------------|
-| `aiusage parse` | Parse local AI session logs into database |
+| `aiusage parse` | Parse local AI session logs into database (supports `--tool claude-code\|codex\|openclaw\|opencode`) |
 | `aiusage summary` | Show usage summary (supports `--week` `--month`) |
 | `aiusage status` | Show current status |
 | `aiusage serve` | Start web dashboard (supports `--port`) |
@@ -113,7 +113,7 @@ For single-machine usage, just follow the Quick Start above — no extra setup n
 
 ### Multi-Machine Sync
 
-Use this to aggregate token usage from multiple machines into one dashboard.
+Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, and OpenCode.
 
 **Architecture:**
 
@@ -301,6 +301,36 @@ docker build -t aiusage .
 | Local database | `~/.aiusage/cache.db` |
 | Config | `~/.aiusage/config.json` |
 | State (watermarks, sync) | `~/.aiusage/state.json` |
+
+### Default Source Paths
+
+`aiusage parse` auto-discovers session logs from the following default locations:
+
+| Tool | macOS | Linux | Windows |
+|------|-------|-------|---------|
+| Claude Code | `~/.claude/projects/` | `~/.claude/projects/` | `%USERPROFILE%\.claude\projects\` |
+| Codex | `~/.codex/sessions/` | `~/.codex/sessions/` | `%USERPROFILE%\.codex\sessions\` |
+| OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
+| OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
+
+> On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
+
+### Custom Source Paths
+
+If you installed a tool to a non-default location, override the paths in `~/.aiusage/config.json`:
+
+```json
+{
+  "sources": {
+    "claude-code": "/custom/path/.claude/projects",
+    "codex": "/custom/path/.codex/sessions",
+    "openclaw": "/custom/sessions-dir",
+    "opencode": "/custom/path/opencode.db"
+  }
+}
+```
+
+Only the paths you specify are overridden; unspecified tools fall back to their defaults.
 
 ## Database Visualization
 

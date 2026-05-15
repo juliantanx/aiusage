@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { ConsentConfig } from './sync/consent.js'
+import type { PriceEntry } from '@aiusage/core'
 
 export const AIUSAGE_DIR = join(homedir(), '.aiusage')
 export const CONFIG_PATH = join(AIUSAGE_DIR, 'config.json')
@@ -22,6 +23,17 @@ export interface SyncConfig {
   credentialRef?: string
 }
 
+export interface SourcesConfig {
+  /** Custom path to Claude Code projects dir (default: ~/.claude/projects) */
+  'claude-code'?: string
+  /** Custom path to Codex sessions dir (default: ~/.codex/sessions) */
+  'codex'?: string
+  /** Custom path to OpenClaw sessions dir (default: ~/.openclaw/agents/main/sessions) */
+  'openclaw'?: string
+  /** Custom path to opencode.db file (default: platform-specific) */
+  'opencode'?: string
+}
+
 export interface Config {
   sync?: SyncConfig
   device?: string
@@ -30,6 +42,9 @@ export interface Config {
   parseInterval?: number
   dashboardPollInterval?: number
   credentials?: Record<string, string>
+  priceOverrides?: Record<string, PriceEntry>
+  /** Override default source paths for each AI tool */
+  sources?: SourcesConfig
 }
 
 export function loadConfig(): Config | null {

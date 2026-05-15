@@ -1,12 +1,12 @@
 # aiusage
 
-追踪和分析 AI 编程助手（Claude Code、Codex、OpenClaw）的使用情况。从本地会话日志中聚合 token 消耗、费用和工具调用统计。
+追踪和分析 AI 编程助手（Claude Code、Codex、OpenClaw、OpenCode）的使用情况。从本地会话日志中聚合 token 消耗、费用和工具调用统计。
 
 [English](./README.md) | 中文
 
 ## 功能
 
-- 解析 Claude Code / Codex / OpenClaw 的本地 JSONL 会话日志
+- 解析 Claude Code / Codex / OpenClaw / OpenCode 的本地会话日志
 - 按工具、模型、日期聚合 token 用量和费用
 - 工具调用频率统计
 - 多设备数据同步（GitHub / S3 / R2）
@@ -72,7 +72,7 @@ schtasks /create /tn "AiusageParse" /tr "aiusage parse" /sc minute /mo 30
 
 | 命令 | 说明 |
 |------|------|
-| `aiusage parse` | 解析本地 AI 会话日志到数据库 |
+| `aiusage parse` | 解析本地 AI 会话日志到数据库（支持 `--tool claude-code\|codex\|openclaw\|opencode`） |
 | `aiusage summary` | 显示用量摘要（支持 `--week` `--month`） |
 | `aiusage status` | 显示当前状态 |
 | `aiusage serve` | 启动 Web 仪表盘（支持 `--port`） |
@@ -113,7 +113,7 @@ aiusage serve
 
 ### 多机同步
 
-适合有多台机器使用 Claude Code / Codex / OpenClaw，需要汇总所有机器的 token 用量。
+适合有多台机器使用 Claude Code / Codex / OpenClaw / OpenCode，需要汇总所有机器的 token 用量。
 
 **架构：**
 
@@ -301,6 +301,36 @@ docker build -t aiusage .
 | 本地数据库 | `~/.aiusage/cache.db` |
 | 配置文件 | `~/.aiusage/config.json` |
 | 状态文件（水位线、同步状态） | `~/.aiusage/state.json` |
+
+### 默认日志来源路径
+
+`aiusage parse` 会自动从以下默认位置查找会话日志：
+
+| 工具 | macOS | Linux | Windows |
+|------|-------|-------|---------|
+| Claude Code | `~/.claude/projects/` | `~/.claude/projects/` | `%USERPROFILE%\.claude\projects\` |
+| Codex | `~/.codex/sessions/` | `~/.codex/sessions/` | `%USERPROFILE%\.codex\sessions\` |
+| OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
+| OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
+
+> Linux 下 OpenCode 会优先读取 `$XDG_DATA_HOME`（未设置时 fallback 到 `~/.local/share`）。
+
+### 自定义来源路径
+
+如果你将某个工具安装到了非默认路径，可以在 `~/.aiusage/config.json` 中覆盖：
+
+```json
+{
+  "sources": {
+    "claude-code": "/自定义路径/.claude/projects",
+    "codex": "/自定义路径/.codex/sessions",
+    "openclaw": "/自定义/sessions目录",
+    "opencode": "/自定义路径/opencode.db"
+  }
+}
+```
+
+只有显式指定的工具路径会被覆盖，未指定的工具仍使用默认路径。
 
 ## 数据库可视化查看
 

@@ -12,8 +12,9 @@ import { runParse } from './commands/parse.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+
+const DB_PATH = join(AIUSAGE_DIR, 'cache.db')
 
 const program = new Command()
 
@@ -27,7 +28,7 @@ program
 // Default command: summary
 program
   .action(() => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const state = getState(AIUSAGE_DIR)
     const summary = generateSummary(db, {
       currentDeviceInstanceId: state?.deviceInstanceId,
@@ -64,7 +65,7 @@ program
   .option('--device <id>', 'Filter by device instance ID')
   .option('--tool <tool>', 'Filter by tool type (claude-code|codex|openclaw|opencode)')
   .action((options) => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const state = getState(AIUSAGE_DIR)
     const summary = generateSummary(db, {
       currentDeviceInstanceId: state?.deviceInstanceId,
@@ -93,7 +94,7 @@ program
   .command('status')
   .description('Show current status')
   .action(() => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const status = generateStatus(db)
     console.log(`Version:     ${status.version}`)
     console.log(`Device:      ${status.deviceName}`)
@@ -124,7 +125,7 @@ program
       console.error('Invalid format. Use csv, json, or ndjson.')
       process.exit(1)
     }
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const data = exportData(db, format)
     if (options.output) {
       writeFileSync(options.output, data, 'utf-8')
@@ -141,7 +142,7 @@ program
   .description('Parse AI tool session logs')
   .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw|opencode)')
   .action(async (options) => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     try {
       const result = await runParse(db, options.tool)
       console.log(`Parsed ${result.parsedCount} records, ${result.toolCallCount} tool calls.`)
@@ -172,7 +173,7 @@ program
       process.exit(1)
     }
     const days = parseInt(daysMatch[1], 10)
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const result = cleanOldData(db, days)
     console.log(`Deleted ${result.deletedCount} records, ${result.deletedSyncedCount} synced records, ${result.deletedOrphanToolCalls} orphan tool calls.`)
     db.close()
@@ -184,7 +185,7 @@ program
   .description('Recalculate costs')
   .option('--pricing', 'Recalculate using latest pricing')
   .action(() => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const result = recalcPricing(db)
     console.log(`Updated ${result.updatedCount} records, skipped ${result.skippedCount}.`)
     db.close()
@@ -196,7 +197,7 @@ program
   .description('Start web dashboard')
   .option('-p, --port <port>', 'Port number', '3847')
   .action((options) => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     serve({ port: parseInt(options.port), db })
   })
 
@@ -229,7 +230,7 @@ program
   .command('sync')
   .description('Sync data with cloud storage')
   .action(async () => {
-    const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
+    const db = createDatabase(DB_PATH)
     const result = await runSync(db)
     if (result.status === 'ok') {
       console.log(`✓ Sync complete — pulled: ${result.pulledCount}, merged: ${result.mergedCount}, uploaded: ${result.uploadedCount}`)

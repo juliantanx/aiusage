@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import { statSync, existsSync } from 'node:fs'
 import { getState } from '../init.js'
-import { homedir } from 'node:os'
+import { AIUSAGE_DIR } from '../config.js'
 import { join } from 'node:path'
 
 export interface StatusResult {
@@ -30,14 +30,14 @@ function getDatabasePath(db: Database.Database): string {
 }
 
 export function generateStatus(db: Database.Database): StatusResult {
-  const state = getState(join(homedir(), '.aiusage'))
+  const state = getState(AIUSAGE_DIR)
   const recordCount = (db.prepare('SELECT COUNT(*) as count FROM records').get() as any).count
   const dbPath = getDatabasePath(db)
   const schemaVersion = ((db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as any)?.version ?? 0) as number
   const tableCount = ((db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").get() as any)?.count ?? 0) as number
   const viewCount = ((db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'view'").get() as any)?.count ?? 0) as number
 
-  const sizePath = join(homedir(), '.aiusage', 'cache.db')
+  const sizePath = join(AIUSAGE_DIR, 'cache.db')
   let databaseSize = '0 B'
   if (existsSync(sizePath)) {
     try {
