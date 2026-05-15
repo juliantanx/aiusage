@@ -167,5 +167,5 @@ export function runParseOpenCode(
     }
   }
 
-  return { records, toolCalls, nextCursor: lastCursor, errors }
+  return { records, toolCalls, nextCursor: records.length > 0 ? lastCursor : null, errors }
 }
