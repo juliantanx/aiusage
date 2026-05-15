@@ -47,7 +47,12 @@ export class Aggregator {
   }
 
   finalize(): ParseResult[] {
-    if (!this.activeParser?.finalize) return []
-    return this.activeParser.finalize()
+    const results: ParseResult[] = []
+    for (const parser of this.parsers.values()) {
+      if (parser.finalize) {
+        results.push(...parser.finalize())
+      }
+    }
+    return results
   }
 }

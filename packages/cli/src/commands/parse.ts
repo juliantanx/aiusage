@@ -128,12 +128,12 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
         for (const line of lines) {
           if (!line.trim()) {
-            byteOffset += line.length + 1
+            byteOffset += Buffer.byteLength(line, 'utf-8') + 1
             continue
           }
 
           if (byteOffset < offset) {
-            byteOffset += line.length + 1
+            byteOffset += Buffer.byteLength(line, 'utf-8') + 1
             continue
           }
 
@@ -158,7 +158,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             }
           }
 
-          byteOffset += line.length + 1
+          byteOffset += Buffer.byteLength(line, 'utf-8') + 1
         }
 
         // Handle finalize (orphan tool calls for Codex)
@@ -175,6 +175,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           size: stat.size,
           mtime: stat.mtimeMs,
         })
+        wm.save()
       } catch (e) {
         errors.push(`${filePath}: ${e instanceof Error ? e.message : e}`)
       }
@@ -198,7 +199,10 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
         for (const record of result.records) insertRecord(db, record)
         for (const tc of result.toolCalls) insertToolCall(db, tc)
-        if (result.nextCursor) wm.setOpenCodeCursor(result.nextCursor)
+        if (result.nextCursor) {
+          wm.setOpenCodeCursor(result.nextCursor)
+          wm.save()
+        }
         parsedCount += result.records.length
         toolCallCount += result.toolCalls.length
         errors.push(...result.errors)
@@ -210,7 +214,20 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
-  wm.save()
+  // Fix historical records that were parsed before init created state.json.
+  // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
+  if (deviceInstanceId !== 'unknown') {
+    db.prepare(
+      `UPDATE records SET device_instance_id = ?, device = ? WHERE device_instance_id = 'unknown'`
+    ).run(deviceInstanceId, device)
+  }
+
+  // Backfill platform for existing records that have an empty platform field.
+  if (devicePlatform) {
+    db.prepare(
+      `UPDATE records SET platform = ? WHERE platform = '' AND source_file NOT LIKE 'synced/%'`
+    ).run(devicePlatform)
+  }
 
   return { parsedCount, toolCallCount, errors }
 }

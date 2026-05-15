@@ -21,7 +21,7 @@ describe('Status Command', () => {
     expect(status.deviceName).toBeDefined()
     expect(status.dbPath).toBe(':memory:')
     expect(status.databaseSize).toBeDefined()
-    expect(status.schemaVersion).toBe(3)
+    expect(status.schemaVersion).toBe(4)
     expect(status.tableCount).toBeGreaterThan(0)
     expect(status.viewCount).toBe(3)
     expect(status.recordCount).toBe(0)

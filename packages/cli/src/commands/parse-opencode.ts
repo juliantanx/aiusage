@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { StatsRecord, ToolCallRecord } from '@aiusage/core'
-import { generateRecordId, generateToolCallId, inferProvider } from '@aiusage/core'
+import { generateRecordId, generateToolCallId, inferProvider, calculateCost } from '@aiusage/core'
 import type { OpenCodeCursor } from '../watermark.js'
 
 export interface OpenCodeImportOptions {
@@ -130,8 +130,8 @@ export function runParseOpenCode(
       cacheReadTokens,
       cacheWriteTokens,
       thinkingTokens: reasoningTokens,
-      cost: parsed.cost ?? 0,
-      costSource: parsed.cost != null ? 'log' : 'unknown',
+      cost: parsed.cost ?? (model !== 'unknown' ? calculateCost(model, { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens: reasoningTokens }) : 0),
+      costSource: parsed.cost != null ? 'log' : model !== 'unknown' ? 'pricing' : 'unknown',
       sessionId: message.session_id,
       sourceFile: dbPath,
       device,

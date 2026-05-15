@@ -110,7 +110,7 @@ describe('Database Schema', () => {
   it('records latest schema version', () => {
     initializeDatabase(db)
     const version = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get()
-    expect((version as any).version).toBe(3)
+    expect((version as any).version).toBe(4)
   })
 
   it('queries visualization views successfully', () => {

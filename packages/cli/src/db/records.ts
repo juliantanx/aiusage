@@ -7,12 +7,12 @@ export function insertRecord(db: Database.Database, record: StatsRecord): void {
       id, ts, ingested_at, synced_at, updated_at, line_offset,
       tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
-      cost, cost_source, session_id, source_file, device, device_instance_id
+      cost, cost_source, session_id, source_file, device, device_instance_id, platform
     ) VALUES (
       @id, @ts, @ingestedAt, @syncedAt, @updatedAt, @lineOffset,
       @tool, @model, @provider, @inputTokens, @outputTokens,
       @cacheReadTokens, @cacheWriteTokens, @thinkingTokens,
-      @cost, @costSource, @sessionId, @sourceFile, @device, @deviceInstanceId
+      @cost, @costSource, @sessionId, @sourceFile, @device, @deviceInstanceId, @platform
     )
   `).run({
     id: record.id,
@@ -35,6 +35,7 @@ export function insertRecord(db: Database.Database, record: StatsRecord): void {
     sourceFile: record.sourceFile,
     device: record.device,
     deviceInstanceId: record.deviceInstanceId,
+    platform: record.platform ?? '',
   })
 }
 
@@ -83,5 +84,6 @@ function mapRowToRecord(row: Record<string, unknown>): StatsRecord {
     sourceFile: row.source_file as string,
     device: row.device as string,
     deviceInstanceId: row.device_instance_id as string,
+    platform: (row.platform as string) || undefined,
   }
 }
