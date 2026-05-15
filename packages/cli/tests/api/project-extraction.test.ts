@@ -25,4 +25,8 @@ describe('extractProject', () => {
       extractProject('/tmp/data/logs/2026/05/16/123e4567-e89b-12d3-a456-426614174000.jsonl')
     ).toBe('unknown')
   })
+
+  it('returns unknown for empty sourceFile', () => {
+    expect(extractProject('')).toBe('unknown')
+  })
 })

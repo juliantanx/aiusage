@@ -3,6 +3,7 @@ import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
 import { loadConfig, saveConfig } from '../config.js'
+import { extractProject } from './project-extraction.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = ''): { where: string; params: Record<string, unknown> } {
@@ -44,23 +45,6 @@ function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.end(JSON.stringify(data))
 }
 
-function extractProject(sourceFile: string): string {
-  // Path: ~/.claude/projects/-Users-tjh-WebstormProjects-ai-bidding-assistant/uuid.jsonl
-  const match = sourceFile.match(/\.claude\/projects\/([^/]+)/)
-  if (!match) return 'unknown'
-  const raw = match[1]
-  // Convert path-encoded name: take last meaningful segment
-  // e.g. "-Users-tjh-WebstormProjects-ai-bidding-assistant" → "ai-bidding-assistant"
-  const parts = raw.split('-').filter(Boolean)
-  // Find the segment after "WebstormProjects" or "Documents"
-  const wpIdx = parts.indexOf('WebstormProjects')
-  if (wpIdx >= 0 && wpIdx < parts.length - 1) return parts.slice(wpIdx + 1).join('-')
-  const docIdx = parts.indexOf('Documents')
-  if (docIdx >= 0 && docIdx < parts.length - 1) return parts.slice(docIdx + 1).join('-')
-  // Fallback: if path is just user home dir, label as "~"
-  if (parts.length <= 3) return '~'
-  return parts.slice(-2).join('-') || raw
-}
 
 export interface ApiServerOptions {
   currentDeviceInstanceId?: string
