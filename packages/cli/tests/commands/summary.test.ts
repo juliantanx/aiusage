@@ -159,6 +159,21 @@ describe('Summary Command', () => {
     expect(Object.keys(summary.byTool)).toEqual(['opencode'])
   })
 
+  it('filters by tool when viewing all devices', () => {
+    insertRecord(db, createTestRecord({ id: 'r1', tool: 'claude-code', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, cost: 0.001 }))
+    insertSyncedRecord(db, {
+      id: 's1', ts: Date.now(), tool: 'opencode', model: 'glm-5.1', provider: 'qianfan',
+      inputTokens: 200, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0,
+      thinkingTokens: 0, cost: 0.002, costSource: 'pricing', sessionKey: 'sk1',
+      device: 'remote', deviceInstanceId: 'remote-uuid', updatedAt: Date.now(),
+    })
+
+    const summary = generateSummary(db, { currentDeviceInstanceId: 'device-123', tool: 'opencode' })
+
+    expect(summary.totalTokens).toBe(300)
+    expect(Object.keys(summary.byTool)).toEqual(['opencode'])
+  })
+
   it('returns local-only data when no currentDeviceInstanceId', () => {
     insertRecord(db, createTestRecord({ id: 'local1', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, cost: 0.001 }))
     insertSyncedRecord(db, {
