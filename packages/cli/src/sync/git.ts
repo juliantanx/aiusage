@@ -78,16 +78,27 @@ export class GitSyncBackend {
     }
   }
 
+  private static readonly MAX_PUSH_RETRIES = 3
+
   /** Commit and push all changes. Returns true if anything was pushed. */
   async flush(): Promise<boolean> {
-    // Check if there are any changes
     const status = await this.git(['status', '--porcelain'])
     if (!status) return false
 
     await this.git(['add', 'data/'])
     await this.git(['commit', '-m', `sync ${new Date().toISOString()}`])
-    await this.git(['push', 'origin', 'main'])
-    return true
+
+    for (let attempt = 1; attempt <= GitSyncBackend.MAX_PUSH_RETRIES; attempt++) {
+      try {
+        await this.git(['push', 'origin', 'main'])
+        return true
+      } catch (error) {
+        if (attempt >= GitSyncBackend.MAX_PUSH_RETRIES) throw error
+        await this.git(['pull', '--rebase', 'origin', 'main'])
+      }
+    }
+
+    return false
   }
 
   private async walkDir(dir: string, prefix: string): Promise<string[]> {
