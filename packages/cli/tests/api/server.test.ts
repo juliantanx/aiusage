@@ -24,7 +24,7 @@ function insertTestRecord(db: Database.Database, overrides: Record<string, unkno
     cost: 0.001,
     cost_source: 'pricing',
     session_id: 'session1',
-    source_file: '/test/file.jsonl',
+    source_file: '/Users/tjh/.claude/projects/-Users-tjh-WebstormProjects-local-device/session1.jsonl',
     device: 'local-device',
     device_instance_id: 'local-uuid-0000',
   }
@@ -256,6 +256,36 @@ describe('Device filtering', () => {
     const data = await res.json()
     expect(data.byTool['codex']).toBeCloseTo(0.003)
     expect(Object.keys(data.byTool)).toEqual(['codex'])
+  })
+
+  it('projects derives claude project names instead of grouping them as unknown', async () => {
+    insertTestRecord(db, {
+      id: 'local00000002',
+      source_file: '/Users/tjh/.claude/projects/-Users-tjh-WebstormProjects-aiusage/session-2.jsonl',
+      session_id: 'session-2',
+    })
+
+    const res = await fetch(`${baseUrl}/api/projects?range=all`)
+    const data = await res.json()
+    const names = data.projects.map((project: any) => project.name)
+
+    expect(names).toContain('aiusage')
+    expect(names).not.toContain('unknown')
+  })
+
+  it('projects uses generic path fallback for non-claude local records', async () => {
+    insertTestRecord(db, {
+      id: 'local00000003',
+      tool: 'opencode',
+      source_file: '/Users/tjh/worktrees/demo-app/sessions/rollout-123.jsonl',
+      session_id: 'session-3',
+    })
+
+    const res = await fetch(`${baseUrl}/api/projects?range=all`)
+    const data = await res.json()
+    const project = data.projects.find((entry: any) => entry.name === 'demo-app')
+
+    expect(project).toMatchObject({ name: 'demo-app', sessions: 1 })
   })
 })
 
