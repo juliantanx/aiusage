@@ -1,6 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { runParseOpenCode } from '../../src/commands/parse-opencode.js'
+import { initializeDatabase } from '../../src/db/index.js'
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual('node:os')
+  return {
+    ...actual,
+    homedir: () => join(tmpdir(), 'aiusage-parse-opencode-test'),
+  }
+})
+
+// Must import after mock
+const { runParse } = await import('../../src/commands/parse.js')
 
 function createOpenCodeDb(db: Database.Database): void {
   db.exec(`
@@ -231,5 +246,80 @@ describe('parse-opencode', () => {
 
     expect(result.records).toHaveLength(0)
     expect(result.errors.length).toBeGreaterThan(0)
+  })
+})
+
+describe('runParse with opencode', () => {
+  const testDir = join(tmpdir(), 'aiusage-parse-opencode-test')
+  let cacheDb: Database.Database
+  let opencodeDbPath: string
+
+  beforeEach(() => {
+    // Set up temp directory structure
+    mkdirSync(join(testDir, '.aiusage'), { recursive: true })
+    writeFileSync(join(testDir, '.aiusage', 'watermark.json'), '{}')
+
+    // Create in-memory cache DB with aiusage schema
+    cacheDb = new Database(':memory:')
+    initializeDatabase(cacheDb)
+
+    // Create OpenCode DB on disk with fixture data
+    opencodeDbPath = join(testDir, '.local', 'share', 'opencode', 'opencode.db')
+    mkdirSync(join(testDir, '.local', 'share', 'opencode'), { recursive: true })
+
+    const opencodeDb = new Database(opencodeDbPath)
+    createOpenCodeDb(opencodeDb)
+
+    // Insert fixture: one assistant message with two tool parts
+    const messageData = JSON.stringify({
+      role: 'assistant',
+      modelID: 'glm-5.1',
+      providerID: 'qianfan',
+      cost: 0,
+      tokens: {
+        input: 120,
+        output: 30,
+        reasoning: 5,
+        cache: { read: 0, write: 0 },
+      },
+      time: { created: 1778821880545, completed: 1778821881000 },
+    })
+    opencodeDb.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_1', 'sess_1', 1778821880545, messageData)
+
+    opencodeDb.prepare(
+      'INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)'
+    ).run('part_1', 'msg_1', 'sess_1', 1778821880546, JSON.stringify({ type: 'tool', tool: 'bash' }))
+
+    opencodeDb.prepare(
+      'INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)'
+    ).run('part_2', 'msg_1', 'sess_1', 1778821880547, JSON.stringify({ type: 'tool', tool: 'read' }))
+
+    opencodeDb.close()
+  })
+
+  afterEach(() => {
+    cacheDb.close()
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  it('runParse imports opencode records when tool filter is opencode', async () => {
+    const result = await runParse(cacheDb, 'opencode', { openCodeDbPath: opencodeDbPath })
+    expect(result.parsedCount).toBe(1)
+    expect(result.toolCallCount).toBe(2)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('runParse skips opencode when filter is different tool', async () => {
+    const result = await runParse(cacheDb, 'claude-code', { openCodeDbPath: opencodeDbPath })
+    expect(result.parsedCount).toBe(0)
+    expect(result.toolCallCount).toBe(0)
+  })
+
+  it('runParse handles missing opencode db gracefully', async () => {
+    const result = await runParse(cacheDb, 'opencode', { openCodeDbPath: join(testDir, 'nonexistent.db') })
+    expect(result.parsedCount).toBe(0)
+    expect(result.toolCallCount).toBe(0)
   })
 })

@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3'
+import Database from 'better-sqlite3'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { homedir, hostname } from 'node:os'
@@ -8,6 +8,7 @@ import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
 import { loadConfig } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
+import { runParseOpenCode } from './parse-opencode.js'
 
 interface ParseResult {
   parsedCount: number
@@ -91,7 +92,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
   return 'unknown'
 }
 
-export async function runParse(db: Database.Database, filterTool?: string): Promise<ParseResult> {
+export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string }): Promise<ParseResult> {
   const state = getState(join(homedir(), '.aiusage'))
   const config = loadConfig()
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
@@ -177,6 +178,31 @@ export async function runParse(db: Database.Database, filterTool?: string): Prom
       } catch (e) {
         errors.push(`${filePath}: ${e instanceof Error ? e.message : e}`)
       }
+    }
+  }
+
+  // OpenCode: SQLite database
+  const openCodeDbPath = options?.openCodeDbPath ?? join(homedir(), '.local', 'share', 'opencode', 'opencode.db')
+  if ((!filterTool || filterTool === 'opencode') && existsSync(openCodeDbPath)) {
+    try {
+      const openCodeDb = new Database(openCodeDbPath, { readonly: true })
+      const result = runParseOpenCode(openCodeDb, {
+        dbPath: openCodeDbPath,
+        device,
+        deviceInstanceId,
+        now: Date.now(),
+        cursor: wm.getOpenCodeCursor(),
+      })
+      openCodeDb.close()
+
+      for (const record of result.records) insertRecord(db, record)
+      for (const tc of result.toolCalls) insertToolCall(db, tc)
+      if (result.nextCursor) wm.setOpenCodeCursor(result.nextCursor)
+      parsedCount += result.records.length
+      toolCallCount += result.toolCalls.length
+      errors.push(...result.errors)
+    } catch (e) {
+      errors.push(`${openCodeDbPath}: ${e instanceof Error ? e.message : e}`)
     }
   }
 

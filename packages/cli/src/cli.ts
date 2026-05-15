@@ -135,7 +135,7 @@ program
 program
   .command('parse')
   .description('Parse AI tool session logs')
-  .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw)')
+  .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw|opencode)')
   .action(async (options) => {
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
     try {
