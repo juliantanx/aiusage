@@ -69,6 +69,20 @@ describe('Aggregator', () => {
     expect(orphanResults[0].toolCalls[0].recordId).toBeNull()
   })
 
+  it('creates parse context for opencode', () => {
+    const context = aggregator.createContext({
+      tool: 'opencode',
+      sourceFile: '/tmp/opencode.db',
+      lineOffset: 0,
+      sessionId: 'ses_123',
+      device: 'macbook',
+      deviceInstanceId: 'device-123',
+    })
+
+    expect(context.tool).toBe('opencode')
+    expect(context.sessionId).toBe('ses_123')
+  })
+
   it('returns empty array on finalize for non-Codex parsers', () => {
     const context = aggregator.createContext({
       tool: 'claude-code',
