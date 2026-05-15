@@ -185,9 +185,9 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 **How sync works:**
 
 - Each machine has a unique `deviceInstanceId` (generated on first run)
-- Data is stored as hourly NDJSON files (`YYYY/MM/DD/HH.ndjson`) in the remote backend
-- Pull merges remote records into local `synced_records` table; Upload merges local records to remote (never overwrites)
-- Optimistic locking (ETag on S3, SHA on GitHub) prevents conflicts
+- Each device writes to its own daily files (`{deviceId}/YYYY/MM/DD.ndjson`) in the remote backend
+- Pull reads other devices' files into local `synced_records` table; Upload writes only to own device's files
+- Device-partitioned files eliminate write conflicts — no locking needed
 - Session IDs are anonymized via `sha256(device + sessionId)`
 
 ---

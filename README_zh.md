@@ -185,9 +185,9 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 **同步原理：**
 
 - 每台机器有唯一的 `deviceInstanceId`（首次运行时生成）
-- 数据按小时存储为 NDJSON 文件（`YYYY/MM/DD/HH.ndjson`）在远端后端
-- Pull 将远端记录合并到本地 `synced_records` 表，Upload 将本地记录合并到远端（永远不覆盖）
-- 使用乐观锁（S3 的 ETag、GitHub 的 SHA）防止多设备冲突
+- 每台设备写入自己的按天文件（`{deviceId}/YYYY/MM/DD.ndjson`）到远端后端
+- Pull 读取其他设备的文件到本地 `synced_records` 表，Upload 仅写入自己设备的文件
+- 按设备分文件，从根本上消除写冲突，无需加锁
 - Session ID 通过 `sha256(device + sessionId)` 匿名化
 
 ---
