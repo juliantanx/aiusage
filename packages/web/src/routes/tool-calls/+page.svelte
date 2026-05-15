@@ -1,9 +1,10 @@
 <script>
-  import { dateRange, selectedDevice, formatNumber } from '$lib/stores.js'
+  import { dateRange, selectedDevice, selectedTool, formatNumber } from '$lib/stores.js'
   import { fetchToolCalls } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
   import DeviceSelector from '$lib/components/DeviceSelector.svelte'
+  import ToolSelector from '$lib/components/ToolSelector.svelte'
 
   let data = null
   let error = null
@@ -13,7 +14,7 @@
     loading = true
     error = null
     try {
-      data = await fetchToolCalls({ ...$dateRange, device: $selectedDevice })
+      data = await fetchToolCalls({ ...$dateRange, device: $selectedDevice, tool: $selectedTool })
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load data'
       data = null
@@ -22,7 +23,7 @@
     }
   }
 
-  $: $dateRange, $selectedDevice, loadData()
+  $: $dateRange, $selectedDevice, $selectedTool, loadData()
 </script>
 
 <svelte:head>
@@ -32,6 +33,7 @@
 <div class="filter-bar">
   <DateRangeSelector />
   <DeviceSelector />
+  <ToolSelector />
 </div>
 
 {#if loading}

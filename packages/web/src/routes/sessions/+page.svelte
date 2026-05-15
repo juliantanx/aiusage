@@ -1,14 +1,14 @@
 <script>
-  import { dateRange, selectedDevice, formatTokens, formatCost, formatDate } from '$lib/stores.js'
+  import { dateRange, selectedDevice, selectedTool, formatTokens, formatCost, formatDate } from '$lib/stores.js'
   import { fetchSessions } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
   import DeviceSelector from '$lib/components/DeviceSelector.svelte'
+  import ToolSelector from '$lib/components/ToolSelector.svelte'
 
   let data = null
   let error = null
   let loading = true
-  let selectedTool = ''
   let page = 1
   const pageSize = 50
 
@@ -19,7 +19,7 @@
       data = await fetchSessions({
         ...$dateRange,
         device: $selectedDevice,
-        tool: selectedTool || undefined,
+        tool: $selectedTool || undefined,
         page,
         pageSize,
       })
@@ -31,12 +31,8 @@
     }
   }
 
-  $: $dateRange, $selectedDevice, selectedTool, page, loadData()
-
-  function handleToolChange(e) {
-    selectedTool = e.target.value
-    page = 1
-  }
+  $: $selectedTool, (page = 1)
+  $: $dateRange, $selectedDevice, $selectedTool, page, loadData()
 
   function nextPage() {
     if (data && page * pageSize < data.total) page++
@@ -54,18 +50,7 @@
 <div class="filter-bar">
   <DateRangeSelector />
   <DeviceSelector />
-</div>
-
-<div class="filters">
-  <label class="filter-label">
-    <span class="filter-text">{$t('sessions.assistant')}</span>
-    <select on:change={handleToolChange}>
-      <option value="">{$t('common.all')}</option>
-      <option value="claude-code">Claude Code</option>
-      <option value="codex">Codex</option>
-      <option value="openclaw">OpenClaw</option>
-    </select>
-  </label>
+  <ToolSelector />
 </div>
 
 {#if loading}
@@ -119,19 +104,6 @@
     gap: 1rem;
     margin-bottom: 1.5rem;
     flex-wrap: wrap;
-  }
-  .filters {
-    margin-bottom: 1rem;
-  }
-  .filter-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-  }
-  .filter-text {
-    font-weight: 500;
   }
   select {
     padding: 0.4rem 0.65rem;
