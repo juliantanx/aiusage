@@ -106,7 +106,10 @@ export class SyncOrchestrator {
   }
 
   private async pull(): Promise<number> {
-    const paths = await this.backend.listFiles()
+    const allPaths = await this.backend.listFiles()
+    const localDevicePrefix = `${this.options.deviceInstanceId}/`
+    const paths = allPaths.filter(p => !p.startsWith(localDevicePrefix))
+
     this.options.onProgress?.({
       phase: 'pulling',
       completedFiles: 0,
@@ -115,7 +118,6 @@ export class SyncOrchestrator {
     })
     if (paths.length === 0) return 0
 
-    const localDeviceId = this.options.deviceInstanceId
     let totalPulled = 0
 
     for (const [index, path] of paths.entries()) {
@@ -126,23 +128,18 @@ export class SyncOrchestrator {
         totalFiles: paths.length,
         pulledCount: totalPulled,
       })
-      const remote = await this.backend.readFile(path)
-      if (!remote) continue
+      const content = await this.backend.readFile(path)
+      if (!content) continue
 
-      const lines = remote.split('\n').filter(Boolean)
-      for (const line of lines) {
+      for (const line of content.split('\n').filter(Boolean)) {
         try {
           const record: SyncRecord = JSON.parse(line)
-          // Normalize string timestamps to integers (legacy remote data may have ISO strings)
           if (typeof record.ts === 'string') {
             (record as any).ts = new Date(record.ts).getTime()
           }
           if (typeof record.updatedAt === 'string') {
             (record as any).updatedAt = new Date(record.updatedAt).getTime()
           }
-          // Skip records from our own device and stale "unknown" records
-          if (record.deviceInstanceId === localDeviceId) continue
-          if (record.deviceInstanceId === 'unknown') continue
           insertSyncedRecord(this.db, record)
           totalPulled++
         } catch {}

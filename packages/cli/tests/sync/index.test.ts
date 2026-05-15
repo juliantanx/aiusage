@@ -198,6 +198,44 @@ describe('SyncOrchestrator', () => {
     expect(records[0].updatedAt).toBe(3000)
   })
 
+  it('skips own device files during pull', async () => {
+    const otherRecord: SyncRecord = {
+      id: 'other-1',
+      ts: 1000,
+      tool: 'claude-code',
+      model: 'test',
+      provider: 'test',
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.001,
+      costSource: 'pricing',
+      sessionKey: 'abc',
+      device: 'other',
+      deviceInstanceId: 'device-456',
+      updatedAt: 1000,
+    }
+
+    mockBackend.listFiles.mockResolvedValue([
+      'device-123/2026/05/13.ndjson',  // own device — should be skipped
+      'device-456/2026/05/13.ndjson',  // other device — should be read
+    ])
+    mockBackend.readFile.mockResolvedValueOnce(JSON.stringify(otherRecord) + '\n')
+    mockBackend.writeFile.mockResolvedValue(undefined)
+
+    const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
+      deviceInstanceId: 'device-123',
+      consentVerified: true,
+    })
+
+    const result = await orchestrator.sync()
+    // readFile called only for the other device's file
+    expect(mockBackend.readFile).toHaveBeenCalledTimes(1)
+    expect(result.pulledCount).toBe(1)
+  })
+
   it('derives a daily device-partitioned sync path from timestamps', () => {
     expect(getSyncPath(1778664420000, 'device-abc')).toBe('device-abc/2026/05/13.ndjson')
   })
