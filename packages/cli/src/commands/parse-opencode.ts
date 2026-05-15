@@ -7,6 +7,7 @@ export interface OpenCodeImportOptions {
   dbPath: string
   device: string
   deviceInstanceId: string
+  platform?: string
   now: number
   cursor: OpenCodeCursor | null
 }
@@ -56,7 +57,7 @@ export function runParseOpenCode(
   db: Database.Database,
   options: OpenCodeImportOptions,
 ): OpenCodeImportResult {
-  const { dbPath, device, deviceInstanceId, now, cursor } = options
+  const { dbPath, device, deviceInstanceId, platform, now, cursor } = options
   const records: StatsRecord[] = []
   const toolCalls: ToolCallRecord[] = []
   const errors: string[] = []
@@ -83,6 +84,12 @@ export function runParseOpenCode(
   )
 
   for (const message of messages) {
+    // Always advance cursor past every message we visit, including skipped ones
+    lastCursor = {
+      lastMessageCreatedAt: message.time_created,
+      lastMessageId: message.id,
+    }
+
     let parsed: ParsedMessageData
     try {
       parsed = JSON.parse(message.data) as ParsedMessageData
@@ -114,7 +121,7 @@ export function runParseOpenCode(
       ts,
       ingestedAt: now,
       updatedAt: now,
-      lineOffset: message.time_created,
+      lineOffset: 0, // DB-sourced records have no byte offset; use 0 as sentinel
       tool: 'opencode',
       model,
       provider,
@@ -129,6 +136,7 @@ export function runParseOpenCode(
       sourceFile: dbPath,
       device,
       deviceInstanceId,
+      platform,
     }
 
     records.push(record)
@@ -138,9 +146,11 @@ export function runParseOpenCode(
     let callIndex = 0
     for (const part of parts) {
       let partParsed: ParsedPartData
+
       try {
         partParsed = JSON.parse(part.data) as ParsedPartData
-      } catch {
+      } catch (e) {
+        errors.push(`message ${message.id} part ${part.id}: invalid JSON: ${e instanceof Error ? e.message : e}`)
         continue
       }
 
@@ -154,11 +164,6 @@ export function runParseOpenCode(
         })
         callIndex++
       }
-    }
-
-    lastCursor = {
-      lastMessageCreatedAt: message.time_created,
-      lastMessageId: message.id,
     }
   }
 

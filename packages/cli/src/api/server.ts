@@ -140,6 +140,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     const from = url.searchParams.get('from')
     const to = url.searchParams.get('to')
 
+    // Validate tool parameter early — same style as range validation
+    const toolParam = url.searchParams.get('tool')
+    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode']
+    if (toolParam && !VALID_TOOLS.includes(toolParam)) {
+      json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid tool' } }, 400)
+      return
+    }
+
     try {
       // ── /api/summary ──────────────────────────────────────────────
       if (url.pathname === '/api/summary') {
@@ -578,6 +586,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool)
+
+        // Projects are derived from source_file which only exists in local records.
+        // synced_records has no source_file column, so other-device project data is unavailable.
+        if (df.where && !df.useUnion) {
+          json(res, { projects: [] })
+          return
+        }
 
         const rows = db.prepare(`
           SELECT source_file,

@@ -247,6 +247,125 @@ describe('parse-opencode', () => {
     expect(result.records).toHaveLength(0)
     expect(result.errors.length).toBeGreaterThan(0)
   })
+
+  it('records error for malformed part JSON and still emits the record', () => {
+    const messageData = JSON.stringify({
+      role: 'assistant',
+      modelID: 'glm-5.1',
+      providerID: 'qianfan',
+      cost: 0,
+      tokens: { input: 50, output: 10, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1778821880000, completed: 1778821881000 },
+    })
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_1', 'sess_1', 1778821880000, messageData)
+
+    // Insert a malformed part alongside a valid one
+    db.prepare(
+      'INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)'
+    ).run('part_bad', 'msg_1', 'sess_1', 1778821880001, 'not-json')
+    db.prepare(
+      'INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?, ?, ?, ?, ?)'
+    ).run('part_ok', 'msg_1', 'sess_1', 1778821880002, JSON.stringify({ type: 'tool', tool: 'bash' }))
+
+    const result = runParseOpenCode(db, {
+      dbPath: '/home/user/.local/share/opencode/opencode.db',
+      device: 'macbook',
+      deviceInstanceId: 'device-123',
+      now: 1778822000000,
+      cursor: null,
+    })
+
+    expect(result.records).toHaveLength(1)
+    expect(result.toolCalls).toHaveLength(1) // valid part still extracted
+    expect(result.errors.some(e => e.includes('part_bad'))).toBe(true)
+  })
+
+  it('falls back to model=unknown when modelID is missing', () => {
+    const messageData = JSON.stringify({
+      role: 'assistant',
+      providerID: 'qianfan',
+      cost: 0,
+      tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1778821880000, completed: 1778821881000 },
+    })
+
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_1', 'sess_1', 1778821880000, messageData)
+
+    const result = runParseOpenCode(db, {
+      dbPath: '/home/user/.local/share/opencode/opencode.db',
+      device: 'macbook',
+      deviceInstanceId: 'device-123',
+      now: 1778822000000,
+      cursor: null,
+    })
+
+    expect(result.records).toHaveLength(1)
+    expect(result.records[0].model).toBe('unknown')
+  })
+
+  it('skips assistant message where all token counts are zero', () => {
+    const messageData = JSON.stringify({
+      role: 'assistant',
+      modelID: 'glm-5.1',
+      providerID: 'qianfan',
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1778821880000, completed: 1778821881000 },
+    })
+
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_zero', 'sess_1', 1778821880000, messageData)
+
+    const result = runParseOpenCode(db, {
+      dbPath: '/home/user/.local/share/opencode/opencode.db',
+      device: 'macbook',
+      deviceInstanceId: 'device-123',
+      now: 1778822000000,
+      cursor: null,
+    })
+
+    expect(result.records).toHaveLength(0)
+  })
+
+  it('cursor advances past trailing skipped messages', () => {
+    const assistantData = JSON.stringify({
+      role: 'assistant',
+      modelID: 'glm-5.1',
+      providerID: 'qianfan',
+      cost: 0,
+      tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1778821880000, completed: 1778821881000 },
+    })
+    const userData = JSON.stringify({ role: 'user', content: 'hello' })
+
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_1', 'sess_1', 1778821880000, assistantData)
+    // Trailing user message that should be skipped
+    db.prepare(
+      'INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)'
+    ).run('msg_2', 'sess_1', 1778821881000, userData)
+
+    const result = runParseOpenCode(db, {
+      dbPath: '/home/user/.local/share/opencode/opencode.db',
+      device: 'macbook',
+      deviceInstanceId: 'device-123',
+      now: 1778822000000,
+      cursor: null,
+    })
+
+    expect(result.records).toHaveLength(1)
+    // Cursor must advance past the trailing user message, not stop at the last assistant
+    expect(result.nextCursor).toEqual({
+      lastMessageCreatedAt: 1778821881000,
+      lastMessageId: 'msg_2',
+    })
+  })
 })
 
 describe('runParse with opencode', () => {
@@ -321,5 +440,15 @@ describe('runParse with opencode', () => {
     const result = await runParse(cacheDb, 'opencode', { openCodeDbPath: join(testDir, 'nonexistent.db') })
     expect(result.parsedCount).toBe(0)
     expect(result.toolCallCount).toBe(0)
+  })
+
+  it('runParse persists cursor so second call imports nothing new', async () => {
+    const result1 = await runParse(cacheDb, 'opencode', { openCodeDbPath: opencodeDbPath })
+    expect(result1.parsedCount).toBe(1)
+
+    // Second call with same DB should yield 0 new records (cursor was saved)
+    const result2 = await runParse(cacheDb, 'opencode', { openCodeDbPath: opencodeDbPath })
+    expect(result2.parsedCount).toBe(0)
+    expect(result2.toolCallCount).toBe(0)
   })
 })

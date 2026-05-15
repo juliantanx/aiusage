@@ -19,7 +19,7 @@
       data = await fetchSessions({
         ...$dateRange,
         device: $selectedDevice,
-        tool: $selectedTool || undefined,
+        tool: $selectedTool,
         page,
         pageSize,
       })

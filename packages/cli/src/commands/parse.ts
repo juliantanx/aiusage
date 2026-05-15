@@ -191,6 +191,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           dbPath: openCodeDbPath,
           device,
           deviceInstanceId,
+          platform: devicePlatform,
           now: Date.now(),
           cursor: wm.getOpenCodeCursor(),
         })

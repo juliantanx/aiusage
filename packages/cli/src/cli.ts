@@ -60,7 +60,7 @@ program
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
   .option('--device <id>', 'Filter by device instance ID')
-  .option('--tool <tool>', 'Filter by tool type')
+  .option('--tool <tool>', 'Filter by tool type (claude-code|codex|openclaw|opencode)')
   .action((options) => {
     const db = createDatabase(join(homedir(), '.aiusage', 'cache.db'))
     const state = getState(AIUSAGE_DIR)
