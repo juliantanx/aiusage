@@ -82,4 +82,16 @@ describe('WatermarkManager', () => {
     expect(wm2.getEntry('claude-code', '/path/a.jsonl')!.offset).toBe(100)
     expect(wm2.getEntry('codex', '/path/b.jsonl')!.offset).toBe(200)
   })
+
+  it('persists opencode database cursor', () => {
+    const wm = new WatermarkManager(watermarkPath)
+    wm.setOpenCodeCursor({ lastMessageCreatedAt: 1000, lastMessageId: 'msg_1' })
+    wm.save()
+
+    const wm2 = new WatermarkManager(watermarkPath)
+    expect(wm2.getOpenCodeCursor()).toEqual({
+      lastMessageCreatedAt: 1000,
+      lastMessageId: 'msg_1',
+    })
+  })
 })

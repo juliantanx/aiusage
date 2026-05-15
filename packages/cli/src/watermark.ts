@@ -9,10 +9,32 @@ export interface WatermarkEntry {
   headFingerprint?: string
 }
 
-export type WatermarkData = Record<Tool, Record<string, WatermarkEntry>>
+export interface OpenCodeCursor {
+  lastMessageCreatedAt: number
+  lastMessageId: string
+}
+
+export type FileWatermarkData = Record<Tool, Record<string, WatermarkEntry>>
+
+export interface WatermarkState {
+  files: FileWatermarkData
+  opencode?: OpenCodeCursor | null
+}
+
+/** @deprecated Use FileWatermarkData instead */
+export type WatermarkData = FileWatermarkData
+
+function defaultFileData(): FileWatermarkData {
+  return {
+    'claude-code': {},
+    'codex': {},
+    'openclaw': {},
+    'opencode': {},
+  }
+}
 
 export class WatermarkManager {
-  private data: WatermarkData
+  private data: WatermarkState
   private path: string
 
   constructor(path: string) {
@@ -20,23 +42,20 @@ export class WatermarkManager {
     this.data = this.load()
   }
 
-  private load(): WatermarkData {
+  private load(): WatermarkState {
     if (!existsSync(this.path)) {
-      return {
-        'claude-code': {},
-        'codex': {},
-        'openclaw': {},
-      }
+      return { files: defaultFileData() }
     }
     try {
       const content = readFileSync(this.path, 'utf-8')
-      return JSON.parse(content)
-    } catch {
-      return {
-        'claude-code': {},
-        'codex': {},
-        'openclaw': {},
+      const parsed = JSON.parse(content)
+      // Handle legacy format (flat Record<Tool, ...> without 'files' key)
+      if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
+        return { files: { ...defaultFileData(), ...parsed } }
       }
+      return { files: parsed.files ?? defaultFileData(), opencode: parsed.opencode ?? null }
+    } catch {
+      return { files: defaultFileData() }
     }
   }
 
@@ -45,24 +64,32 @@ export class WatermarkManager {
   }
 
   getEntry(tool: Tool, filePath: string): WatermarkEntry | null {
-    return this.data[tool]?.[filePath] ?? null
+    return this.data.files[tool]?.[filePath] ?? null
   }
 
   setEntry(tool: Tool, filePath: string, entry: WatermarkEntry): void {
-    if (!this.data[tool]) {
-      this.data[tool] = {}
+    if (!this.data.files[tool]) {
+      this.data.files[tool] = {}
     }
-    this.data[tool][filePath] = entry
+    this.data.files[tool][filePath] = entry
   }
 
   cleanup(existingFiles: string[]): void {
     const existingSet = new Set(existingFiles)
-    for (const tool of Object.keys(this.data) as Tool[]) {
-      for (const filePath of Object.keys(this.data[tool])) {
+    for (const tool of Object.keys(this.data.files) as Tool[]) {
+      for (const filePath of Object.keys(this.data.files[tool])) {
         if (!existingSet.has(filePath)) {
-          delete this.data[tool][filePath]
+          delete this.data.files[tool][filePath]
         }
       }
     }
+  }
+
+  getOpenCodeCursor(): OpenCodeCursor | null {
+    return this.data.opencode ?? null
+  }
+
+  setOpenCodeCursor(cursor: OpenCodeCursor): void {
+    this.data.opencode = cursor
   }
 }
