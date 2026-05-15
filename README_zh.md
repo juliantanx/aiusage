@@ -14,19 +14,11 @@
 
 ## 快速开始
 
-**前置条件：** Node.js >= 18，pnpm
+**前置条件：** Node.js >= 18
 
 ```bash
-# 克隆并构建
-git clone https://github.com/juliantanx/aiusage.git
-cd aiusage
-pnpm install
-pnpm build
-
-# 将 CLI 添加到全局 PATH
-cd packages/cli
-npm link
-cd ../..
+# 安装
+npm install -g aiusage
 
 # 解析本地会话日志
 aiusage parse
@@ -38,6 +30,20 @@ aiusage summary
 aiusage serve
 # 打开 http://localhost:3847
 ```
+
+<details>
+<summary>从源码构建</summary>
+
+```bash
+git clone https://github.com/juliantanx/aiusage.git
+cd aiusage
+pnpm install
+pnpm build
+cd packages/cli
+npm link
+```
+
+</details>
 
 日常使用只需两条命令：
 
@@ -136,13 +142,7 @@ aiusage serve
 
 ```bash
 # 安装 aiusage CLI
-git clone https://github.com/juliantanx/aiusage.git
-cd aiusage
-pnpm install
-pnpm build
-cd packages/cli
-npm link
-cd ../..
+npm install -g aiusage
 
 # 配置同步后端 — GitHub
 aiusage init --backend github \
@@ -239,13 +239,13 @@ docker run -d \
   juliantanx/aiusage
 
 # 配置同步后端
-docker exec -it aiusage node packages/cli/dist/index.js init \
+docker exec -it aiusage aiusage init \
   --backend github \
   --repo <user>/aiusage-data \
   --token ghp_xxxxxxxxxxxxxxxxxxxx
 
 # 首次拉取数据
-docker exec -it aiusage node packages/cli/dist/index.js sync
+docker exec -it aiusage aiusage sync
 ```
 
 > 如果不加 `-v` 参数，容器删除后数据将丢失。
@@ -256,7 +256,7 @@ docker exec -it aiusage node packages/cli/dist/index.js sync
 # 在容器内安装 cron 并创建定时任务
 docker exec -it aiusage bash -c "apt-get update && apt-get install -y cron"
 docker exec -it aiusage bash -c \
-  'echo "*/30 * * * * node /app/packages/cli/dist/index.js sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
+  'echo "*/30 * * * * aiusage sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
 docker restart aiusage
 ```
 

@@ -17,9 +17,11 @@ import { join } from 'node:path'
 
 const program = new Command()
 
+declare const __VERSION__: string
+
 program
   .name('aiusage')
-  .version('0.0.1')
+  .version(__VERSION__)
   .description('CLI tool for AI usage statistics')
 
 // Default command: summary

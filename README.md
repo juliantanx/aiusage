@@ -14,19 +14,11 @@ English | [中文](./README_zh.md)
 
 ## Quick Start
 
-**Prerequisites:** Node.js >= 18, pnpm
+**Prerequisites:** Node.js >= 18
 
 ```bash
-# Clone and build
-git clone https://github.com/juliantanx/aiusage.git
-cd aiusage
-pnpm install
-pnpm build
-
-# Add CLI to global PATH
-cd packages/cli
-npm link
-cd ../..
+# Install
+npm install -g aiusage
 
 # Parse local session logs
 aiusage parse
@@ -38,6 +30,20 @@ aiusage summary
 aiusage serve
 # Open http://localhost:3847
 ```
+
+<details>
+<summary>Build from source</summary>
+
+```bash
+git clone https://github.com/juliantanx/aiusage.git
+cd aiusage
+pnpm install
+pnpm build
+cd packages/cli
+npm link
+```
+
+</details>
 
 Day-to-day usage is just two commands:
 
@@ -136,13 +142,7 @@ On **every** machine that uses Claude Code / Codex / OpenClaw:
 
 ```bash
 # Install aiusage CLI
-git clone https://github.com/juliantanx/aiusage.git
-cd aiusage
-pnpm install
-pnpm build
-cd packages/cli
-npm link
-cd ../..
+npm install -g aiusage
 
 # Configure sync backend — GitHub
 aiusage init --backend github \
@@ -239,13 +239,13 @@ docker run -d \
   juliantanx/aiusage
 
 # Configure sync backend
-docker exec -it aiusage node packages/cli/dist/index.js init \
+docker exec -it aiusage aiusage init \
   --backend github \
   --repo <user>/aiusage-data \
   --token ghp_xxxxxxxxxxxxxxxxxxxx
 
 # Initial data pull
-docker exec -it aiusage node packages/cli/dist/index.js sync
+docker exec -it aiusage aiusage sync
 ```
 
 > Without the `-v` flag, data is lost when the container is removed.
@@ -256,7 +256,7 @@ docker exec -it aiusage node packages/cli/dist/index.js sync
 # Install cron in container and create scheduled task
 docker exec -it aiusage bash -c "apt-get update && apt-get install -y cron"
 docker exec -it aiusage bash -c \
-  'echo "*/30 * * * * node /app/packages/cli/dist/index.js sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
+  'echo "*/30 * * * * aiusage sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
 docker restart aiusage
 ```
 

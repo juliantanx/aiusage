@@ -28,18 +28,6 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
 }
 
-function findMonorepoRoot(): string {
-  // Try relative to this source file (dev mode)
-  const here = dirname(fileURLToPath(import.meta.url))
-  let dir = here
-  for (let i = 0; i < 5; i++) {
-    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir
-    dir = dirname(dir)
-  }
-  // Fallback to cwd
-  return process.cwd()
-}
-
 export function serve(options: ServeOptions): void {
   const syncRuntime = new SyncRuntimeController({
     runSync: (runtimeOptions) => runSync(options.db, runtimeOptions).then(() => undefined),
@@ -52,7 +40,7 @@ export function serve(options: ServeOptions): void {
     onSyncStart: () => syncRuntime.start(),
     getSyncStatus: () => syncRuntime.getStatus(),
   })
-  const webBuildDir = join(findMonorepoRoot(), 'packages', 'web', 'build')
+  const webBuildDir = join(dirname(fileURLToPath(import.meta.url)), 'web')
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
@@ -92,7 +80,7 @@ export function serve(options: ServeOptions): void {
 
     // No web build available
     res.writeHead(404, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Web dashboard not built. Run "pnpm --filter @aiusage/web build" first.' } }))
+    res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Web dashboard not found. Reinstall the package: npm install -g aiusage' } }))
   })
 
   server.listen(options.port, '0.0.0.0', () => {

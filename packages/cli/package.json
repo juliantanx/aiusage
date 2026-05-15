@@ -1,24 +1,29 @@
 {
-  "name": "@aiusage/cli",
+  "name": "aiusage",
   "version": "0.0.1",
   "type": "module",
+  "description": "Track and analyze AI coding assistant usage across Claude Code, Codex, and more",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "aiusage": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/copy-web.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@aiusage/core": "workspace:*",
     "@aws-sdk/client-s3": "^3.700.0",
     "better-sqlite3": "^11.0.0",
     "commander": "^12.0.0"
   },
   "devDependencies": {
+    "@aiusage/core": "workspace:*",
+    "@aiusage/web": "workspace:*",
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^25.7.0",
     "tsup": "^8.0.0",
