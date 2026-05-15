@@ -185,7 +185,7 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 **同步原理：**
 
 - 每台机器有唯一的 `deviceInstanceId`（首次运行时生成）
-- 数据按月存储为 NDJSON 文件（`YYYY/MM.ndjson`）在远端后端
+- 数据按小时存储为 NDJSON 文件（`YYYY/MM/DD/HH.ndjson`）在远端后端
 - Pull 将远端记录合并到本地 `synced_records` 表，Upload 将本地记录合并到远端（永远不覆盖）
 - 使用乐观锁（S3 的 ETag、GitHub 的 SHA）防止多设备冲突
 - Session ID 通过 `sha256(device + sessionId)` 匿名化
@@ -194,7 +194,7 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 
 ### Docker 部署
 
-在云端服务器拉取镜像运行，24/7 提供统一仪表盘。各机器的数据通过同步后端自动汇总。
+在云端服务器拉取镜像运行，24/7 提供统一仪表盘。Docker 容器本身**不运行**任何 AI 编程工具，它仅提供 Web 仪表盘并从同步后端拉取数据。你必须配置同步后端（GitHub/S3），容器才有数据可展示。
 
 **架构：**
 
@@ -204,13 +204,29 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 机器 C ──┘                             └── 端口 3847
 ```
 
+**数据流向：**
+
+1. 每台开发机器运行 `aiusage parse && aiusage sync`，将本地用量数据上传到 GitHub/S3
+2. Docker 容器运行 `aiusage sync`，从远端拉取数据到本地 SQLite 数据库
+3. Web 仪表盘读取本地数据库，展示聚合统计
+
+**Docker 中的数据存储：**
+
+| 项目 | 容器内路径 | 说明 |
+|------|-----------|------|
+| 数据库 | `/root/.aiusage/cache.db` | SQLite 数据库（所有用量数据） |
+| 配置文件 | `/root/.aiusage/config.json` | 同步后端配置及凭证 |
+| 状态文件 | `/root/.aiusage/state.json` | 水位线和同步状态 |
+
+所有数据位于 `/root/.aiusage` 下，已在 Dockerfile 中声明为 `VOLUME`。**必须**挂载 volume 才能在容器重启后保留数据。
+
 **第一步 — 拉取镜像并运行：**
 
 ```bash
 # 拉取镜像
 docker pull juliantanx/aiusage
 
-# 运行容器
+# 运行容器（挂载 volume 持久化数据）
 docker run -d \
   --name aiusage \
   -p 3847:3847 \
@@ -227,15 +243,19 @@ docker exec -it aiusage node packages/cli/dist/index.js init \
 docker exec -it aiusage node packages/cli/dist/index.js sync
 ```
 
+> 如果不加 `-v` 参数，容器删除后数据将丢失。
+
 **第二步 — 定时同步：**
 
 ```bash
 # 在容器内安装 cron 并创建定时任务
 docker exec -it aiusage bash -c "apt-get update && apt-get install -y cron"
 docker exec -it aiusage bash -c \
-  'echo "*/30 * * * * node /app/packages/cli/dist/index.js parse && node /app/packages/cli/dist/index.js sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
+  'echo "*/30 * * * * node /app/packages/cli/dist/index.js sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
 docker restart aiusage
 ```
+
+> 注意：这里不需要 `parse` — 容器内没有本地 AI 会话日志。只需 `sync` 从远端后端拉取数据即可。
 
 **第三步 — 访问：**
 

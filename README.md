@@ -185,7 +185,7 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 **How sync works:**
 
 - Each machine has a unique `deviceInstanceId` (generated on first run)
-- Data is stored as monthly NDJSON files (`YYYY/MM.ndjson`) in the remote backend
+- Data is stored as hourly NDJSON files (`YYYY/MM/DD/HH.ndjson`) in the remote backend
 - Pull merges remote records into local `synced_records` table; Upload merges local records to remote (never overwrites)
 - Optimistic locking (ETag on S3, SHA on GitHub) prevents conflicts
 - Session IDs are anonymized via `sha256(device + sessionId)`
@@ -194,7 +194,7 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 
 ### Docker Deployment
 
-Run on a cloud server with the pre-built image. Data from all machines is aggregated via the sync backend automatically.
+Run on a cloud server with the pre-built image for a 24/7 dashboard. The Docker container itself does **not** run any AI coding tools — it only serves the web dashboard and pulls data from the sync backend. You must configure a sync backend (GitHub/S3) so the container has data to display.
 
 **Architecture:**
 
@@ -204,13 +204,29 @@ Machine B ──┼──▶ GitHub / S3 ──▶ Cloud Server (Docker)
 Machine C ──┘                           └── port 3847
 ```
 
+**How data flows:**
+
+1. Each dev machine runs `aiusage parse && aiusage sync` to upload local usage data to GitHub/S3
+2. The Docker container runs `aiusage sync` to pull that data into its local SQLite database
+3. The web dashboard reads from the local database and displays aggregated stats
+
+**Data storage in Docker:**
+
+| Item | Container path | Description |
+|------|---------------|-------------|
+| Database | `/root/.aiusage/cache.db` | SQLite database (all usage data) |
+| Config | `/root/.aiusage/config.json` | Sync backend config and credentials |
+| State | `/root/.aiusage/state.json` | Watermarks and sync state |
+
+All data lives under `/root/.aiusage`, which is declared as a `VOLUME`. You **must** mount this volume to persist data across container restarts.
+
 **Step 1 — Pull image and run:**
 
 ```bash
 # Pull image
 docker pull juliantanx/aiusage
 
-# Run container
+# Run container (mount volume for data persistence)
 docker run -d \
   --name aiusage \
   -p 3847:3847 \
@@ -227,15 +243,19 @@ docker exec -it aiusage node packages/cli/dist/index.js init \
 docker exec -it aiusage node packages/cli/dist/index.js sync
 ```
 
+> Without the `-v` flag, data is lost when the container is removed.
+
 **Step 2 — Scheduled sync:**
 
 ```bash
 # Install cron in container and create scheduled task
 docker exec -it aiusage bash -c "apt-get update && apt-get install -y cron"
 docker exec -it aiusage bash -c \
-  'echo "*/30 * * * * node /app/packages/cli/dist/index.js parse && node /app/packages/cli/dist/index.js sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
+  'echo "*/30 * * * * node /app/packages/cli/dist/index.js sync >> /root/.aiusage/cron.log 2>&1" | crontab -'
 docker restart aiusage
 ```
+
+> Note: `parse` is not needed here — the container has no local AI session logs. Only `sync` is needed to pull data from the remote backend.
 
 **Step 3 — Access:**
 
