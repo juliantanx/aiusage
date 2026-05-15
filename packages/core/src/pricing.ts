@@ -7,38 +7,36 @@ export interface PriceEntry {
 }
 
 export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
-  // Anthropic
-  'claude-opus-4-6':    { input: 15,   output: 75,  cacheRead: 1.5,  cacheWrite: 3.75, thinking: 75 },
-  'claude-sonnet-4-6':  { input: 3,    output: 15,  cacheRead: 0.3,  cacheWrite: 0.375, thinking: 15 },
-  'claude-haiku-4-5':   { input: 0.8,  output: 4,   cacheRead: 0.08, cacheWrite: 0.1, thinking: 4 },
-  // OpenAI
-  'gpt-4.1':            { input: 2,    output: 8 },
-  'gpt-4o':             { input: 2.5,  output: 10 },
-  'gpt-5.4':            { input: 2,    output: 8 },
-  'gpt-5.4-mini':       { input: 0.5,  output: 2 },
-  'gpt-5.5':            { input: 2,    output: 8 },
-  'o4-mini':            { input: 1.1,  output: 4.4 },
-  // Zhipu (GLM)
-  'glm-5':              { input: 0.02, output: 0.02 },
-  'glm5':               { input: 0.02, output: 0.02 },
-  'glm-5.1':            { input: 0.02, output: 0.02 },
-  'glm-4.7':            { input: 0.02, output: 0.02 },
-  // Xiaomi MiMo
-  'mimo-v2.5-pro':      { input: 0.1,  output: 0.3 },
-  'mimo-v2-pro':        { input: 0.1,  output: 0.3 },
-  // MiniMax
-  'minimax-m2.5':       { input: 0.2,  output: 0.6 },
-  'minimax-m2.7':       { input: 0.2,  output: 0.6 },
-  // Moonshot (Kimi)
-  'kimi-k2.5':          { input: 0.15, output: 0.6 },
-  'kimi-for-coding':    { input: 0.15, output: 0.6 },
-  // Baidu Qianfan
-  'qianfan-code-latest': { input: 0.1, output: 0.3 },
-  // Alibaba Qwen
-  'qwen3.6-plus':       { input: 0.25, output: 1 },
-  'qwen3.5:397b':       { input: 0.15, output: 0.6 },
-  // DeepSeek
-  'deepseek-v4-flash':  { input: 0.07, output: 0.28 },
+  // Anthropic — https://platform.claude.com/docs/en/about-claude/pricing
+  'claude-opus-4-7':       { input: 5,     output: 25,   cacheRead: 0.5,    cacheWrite: 6.25 },
+  'claude-opus-4-6':       { input: 5,     output: 25,   cacheRead: 0.5,    cacheWrite: 6.25 },
+  'claude-sonnet-4-6':     { input: 3,     output: 15,   cacheRead: 0.3,    cacheWrite: 3.75 },
+  'claude-sonnet-4-5':     { input: 3,     output: 15,   cacheRead: 0.3,    cacheWrite: 3.75 },
+  'claude-haiku-4-5':      { input: 1,     output: 5,    cacheRead: 0.1,    cacheWrite: 1.25 },
+  // OpenAI — https://developers.openai.com/api/docs/pricing
+  'gpt-5.5-pro':           { input: 30,    output: 180 },
+  'gpt-5.5':               { input: 5,     output: 30 },
+  'gpt-5.4-pro':           { input: 30,    output: 180 },
+  'gpt-5.4-mini':          { input: 0.75,  output: 4.5 },
+  'gpt-5.4-nano':          { input: 0.2,   output: 1.25 },
+  'gpt-5.4':               { input: 2.5,   output: 15 },
+  'gpt-5.3-codex':         { input: 1.75,  output: 14 },
+  'gpt-4o-mini':           { input: 0.15,  output: 0.6 },
+  'gpt-4o':                { input: 2.5,   output: 10 },
+  'gpt-4.1':               { input: 2,     output: 8 },
+  'o4-mini':               { input: 1.1,   output: 4.4 },
+  'o3':                    { input: 2,     output: 8 },
+  // Google Gemini — https://ai.google.dev/gemini-api/docs/pricing
+  'gemini-3.1-pro':        { input: 2,     output: 12 },
+  'gemini-3.1-flash-lite': { input: 0.25,  output: 1.5 },
+  'gemini-3-flash':        { input: 0.5,   output: 3 },
+  'gemini-2.5-pro':        { input: 1.25,  output: 10 },
+  'gemini-2.5-flash-lite': { input: 0.1,   output: 0.4 },
+  'gemini-2.5-flash':      { input: 0.3,   output: 2.5 },
+  'gemini-2.0-flash':      { input: 0.1,   output: 0.4 },
+  // DeepSeek — https://api-docs.deepseek.com/quick_start/pricing
+  'deepseek-v4-pro':       { input: 1.74,  output: 3.48, cacheRead: 0.0145 },
+  'deepseek-v4-flash':     { input: 0.14,  output: 0.28, cacheRead: 0.0028 },
 }
 
 // Runtime-mutable price table (user overrides merge with defaults)
