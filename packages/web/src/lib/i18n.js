@@ -154,6 +154,9 @@ const translations = {
       allDevices: 'All Devices',
       loading: 'Loading...',
     },
+    tool: {
+      allTools: 'All tools',
+    },
   },
   zh: {
     nav: {
@@ -307,6 +310,9 @@ const translations = {
     device: {
       allDevices: '全部设备',
       loading: '加载中...',
+    },
+    tool: {
+      allTools: '全部工具',
     },
   },
 }

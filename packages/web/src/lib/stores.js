@@ -8,6 +8,12 @@ export function setDevice(deviceInstanceId) {
   selectedDevice.set(deviceInstanceId)
 }
 
+export const selectedTool = writable('') // '' = all tools, value = tool name
+
+export function setTool(tool) {
+  selectedTool.set(tool)
+}
+
 export const pollingInterval = writable(30000) // 30 seconds default
 
 export function setRange(range) {
