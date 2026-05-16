@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PRICE_TABLE, calculateCost } from '../src/pricing.js'
+import { PRICE_TABLE, calculateCost, resolvePrice } from '../src/pricing.js'
 
 describe('PRICE_TABLE', () => {
   it('contains expected models', () => {
@@ -9,6 +9,26 @@ describe('PRICE_TABLE', () => {
     expect(PRICE_TABLE).toHaveProperty('gpt-4.1')
     expect(PRICE_TABLE).toHaveProperty('gpt-4o')
     expect(PRICE_TABLE).toHaveProperty('o4-mini')
+    // Kimi (Moonshot AI)
+    expect(PRICE_TABLE).toHaveProperty('kimi-k2')
+    // GLM (Z.ai)
+    expect(PRICE_TABLE).toHaveProperty('glm-5')
+    // Qwen (Alibaba)
+    expect(PRICE_TABLE).toHaveProperty('qwen-max')
+    // MiniMax
+    expect(PRICE_TABLE).toHaveProperty('minimax-m2.5')
+    // Mistral AI
+    expect(PRICE_TABLE).toHaveProperty('mistral-large')
+    // xAI Grok
+    expect(PRICE_TABLE).toHaveProperty('grok-4')
+    // Cohere
+    expect(PRICE_TABLE).toHaveProperty('command-r-plus')
+    // Doubao (ByteDance)
+    expect(PRICE_TABLE).toHaveProperty('doubao-seed-2.0-pro')
+    // Hunyuan (Tencent)
+    expect(PRICE_TABLE).toHaveProperty('hunyuan-t1')
+    // ERNIE (Baidu)
+    expect(PRICE_TABLE).toHaveProperty('ernie-4.5-300b')
   })
 
   it('has correct price structure', () => {
@@ -17,7 +37,6 @@ describe('PRICE_TABLE', () => {
     expect(model).toHaveProperty('output')
     expect(model).toHaveProperty('cacheRead')
     expect(model).toHaveProperty('cacheWrite')
-    expect(model).toHaveProperty('thinking')
   })
 })
 
@@ -55,8 +74,8 @@ describe('calculateCost', () => {
       cacheWriteTokens: 0,
       thinkingTokens: 1000,
     })
-    // (1000/1M * 15) + (500/1M * 75) + (1000/1M * 75)
-    expect(cost).toBeCloseTo(0.015 + 0.0375 + 0.075, 6)
+    // (1000/1M * 5) + (500/1M * 25) + (1000/1M * 25) — thinking uses output price
+    expect(cost).toBeCloseTo(0.005 + 0.0125 + 0.025, 6)
   })
 
   it('returns 0 for unknown model', () => {
@@ -93,5 +112,17 @@ describe('calculateCost', () => {
     })
     // (1000/1M * 10) - uses output price for thinking
     expect(cost).toBeCloseTo(0.01, 6)
+  })
+})
+
+describe('resolvePrice', () => {
+  it('matches longest prefix — kimi-k2-something-unknown resolves to kimi-k2', () => {
+    // kimi-k2-turbo is also a prefix candidate, but kimi-k2 is shorter;
+    // the unknown suffix does NOT match kimi-k2-turbo exactly, so longest
+    // actual prefix match is kimi-k2 (7 chars vs kimi-k2-turbo which is 13
+    // chars and does NOT match "kimi-k2-something-unknown").
+    const entry = resolvePrice('kimi-k2-something-unknown')
+    expect(entry).toBeDefined()
+    expect(entry).toEqual(PRICE_TABLE['kimi-k2'])
   })
 })
