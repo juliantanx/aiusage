@@ -1,51 +1,65 @@
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 
 export function acquireLock(lockPath: string): boolean {
-  if (!existsSync(lockPath)) {
-    writeFileSync(lockPath, process.pid.toString(), 'utf-8')
+  // Atomically create the lock file; throws EEXIST if it already exists.
+  try {
+    writeFileSync(lockPath, process.pid.toString(), { encoding: 'utf-8', flag: 'wx' })
     return true
+  } catch (err: any) {
+    if (err.code !== 'EEXIST') return false
   }
 
-  // Check if the PID in the lock file is still running
+  // File exists — check if the owning process is still alive.
+  let pid: number
   try {
     const content = readFileSync(lockPath, 'utf-8')
-    const pid = parseInt(content.trim(), 10)
-    if (isNaN(pid)) {
-      // Invalid lock file, remove it and acquire
-      unlinkSync(lockPath)
-      writeFileSync(lockPath, process.pid.toString(), 'utf-8')
-      return true
-    }
-
-    // Try to check if process is running using signal 0
-    try {
-      process.kill(pid, 0)
-      // Process is still running, lock is held
-      return false
-    } catch {
-      // Process not running (stale lock), acquire it
-      unlinkSync(lockPath)
-      writeFileSync(lockPath, process.pid.toString(), 'utf-8')
-      return true
-    }
+    pid = parseInt(content.trim(), 10)
   } catch {
-    // Error reading lock file, try to acquire
+    return false
+  }
+
+  if (isNaN(pid)) {
+    // Corrupted lock file — remove and retry once.
+    try { unlinkSync(lockPath) } catch { return false }
     try {
-      unlinkSync(lockPath)
-    } catch {}
-    writeFileSync(lockPath, process.pid.toString(), 'utf-8')
-    return true
+      writeFileSync(lockPath, process.pid.toString(), { encoding: 'utf-8', flag: 'wx' })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  try {
+    process.kill(pid, 0)
+    // Process is running — lock is held.
+    return false
+  } catch (err: any) {
+    if (err.code !== 'ESRCH') {
+      // EPERM or other error — process exists but we can't signal it; treat as held.
+      return false
+    }
+    // ESRCH — process no longer exists; stale lock.
+    try { unlinkSync(lockPath) } catch { return false }
+    try {
+      writeFileSync(lockPath, process.pid.toString(), { encoding: 'utf-8', flag: 'wx' })
+      return true
+    } catch {
+      return false
+    }
   }
 }
 
 export function releaseLock(lockPath: string): void {
   try {
-    if (existsSync(lockPath)) {
-      unlinkSync(lockPath)
-    }
+    unlinkSync(lockPath)
   } catch {}
 }
 
 export function isLocked(lockPath: string): boolean {
-  return existsSync(lockPath)
+  try {
+    readFileSync(lockPath)
+    return true
+  } catch {
+    return false
+  }
 }

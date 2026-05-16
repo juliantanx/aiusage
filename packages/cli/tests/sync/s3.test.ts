@@ -8,6 +8,7 @@ vi.mock('@aws-sdk/client-s3', () => ({
   GetObjectCommand: vi.fn((params) => params),
   PutObjectCommand: vi.fn((params) => params),
   HeadObjectCommand: vi.fn((params) => params),
+  ListObjectsV2Command: vi.fn((params) => params),
 }))
 
 describe('S3SyncBackend', () => {
@@ -83,5 +84,54 @@ describe('S3SyncBackend', () => {
   it('returns false for non-existent file', async () => {
     mockSend.mockRejectedValueOnce({ name: 'NotFound', $metadata: { httpStatusCode: 404 } })
     expect(await backend.fileExists('2026/05.ndjson')).toBe(false)
+  })
+
+  describe('listFiles', () => {
+    it('returns paths relative to prefix (no data/ subdirectory)', async () => {
+      mockSend.mockResolvedValueOnce({
+        Contents: [
+          { Key: 'aiusage/device-abc/2026/05/16.ndjson' },
+          { Key: 'aiusage/device-xyz/2026/05/15.ndjson' },
+        ],
+        IsTruncated: false,
+      })
+
+      const files = await backend.listFiles()
+
+      // Paths must be readable back via readFile(path) → getObjectKey(path) = 'aiusage/' + path
+      expect(files).toContain('device-abc/2026/05/16.ndjson')
+      expect(files).toContain('device-xyz/2026/05/15.ndjson')
+    })
+
+    it('listed paths round-trip correctly through readFile', async () => {
+      mockSend
+        .mockResolvedValueOnce({
+          Contents: [{ Key: 'aiusage/device-abc/2026/05/16.ndjson' }],
+          IsTruncated: false,
+        })
+        .mockResolvedValueOnce({
+          Body: { transformToString: () => Promise.resolve('{"id":"r1"}\n') },
+        })
+
+      const [path] = await backend.listFiles()
+      const content = await backend.readFile(path)
+      expect(content).toBe('{"id":"r1"}\n')
+    })
+
+    it('handles pagination', async () => {
+      mockSend
+        .mockResolvedValueOnce({
+          Contents: [{ Key: 'aiusage/device-abc/2026/05/15.ndjson' }],
+          IsTruncated: true,
+          NextContinuationToken: 'token1',
+        })
+        .mockResolvedValueOnce({
+          Contents: [{ Key: 'aiusage/device-abc/2026/05/16.ndjson' }],
+          IsTruncated: false,
+        })
+
+      const files = await backend.listFiles()
+      expect(files).toHaveLength(2)
+    })
   })
 })

@@ -2,6 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { generateRecordId, generateSyncRecordId, generateToolCallId, generateOrphanToolCallId, generateSessionKey } from '../src/record-id.js'
 
 describe('generateRecordId', () => {
+  it('produces different ids for inputs that would collide without field separators', () => {
+    // Without separators: 'abc'+'def10'+0 → 'abcdef100'
+    //                     'abcdef10'+''+0 → 'abcdef100'  ← same hash input, collision!
+    const id1 = generateRecordId('abc', 'def10', 0)
+    const id2 = generateRecordId('abcdef10', '', 0)
+    expect(id1).not.toBe(id2)
+  })
+
   it('generates consistent id for same input', () => {
     const id1 = generateRecordId('device-123', '/path/to/file.jsonl', 12345)
     const id2 = generateRecordId('device-123', '/path/to/file.jsonl', 12345)

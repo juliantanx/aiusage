@@ -131,6 +131,6 @@ export class CodexParser implements Parser {
 
     this.pendingToolCalls = []
 
-    return [{ record: null as any, toolCalls }]
+    return [{ record: null, toolCalls }]
   }
 }

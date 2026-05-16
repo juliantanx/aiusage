@@ -183,8 +183,10 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
           const result = aggregator.parseLine(line, context)
           if (result) {
-            insertRecord(db, result.record)
-            parsedCount++
+            if (result.record) {
+              insertRecord(db, result.record)
+              parsedCount++
+            }
 
             for (const tc of result.toolCalls) {
               insertToolCall(db, tc)

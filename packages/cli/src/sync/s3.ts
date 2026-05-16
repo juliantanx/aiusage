@@ -68,7 +68,7 @@ export class S3SyncBackend {
     do {
       const command = new ListObjectsV2Command({
         Bucket: this.bucket,
-        Prefix: `${this.prefix}data/`,
+        Prefix: this.prefix,
         ContinuationToken: continuationToken,
       })
       const response = await this.client.send(command)
@@ -76,7 +76,7 @@ export class S3SyncBackend {
       if (response.Contents) {
         for (const obj of response.Contents) {
           const key = obj.Key!
-          const relPath = key.slice(`${this.prefix}data/`.length)
+          const relPath = key.slice(this.prefix.length)
           if (relPath.endsWith('.ndjson')) {
             files.push(relPath)
           }

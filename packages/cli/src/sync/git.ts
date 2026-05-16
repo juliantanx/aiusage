@@ -10,6 +10,8 @@ export interface GitSyncConfig {
   token: string
   /** Local directory to clone the repo into */
   cacheDir: string
+  /** Branch to sync with (default: 'main') */
+  branch?: string
 }
 
 export class GitSyncBackend {
@@ -17,25 +19,43 @@ export class GitSyncBackend {
   private token: string
   private cacheDir: string
   private dataDir: string
+  private branch: string
 
   constructor(config: GitSyncConfig) {
     this.repo = config.repo
     this.token = config.token
     this.cacheDir = config.cacheDir
     this.dataDir = join(config.cacheDir, 'data')
+    this.branch = config.branch ?? 'main'
   }
 
   private get remoteUrl(): string {
     return `https://x-access-token:${this.token}@github.com/${this.repo}.git`
   }
 
+  private sanitizeError(error: unknown): unknown {
+    if (error instanceof Error) {
+      const pattern = /https:\/\/[^@\s]+@github\.com/g
+      error.message = error.message.replace(pattern, 'https://github.com')
+      const err = error as any
+      if (typeof err.stderr === 'string') {
+        err.stderr = err.stderr.replace(pattern, 'https://github.com')
+      }
+    }
+    return error
+  }
+
   private async git(args: string[], cwd?: string): Promise<string> {
-    const { stdout } = await exec('git', args, {
-      cwd: cwd ?? this.cacheDir,
-      timeout: 60_000,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-    })
-    return stdout.trim()
+    try {
+      const { stdout } = await exec('git', args, {
+        cwd: cwd ?? this.cacheDir,
+        timeout: 60_000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      })
+      return stdout.trim()
+    } catch (error) {
+      throw this.sanitizeError(error)
+    }
   }
 
   /** Clone or pull the repo to get latest remote state */
@@ -43,15 +63,19 @@ export class GitSyncBackend {
     try {
       await stat(join(this.cacheDir, '.git'))
       // Repo exists — pull latest
-      await this.git(['fetch', 'origin', 'main', '--depth=1'])
-      await this.git(['reset', '--hard', 'origin/main'])
+      await this.git(['fetch', 'origin', this.branch, '--depth=1'])
+      await this.git(['reset', '--hard', `origin/${this.branch}`])
     } catch {
       // First time — shallow clone
       await mkdir(this.cacheDir, { recursive: true })
-      await exec('git', ['clone', '--depth=1', this.remoteUrl, this.cacheDir], {
-        timeout: 120_000,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-      })
+      try {
+        await exec('git', ['clone', '--depth=1', this.remoteUrl, this.cacheDir], {
+          timeout: 120_000,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+        })
+      } catch (error) {
+        throw this.sanitizeError(error)
+      }
     }
   }
 
@@ -90,11 +114,11 @@ export class GitSyncBackend {
 
     for (let attempt = 1; attempt <= GitSyncBackend.MAX_PUSH_RETRIES; attempt++) {
       try {
-        await this.git(['push', 'origin', 'main'])
+        await this.git(['push', 'origin', this.branch])
         return true
       } catch (error) {
         if (attempt >= GitSyncBackend.MAX_PUSH_RETRIES) throw error
-        await this.git(['pull', '--rebase', 'origin', 'main'])
+        await this.git(['pull', '--rebase', 'origin', this.branch])
       }
     }
 

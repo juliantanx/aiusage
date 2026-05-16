@@ -3,7 +3,7 @@ import type { Tool } from './types.js'
 
 export function generateRecordId(deviceInstanceId: string, sourceFile: string, lineOffset: number): string {
   const hash = createHash('sha256')
-    .update(deviceInstanceId + sourceFile + lineOffset)
+    .update(deviceInstanceId + '\0' + sourceFile + '\0' + lineOffset)
     .digest('hex')
   return hash.slice(0, 16)
 }
@@ -24,7 +24,7 @@ export function generateToolCallId(
   callIndex: number
 ): string {
   const hash = createHash('sha256')
-    .update(recordId + name + ts + callIndex)
+    .update(recordId + '\0' + name + '\0' + ts + '\0' + callIndex)
     .digest('hex')
   return hash.slice(0, 16)
 }
@@ -36,14 +36,14 @@ export function generateOrphanToolCallId(
   callIndex: number
 ): string {
   const hash = createHash('sha256')
-    .update(tool + ':' + name + ':' + ts + ':' + callIndex)
+    .update(tool + '\0' + name + '\0' + ts + '\0' + callIndex)
     .digest('hex')
   return hash.slice(0, 16)
 }
 
 export function generateSessionKey(device: string, sessionId: string): string {
   const hash = createHash('sha256')
-    .update(device + sessionId)
+    .update(device + '\0' + sessionId)
     .digest('hex')
   return hash.slice(0, 24)
 }

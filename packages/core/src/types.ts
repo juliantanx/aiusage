@@ -86,7 +86,7 @@ export interface ParseContext {
 }
 
 export interface ParseResult {
-  record: StatsRecord
+  record: StatsRecord | null
   toolCalls: ToolCallRecord[]
 }
 
