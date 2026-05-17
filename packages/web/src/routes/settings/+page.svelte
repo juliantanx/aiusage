@@ -251,6 +251,7 @@
     <!-- Sync -->
     <div class="card">
       <div class="group-title">{$t('settings.sync')}</div>
+      <div class="field-hint">{$t('settings.syncHint')}</div>
       <div class="fields">
         <div class="field">
           <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
