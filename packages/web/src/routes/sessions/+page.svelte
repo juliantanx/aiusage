@@ -105,21 +105,6 @@
     margin-bottom: 1.5rem;
     flex-wrap: wrap;
   }
-  select {
-    padding: 0.4rem 0.65rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    background: var(--bg-raised);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: border-color 0.15s;
-  }
-  select:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
   .model {
     font-size: 0.8rem;
     color: var(--text-primary);

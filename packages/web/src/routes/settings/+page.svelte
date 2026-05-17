@@ -147,24 +147,24 @@
       <div class="group-title">{$t('settings.general')}</div>
       <div class="fields">
         <div class="field">
-          <label class="field-label">{$t('settings.device')}</label>
+          <label class="field-label" for="field-device">{$t('settings.device')}</label>
           <div class="field-hint">{$t('settings.deviceHint')}</div>
-          <input type="text" bind:value={general.device} class="field-input" placeholder="hostname" />
+          <input id="field-device" type="text" bind:value={general.device} class="field-input" placeholder="hostname" />
         </div>
         <div class="field">
-          <label class="field-label">{$t('settings.weekStart')}</label>
-          <select bind:value={general.weekStart} class="field-input">
+          <label class="field-label" for="field-week-start">{$t('settings.weekStart')}</label>
+          <select id="field-week-start" bind:value={general.weekStart} class="field-input">
             <option value={0}>{$t('settings.weekStartSunday')}</option>
             <option value={1}>{$t('settings.weekStartMonday')}</option>
           </select>
         </div>
         <div class="field">
-          <label class="field-label">{$t('settings.pollInterval')}</label>
-          <input type="number" bind:value={general.dashboardPollInterval} class="field-input" placeholder="e.g. 30000" min="1000" />
+          <label class="field-label" for="field-poll-interval">{$t('settings.pollInterval')}</label>
+          <input id="field-poll-interval" type="number" bind:value={general.dashboardPollInterval} class="field-input" placeholder="e.g. 30000" min="1000" />
         </div>
         <div class="field">
-          <label class="field-label">{$t('settings.parseInterval')}</label>
-          <input type="number" bind:value={general.parseInterval} class="field-input" placeholder="e.g. 5000" min="1000" />
+          <label class="field-label" for="field-parse-interval">{$t('settings.parseInterval')}</label>
+          <input id="field-parse-interval" type="number" bind:value={general.parseInterval} class="field-input" placeholder="e.g. 5000" min="1000" />
         </div>
       </div>
       {#if generalError}<p class="section-error">{generalError}</p>{/if}
@@ -181,9 +181,9 @@
       <div class="fields">
         {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode']] as [key, label]}
           <div class="field full">
-            <label class="field-label">{label}</label>
+            <label class="field-label" for="field-source-{key}">{label}</label>
             <div class="field-hint">{$t('settings.sourcePath')}</div>
-            <input type="text" bind:value={sources[key]} class="field-input mono" placeholder="~/.claude/projects" />
+            <input id="field-source-{key}" type="text" bind:value={sources[key]} class="field-input mono" placeholder="~/.claude/projects" />
           </div>
         {/each}
       </div>
@@ -200,8 +200,8 @@
       <div class="group-title">{$t('settings.sync')}</div>
       <div class="fields">
         <div class="field">
-          <label class="field-label">{$t('settings.syncBackend')}</label>
-          <select bind:value={syncData.backend} class="field-input">
+          <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
+          <select id="field-sync-backend" bind:value={syncData.backend} class="field-input">
             <option value="">{$t('settings.syncBackendNone')}</option>
             <option value="github">GitHub</option>
             <option value="s3">S3 / Compatible</option>
@@ -209,36 +209,37 @@
         </div>
         {#if syncData.backend === 'github'}
           <div class="field">
-            <label class="field-label">{$t('settings.syncRepo')}</label>
-            <input type="text" bind:value={syncData.repo} class="field-input mono" placeholder="owner/repo" />
+            <label class="field-label" for="field-sync-repo">{$t('settings.syncRepo')}</label>
+            <input id="field-sync-repo" type="text" bind:value={syncData.repo} class="field-input mono" placeholder="owner/repo" />
           </div>
         {/if}
         {#if syncData.backend === 's3'}
           <div class="field">
-            <label class="field-label">{$t('settings.syncBucket')}</label>
-            <input type="text" bind:value={syncData.bucket} class="field-input mono" placeholder="my-bucket" />
+            <label class="field-label" for="field-sync-bucket">{$t('settings.syncBucket')}</label>
+            <input id="field-sync-bucket" type="text" bind:value={syncData.bucket} class="field-input mono" placeholder="my-bucket" />
           </div>
           <div class="field">
-            <label class="field-label">{$t('settings.syncEndpoint')}</label>
-            <input type="text" bind:value={syncData.endpoint} class="field-input mono" placeholder="https://s3.amazonaws.com" />
+            <label class="field-label" for="field-sync-endpoint">{$t('settings.syncEndpoint')}</label>
+            <input id="field-sync-endpoint" type="text" bind:value={syncData.endpoint} class="field-input mono" placeholder="https://s3.amazonaws.com" />
           </div>
           <div class="field">
-            <label class="field-label">{$t('settings.syncRegion')}</label>
-            <input type="text" bind:value={syncData.region} class="field-input mono" placeholder="us-east-1" />
+            <label class="field-label" for="field-sync-region">{$t('settings.syncRegion')}</label>
+            <input id="field-sync-region" type="text" bind:value={syncData.region} class="field-input mono" placeholder="us-east-1" />
           </div>
         {/if}
         {#if syncData.backend}
           <div class="field">
-            <label class="field-label">{$t('settings.syncPrefix')}</label>
-            <input type="text" bind:value={syncData.prefix} class="field-input mono" placeholder="aiusage/" />
+            <label class="field-label" for="field-sync-prefix">{$t('settings.syncPrefix')}</label>
+            <input id="field-sync-prefix" type="text" bind:value={syncData.prefix} class="field-input mono" placeholder="aiusage/" />
           </div>
           <div class="field">
-            <label class="field-label">{$t('settings.syncCredentialRef')}</label>
-            <input type="text" bind:value={syncData.credentialRef} class="field-input mono" placeholder="GITHUB_TOKEN" />
+            <label class="field-label" for="field-sync-credential-ref">{$t('settings.syncCredentialRef')}</label>
+            <input id="field-sync-credential-ref" type="text" bind:value={syncData.credentialRef} class="field-input mono" placeholder="GITHUB_TOKEN" />
           </div>
           <div class="field">
-            <label class="field-label">{$t('settings.syncCredentialValue')}</label>
+            <label class="field-label" for="field-sync-credential-value">{$t('settings.syncCredentialValue')}</label>
             <input
+              id="field-sync-credential-value"
               type="password"
               bind:value={credentialValue}
               class="field-input mono"
@@ -260,9 +261,9 @@
       <div class="group-title">{$t('settings.data')}</div>
       <div class="fields">
         <div class="field">
-          <label class="field-label">{$t('settings.retentionDays')}</label>
+          <label class="field-label" for="field-retention-days">{$t('settings.retentionDays')}</label>
           <div class="field-hint">{$t('settings.retentionHint')}</div>
-          <input type="number" bind:value={dataSection.retentionDays} class="field-input" placeholder="0" min="0" />
+          <input id="field-retention-days" type="number" bind:value={dataSection.retentionDays} class="field-input" placeholder="0" min="0" />
         </div>
       </div>
       {#if dataError}<p class="section-error">{dataError}</p>{/if}
