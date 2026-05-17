@@ -99,3 +99,20 @@ export async function triggerSync() {
 export async function fetchSyncStatus() {
   return apiFetch('/api/sync')
 }
+
+export async function fetchConfig() {
+  return apiFetch('/api/config')
+}
+
+export async function saveConfig(data) {
+  const response = await fetch('/api/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}

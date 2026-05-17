@@ -42,4 +42,23 @@ describe('API Client', () => {
 
     await expect(fetchSummary({ range: 'invalid' as any })).rejects.toThrow()
   })
+
+  it('saves config via PUT', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    })
+
+    const { saveConfig } = await import('../src/lib/api.js')
+    const result = await saveConfig({ weekStart: 1, device: 'my-mac' })
+    expect(result).toEqual({ ok: true })
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/config',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weekStart: 1, device: 'my-mac' }),
+      })
+    )
+  })
 })
