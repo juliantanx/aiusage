@@ -49,7 +49,12 @@ export function serve(options: ServeOptions): void {
     onSyncStart: () => syncRuntime.start(),
     getSyncStatus: () => syncRuntime.getStatus(),
   })
-  const webBuildDir = join(dirname(fileURLToPath(import.meta.url)), 'web')
+  const webBuildDir = (() => {
+    const prodDir = join(dirname(fileURLToPath(import.meta.url)), 'web')
+    if (existsSync(prodDir)) return prodDir
+    // dev mode (tsx): fall back to packages/web/build
+    return join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'web', 'build')
+  })()
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)

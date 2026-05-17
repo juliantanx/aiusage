@@ -18,11 +18,11 @@ const DB_PATH = join(AIUSAGE_DIR, 'cache.db')
 
 const program = new Command()
 
-declare const __VERSION__: string
+declare const __VERSION__: string | undefined
 
 program
   .name('aiusage')
-  .version(__VERSION__)
+  .version(typeof __VERSION__ !== 'undefined' ? __VERSION__ : 'dev')
   .description('CLI tool for AI usage statistics')
 
 // Default command: summary
