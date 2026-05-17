@@ -6,7 +6,7 @@
   import { triggerSync, fetchSyncStatus } from '$lib/api.js'
 
   const navItems = [
-    { path: '/', key: 'nav.overview' },
+    { path: '/overview', key: 'nav.overview' },
     { path: '/tokens', key: 'nav.tokens' },
     { path: '/cost', key: 'nav.cost' },
     { path: '/models', key: 'nav.models' },
@@ -96,10 +96,10 @@
 
 <div class="app">
   <header>
-    <div class="brand">
+    <a href="/" class="brand">
       <span class="logo">⌘</span>
       <span class="name">AIUsage</span>
-    </div>
+    </a>
     <nav>
       {#each navItems as item}
         <a
@@ -239,6 +239,7 @@
     align-items: center;
     gap: 0.5rem;
     flex-shrink: 0;
+    text-decoration: none;
   }
   .logo {
     font-size: 1.25rem;
