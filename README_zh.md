@@ -8,7 +8,7 @@
 
 - 将多个 AI 编程助手的本地会话日志汇总到同一个视图中。
 - 分析 token 用量、费用、模型分布和工具调用活跃度。
-- 通过本地 Web 仪表盘查看按周、按月的趋势和汇总。
+- 通过本地 Web 仪表盘查看从今天到全部时间的概览趋势和汇总。
 - 通过 GitHub、S3 或 R2 在多台设备之间同步数据。
 - 默认本地优先，只有在需要共享视图时才启用云同步。
 
@@ -59,16 +59,17 @@ pnpm build
 
 ## 截图
 
-![本周概览仪表盘](./docs/assets/readme/weekly-overview.png)
+![本周首页仪表盘](./docs/assets/readme/weekly-overview.png)
 
-按“本周”筛选后的概览页，展示费用、token、活跃天数和工具使用分布。
+首页按“本周”筛选后的仪表盘，展示来自本地真实数据的多助手使用情况。
 
 ## 常用命令
 
 | 命令 | 用途 |
 | --- | --- |
-| `aiusage parse` | 导入本地新追加的会话数据 |
-| `aiusage serve` | 启动本地仪表盘 |
+| `aiusage` | 输出与 `aiusage summary` 相同的终端摘要 |
+| `aiusage parse` | 从自动发现的数据来源路径导入本地新追加的会话数据 |
+| `aiusage serve` | 启动本地仪表盘和运行时设置控制器 |
 | `aiusage summary` | 在终端输出用量摘要 |
 | `aiusage status` | 显示数据库路径、schema 版本和记录数 |
 | `aiusage sync` | 与已配置的远程后端双向同步数据 |
@@ -84,17 +85,26 @@ aiusage serve
 # 打开 http://localhost:3847
 ```
 
-概览页首次加载时会调用 `/api/refresh`，先执行一次本地增量 parse，再加载统计数据。
+`aiusage serve` 会提供两个顶层入口：
 
-- **概览** — 按周或按月查看总量、费用、活跃天数和按工具分组的汇总。
+- **首页（`/`）** — 实时计数主页。首次加载时会调用 `/api/refresh`，先执行一次本地增量 parse，再加载汇总数据；之后按已配置的仪表盘轮询间隔自动刷新。
+- **概览（`/overview`）** — 可按今天、本周、本月、近 30 天或全部时间查看总量、费用、活跃天数和按工具分组的汇总。
 - **Token** — token 用量随时间的变化趋势。
 - **费用** — 费用趋势，以及按工具、按模型拆分的统计。
 - **模型** — 模型占比和分布。
 - **工具调用** — 工具调用频率和排行。
-- **Projects** — 按项目汇总的使用数据。
+- **项目** — 按项目汇总的使用数据。
 - **会话** — 支持筛选和分页的会话浏览。
-- **Pricing** — 当前模型定价参考。
-- **设置** — 在界面中配置设备名称、周起始日、数据来源路径、同步后端和数据保留策略，无需手动编辑配置文件。
+- **定价** — 当前模型定价参考。
+- **设置** — 在界面中配置设备名称、周起始日、仪表盘轮询间隔、自动解析间隔、数据来源路径、同步后端、凭据和本地数据保留策略，无需手动编辑配置文件。
+
+**设置行为**
+
+- **仪表盘轮询间隔** 的单位是毫秒，只控制首页首次加载之后的自动刷新周期。
+- **自动解析间隔** 的单位是毫秒，只会在 `aiusage serve` 运行期间定时触发后台 `aiusage parse`。设置为 `0` 或留空即可禁用。
+- **本地数据保留天数** 只会在 `aiusage serve` 运行期间定期执行清理。设置为 `0` 或留空表示永久保留。
+- **数据来源路径** 的修改会在下一次 parse 时生效。
+- **同步后端和凭据** 的修改会在下一次 sync 时生效。
 
 ---
 
@@ -197,7 +207,7 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 
 ### Docker 部署
 
-你可以在服务器上运行预构建镜像，提供 24/7 仪表盘。容器本身**不会**运行任何 AI 编程工具，它只负责提供 Web 仪表盘，并从 GitHub、S3 或 R2 拉取同步数据。
+你可以在服务器上运行预构建镜像，提供 24/7 仪表盘。容器本身**不会**运行任何 AI 编程工具；它负责提供 Web 仪表盘，可以运行与 `aiusage serve` 相同的运行时设置控制器，并从 GitHub、S3 或 R2 拉取同步数据。
 
 **架构：**
 
@@ -218,8 +228,9 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 | 项目 | 容器内路径 | 说明 |
 |------|-----------|------|
 | 数据库 | `/root/.aiusage/cache.db` | 存放聚合用量数据的 SQLite 数据库 |
-| 配置文件 | `/root/.aiusage/config.json` | 同步后端配置和凭证 |
-| 状态文件 | `/root/.aiusage/state.json` | 水位线和同步状态 |
+| 配置文件 | `/root/.aiusage/config.json` | 同步后端配置、运行时设置和凭据 |
+| 状态文件 | `/root/.aiusage/state.json` | 同意状态和同步运行时状态 |
+| 水位线 | `/root/.aiusage/watermark.json` | 增量 parse 游标 |
 
 所有数据都位于 `/root/.aiusage` 下，并被声明为 `VOLUME`。你**必须**挂载 volume，才能在容器重启后保留数据。
 
@@ -258,7 +269,7 @@ docker exec -it aiusage bash -c \
 docker restart aiusage
 ```
 
-> 注意：这里不需要 `parse`，因为容器内没有本地 AI 会话日志，只需要 `sync` 从远端拉取数据。
+> 注意：除非你也把本地 AI 会话日志挂载进容器，否则这里不需要 `parse`。标准部署里只需要 `sync` 从远端后端拉取数据。
 
 **第三步 — 访问**
 
@@ -310,6 +321,13 @@ docker build -t aiusage .
 | Codex | `~/.codex/sessions/` | `~/.codex/sessions/` | `%USERPROFILE%\.codex\sessions\` |
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
+
+发现行为：
+
+- **Claude Code** — 递归扫描 `~/.claude/projects/**` 下的 `.jsonl` 文件，包括嵌套的 subagent 日志。
+- **Codex** — 递归扫描 `~/.codex/sessions/**` 下的 `.jsonl` 文件。
+- **OpenClaw** — 扫描 `~/.openclaw/agents/*/sessions/` 下各 agent 的 `sessions/` 目录，并跳过 checkpoint 文件。
+- **OpenCode** — 直接读取 SQLite 数据库文件，而不是 `.jsonl` 日志。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 

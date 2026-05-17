@@ -8,7 +8,7 @@ English | [中文](./README_zh.md)
 
 - Aggregate local session logs from multiple AI coding assistants into one view.
 - Analyze token usage, cost, model mix, and tool call activity.
-- Explore the data through a local dashboard with weekly and monthly views.
+- Explore the data through a local dashboard with overview ranges from Today to All Time.
 - Sync usage data across multiple machines with GitHub, S3, or R2.
 - Keep everything local-first, with optional cloud sync when you need shared visibility.
 
@@ -59,16 +59,17 @@ pnpm build
 
 ## Screenshot
 
-![Weekly overview dashboard](./docs/assets/readme/weekly-overview.png)
+![This Week homepage dashboard](./docs/assets/readme/weekly-overview.png)
 
-Weekly overview of cost, tokens, active days, and tool usage across assistants.
+Homepage dashboard filtered to This Week, showing real local usage data across assistants.
 
 ## Common Commands
 
 | Command | Purpose |
 | --- | --- |
-| `aiusage parse` | Import newly appended local session data |
-| `aiusage serve` | Start the local dashboard |
+| `aiusage` | Print the same terminal summary as `aiusage summary` |
+| `aiusage parse` | Import newly appended local session data from discovered source paths |
+| `aiusage serve` | Start the local dashboard and runtime settings controller |
 | `aiusage summary` | Print a usage summary in the terminal |
 | `aiusage status` | Show database path, schema version, and record counts |
 | `aiusage sync` | Push and pull data with a configured remote backend |
@@ -84,9 +85,10 @@ aiusage serve
 # Open http://localhost:3847
 ```
 
-On the overview page's first load, the dashboard triggers `/api/refresh`, which runs one incremental local parse before loading summary data.
+`aiusage serve` hosts two top-level dashboard entry points:
 
-- **Overview** — weekly or monthly totals, cost, active days, and per-tool breakdowns.
+- **Home (`/`)** — live counter homepage. On first load it calls `/api/refresh`, runs one incremental local parse, then loads summary data. After that, it refreshes on the configured dashboard poll interval.
+- **Overview (`/overview`)** — totals, cost, active days, and per-tool breakdowns for Today, This Week, This Month, Last 30d, or All Time.
 - **Tokens** — token usage trends over time.
 - **Cost** — cost trends with by-tool and by-model breakdowns.
 - **Models** — model share and distribution.
@@ -94,7 +96,15 @@ On the overview page's first load, the dashboard triggers `/api/refresh`, which 
 - **Projects** — project-level usage rollups.
 - **Sessions** — session browsing with filters and pagination.
 - **Pricing** — active model pricing reference.
-- **Settings** — configure device name, week start day, source paths, sync backend, and data retention without editing config files manually.
+- **Settings** — configure device name, week start day, dashboard poll interval, auto-parse interval, source paths, sync backend, credentials, and local data retention without editing config files manually.
+
+**Settings behavior**
+
+- **Dashboard Poll Interval** is in milliseconds and only controls the homepage refresh cycle after the initial load.
+- **Auto-Parse Interval** is in milliseconds and schedules background `aiusage parse` runs only while `aiusage serve` is running. Set `0` or leave it blank to disable it.
+- **Local Data Retention** runs periodic cleanup only while `aiusage serve` is running. Set `0` or leave it blank to keep data forever.
+- **Source path** changes take effect on the next parse.
+- **Sync backend and credential** changes take effect on the next sync.
 
 ---
 
@@ -197,7 +207,7 @@ schtasks /create /tn "AiusageSync" /tr "aiusage parse && aiusage sync" /sc minut
 
 ### Docker Deployment
 
-Run the pre-built image on a server for a 24/7 dashboard. The container does **not** run any AI coding tools itself — it only serves the web dashboard and pulls synced data from GitHub, S3, or R2.
+Run the pre-built image on a server for a 24/7 dashboard. The container does **not** run any AI coding tools itself — it serves the web dashboard, can run the same runtime settings controller as `aiusage serve`, and can pull synced data from GitHub, S3, or R2.
 
 **Architecture:**
 
@@ -218,8 +228,9 @@ Machine C ──┘                           └── port 3847
 | Item | Container path | Description |
 |------|---------------|-------------|
 | Database | `/root/.aiusage/cache.db` | SQLite database with aggregated usage data |
-| Config | `/root/.aiusage/config.json` | Sync backend config and credentials |
-| State | `/root/.aiusage/state.json` | Watermarks and sync state |
+| Config | `/root/.aiusage/config.json` | Sync backend config, runtime settings, and credentials |
+| State | `/root/.aiusage/state.json` | Consent and sync runtime state |
+| Watermarks | `/root/.aiusage/watermark.json` | Incremental parse cursors |
 
 All data lives under `/root/.aiusage`, which is declared as a `VOLUME`. You **must** mount this volume to persist data across container restarts.
 
@@ -258,7 +269,7 @@ docker exec -it aiusage bash -c \
 docker restart aiusage
 ```
 
-> Note: `parse` is not needed here — the container has no local AI session logs. Only `sync` is needed to pull data from the remote backend.
+> Note: `parse` is not needed here unless you also mount local AI session logs into the container. In the standard deployment, only `sync` is needed to pull data from the remote backend.
 
 **Step 3 — Access**
 
@@ -310,6 +321,13 @@ docker build -t aiusage .
 | Codex | `~/.codex/sessions/` | `~/.codex/sessions/` | `%USERPROFILE%\.codex\sessions\` |
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
+
+Discovery behavior:
+
+- **Claude Code** — recursively scans `~/.claude/projects/**` for `.jsonl` files, including nested subagent logs.
+- **Codex** — recursively scans `~/.codex/sessions/**` for `.jsonl` files.
+- **OpenClaw** — scans each agent's `sessions/` directory under `~/.openclaw/agents/*/sessions/` and skips checkpoint files.
+- **OpenCode** — reads the SQLite database file directly instead of `.jsonl` logs.
 
 > On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
 
