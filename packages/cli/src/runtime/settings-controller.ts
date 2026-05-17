@@ -9,6 +9,8 @@ export interface RuntimeSettingsControllerOptions {
   cleanupIntervalMs?: number
 }
 
+const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
+
 export class RuntimeSettingsController {
   private readonly db: Database.Database
   private readonly loadConfigFn: RuntimeSettingsControllerOptions['loadConfig']
@@ -25,7 +27,7 @@ export class RuntimeSettingsController {
     this.loadConfigFn = options.loadConfig
     this.runParseFn = options.runParse
     this.runCleanupFn = options.runCleanup
-    this.cleanupIntervalMs = options.cleanupIntervalMs ?? 60 * 60 * 1000
+    this.cleanupIntervalMs = options.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS
   }
 
   start(): void {
@@ -67,7 +69,10 @@ export class RuntimeSettingsController {
       this.cleanupTimer = setInterval(() => {
         try {
           this.runCleanupFn(this.db, retentionDays)
-        } catch {}
+        } catch (err) {
+          // Keep scheduling active after individual cleanup failures.
+          console.error('[settings-controller] cleanup failed:', err)
+        }
       }, this.cleanupIntervalMs)
     }
   }
@@ -77,8 +82,9 @@ export class RuntimeSettingsController {
     this.parseInFlight = true
     try {
       await this.runParseFn(this.db)
-    } catch {
+    } catch (err) {
       // Keep scheduling active after individual parse failures.
+      console.error('[settings-controller] parse failed:', err)
     } finally {
       this.parseInFlight = false
     }

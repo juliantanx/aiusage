@@ -117,4 +117,29 @@ describe('RuntimeSettingsController', () => {
     expect(runParse).not.toHaveBeenCalled()
     expect(runCleanup).not.toHaveBeenCalled()
   })
+
+  it('does not schedule when loadConfig returns null', async () => {
+    const loadConfig = vi.fn(() => null)
+    const runParse = vi.fn(async () => {})
+    const runCleanup = vi.fn(() => {})
+    const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
+
+    controller.start()
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(runParse).not.toHaveBeenCalled()
+    expect(runCleanup).not.toHaveBeenCalled()
+  })
+
+  it('ignores reload before start', async () => {
+    const loadConfig = vi.fn(() => ({ parseInterval: 25 }))
+    const runParse = vi.fn(async () => {})
+    const runCleanup = vi.fn(() => {})
+    const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
+
+    controller.reload()
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(runParse).not.toHaveBeenCalled()
+  })
 })
