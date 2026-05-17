@@ -124,8 +124,7 @@
   }
 
   function handleSettingsUpdated(event) {
-    const nextMs = event?.detail?.dashboardPollInterval
-    globalRefreshMs = nextMs || 30000
+    globalRefreshMs = event?.detail?.dashboardPollInterval ?? 30000
     startRefreshCycle()
   }
 
