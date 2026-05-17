@@ -104,6 +104,10 @@ export async function fetchConfig() {
   return apiFetch('/api/config')
 }
 
+export async function fetchCredential(ref) {
+  return apiFetch(buildUrl('/api/config/credential', { ref }))
+}
+
 export async function saveConfig(data) {
   const response = await fetch('/api/config', {
     method: 'PUT',
@@ -115,4 +119,11 @@ export async function saveConfig(data) {
     throw new Error(error.error?.message || `HTTP ${response.status}`)
   }
   return response.json()
+}
+
+export const SETTINGS_UPDATED_EVENT = 'aiusage:settings-updated'
+
+export function notifySettingsUpdated(patch) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(SETTINGS_UPDATED_EVENT, { detail: patch }))
 }

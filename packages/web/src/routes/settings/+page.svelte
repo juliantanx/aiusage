@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, notifySettingsUpdated } from '$lib/api.js'
 
   let loading = true
   let loadError = null
@@ -12,7 +12,11 @@
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '', credentialRef: '' }
   let credentialValue = ''
   let credentialIsSet = false
+  let credentialVisible = false
+  let credentialLoading = false
+  let lastCredentialRef = ''
   let dataSection = { retentionDays: '' }
+  let effectiveDeviceName = ''
 
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
@@ -45,7 +49,9 @@
         credentialRef: cfg.sync?.credentialRef ?? '',
       }
       credentialIsSet = !!(cfg.sync?.credentialRef && cfg.credentialKeys?.includes(cfg.sync.credentialRef))
+      lastCredentialRef = cfg.sync?.credentialRef ?? ''
       dataSection = { retentionDays: cfg.retentionDays != null ? String(cfg.retentionDays) : '' }
+      effectiveDeviceName = cfg.device || 'hostname'
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -62,6 +68,12 @@
         dashboardPollInterval: general.dashboardPollInterval ? Number(general.dashboardPollInterval) : null,
         parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
       })
+      notifySettingsUpdated({
+        dashboardPollInterval: general.dashboardPollInterval ? Number(general.dashboardPollInterval) : null,
+        device: general.device || null,
+        parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
+      })
+      effectiveDeviceName = general.device || 'hostname'
       generalSaved = true
       setTimeout(() => { generalSaved = false }, 2000)
     } catch (e) {
@@ -85,6 +97,7 @@
   }
 
   async function saveSync() {
+    maybeResetCredentialForRefChange()
     syncSaving = true; syncError = ''
     try {
       const payload = { sync: syncData.backend ? { ...syncData } : null }
@@ -93,10 +106,8 @@
       }
       await saveConfig(payload)
       syncSaved = true
-      if (!syncError) {
-        credentialValue = ''
-        credentialIsSet = !!syncData.credentialRef
-      }
+      credentialIsSet = !!syncData.credentialRef
+      lastCredentialRef = syncData.credentialRef ?? ''
       setTimeout(() => { syncSaved = false }, 2000)
     } catch (e) {
       syncError = e instanceof Error ? e.message : 'Save failed'
@@ -117,6 +128,47 @@
       dataError = e instanceof Error ? e.message : 'Save failed'
     } finally {
       dataSaving = false
+    }
+  }
+
+  function resetCredentialReveal() {
+    credentialValue = ''
+    credentialVisible = false
+    credentialLoading = false
+  }
+
+  function maybeResetCredentialForRefChange() {
+    if (syncData.credentialRef !== lastCredentialRef) {
+      lastCredentialRef = syncData.credentialRef
+      resetCredentialReveal()
+    }
+  }
+
+  async function toggleCredentialVisibility() {
+    syncError = ''
+
+    if (!syncData.credentialRef) return
+
+    if (credentialVisible) {
+      credentialVisible = false
+      return
+    }
+
+    if (credentialValue) {
+      credentialVisible = true
+      return
+    }
+
+    credentialLoading = true
+    try {
+      const data = await fetchCredential(syncData.credentialRef)
+      credentialValue = data.value ?? ''
+      credentialVisible = true
+      credentialIsSet = !!credentialValue
+    } catch (e) {
+      syncError = e instanceof Error ? e.message : 'Failed to load credential'
+    } finally {
+      credentialLoading = false
     }
   }
 
@@ -150,6 +202,7 @@
           <label class="field-label" for="field-device">{$t('settings.device')}</label>
           <div class="field-hint">{$t('settings.deviceHint')}</div>
           <input id="field-device" type="text" bind:value={general.device} class="field-input" placeholder="hostname" />
+          <div class="field-hint">Effective device name: {effectiveDeviceName}</div>
         </div>
         <div class="field">
           <label class="field-label" for="field-week-start">{$t('settings.weekStart')}</label>
@@ -198,6 +251,7 @@
     <!-- Sync -->
     <div class="card">
       <div class="group-title">{$t('settings.sync')}</div>
+      <div class="field-hint">{$t('settings.syncHint')}</div>
       <div class="fields">
         <div class="field">
           <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
@@ -234,17 +288,34 @@
           </div>
           <div class="field">
             <label class="field-label" for="field-sync-credential-ref">{$t('settings.syncCredentialRef')}</label>
-            <input id="field-sync-credential-ref" type="text" bind:value={syncData.credentialRef} class="field-input mono" placeholder="GITHUB_TOKEN" />
+            <input id="field-sync-credential-ref" type="text" bind:value={syncData.credentialRef} class="field-input mono" placeholder="GITHUB_TOKEN" on:input={maybeResetCredentialForRefChange} />
           </div>
           <div class="field">
             <label class="field-label" for="field-sync-credential-value">{$t('settings.syncCredentialValue')}</label>
-            <input
-              id="field-sync-credential-value"
-              type="password"
-              bind:value={credentialValue}
-              class="field-input mono"
-              placeholder={credentialIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')}
-            />
+            <div class="credential-row">
+              <input
+                id="field-sync-credential-value"
+                type={credentialVisible ? 'text' : 'password'}
+                value={credentialValue}
+                on:input={e => credentialValue = e.target.value}
+                class="field-input mono"
+                placeholder={credentialIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')}
+              />
+              <button
+                type="button"
+                class="btn-secondary"
+                on:click={toggleCredentialVisibility}
+                disabled={!syncData.credentialRef || credentialLoading}
+              >
+                {#if credentialLoading}
+                  ...
+                {:else if credentialVisible}
+                  {$t('settings.hideCredential')}
+                {:else}
+                  {$t('settings.showCredential')}
+                {/if}
+              </button>
+            </div>
           </div>
         {/if}
       </div>
@@ -398,4 +469,32 @@
 
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
   .state-msg.error { color: var(--rose); }
+
+  .credential-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .credential-row .field-input {
+    flex: 1;
+  }
+
+  .btn-secondary {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 </style>

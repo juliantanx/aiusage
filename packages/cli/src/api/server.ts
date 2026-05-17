@@ -2,7 +2,7 @@ import http from 'node:http'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
-import { loadConfig, saveConfig } from '../config.js'
+import { loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
@@ -53,6 +53,7 @@ export interface ApiServerOptions {
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
   onSyncStart?: () => SyncStartResult
   getSyncStatus?: () => SyncStatusSnapshot | null
+  onConfigUpdated?: () => void
 }
 
 interface DeviceFilter {
@@ -846,6 +847,24 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
+      // ── /api/config/credential ──────────────────────────────────────
+      if (url.pathname === '/api/config/credential' && req.method === 'GET') {
+        const ref = url.searchParams.get('ref')?.trim()
+        if (!ref) {
+          json(res, { error: { code: 'MISSING_CREDENTIAL_REF', message: 'credential ref is required' } }, 400)
+          return
+        }
+
+        const value = loadCredential(ref)
+        if (!value) {
+          json(res, { error: { code: 'CREDENTIAL_NOT_FOUND', message: 'Credential not found' } }, 404)
+          return
+        }
+
+        json(res, { value })
+        return
+      }
+
       // ── /api/config ───────────────────────────────────────────────
       if (url.pathname === '/api/config') {
         if (req.method === 'GET') {
@@ -946,6 +965,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             }
 
             saveConfig(existing)
+            options?.onConfigUpdated?.()
             json(res, { ok: true })
           } catch {
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
