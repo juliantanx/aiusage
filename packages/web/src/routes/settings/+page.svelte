@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig } from '$lib/api.js'
+  import { fetchConfig, saveConfig, notifySettingsUpdated } from '$lib/api.js'
 
   let loading = true
   let loadError = null
@@ -60,6 +60,11 @@
         device: general.device || null,
         weekStart: Number(general.weekStart),
         dashboardPollInterval: general.dashboardPollInterval ? Number(general.dashboardPollInterval) : null,
+        parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
+      })
+      notifySettingsUpdated({
+        dashboardPollInterval: general.dashboardPollInterval ? Number(general.dashboardPollInterval) : null,
+        device: general.device || null,
         parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
       })
       generalSaved = true

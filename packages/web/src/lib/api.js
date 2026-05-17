@@ -116,3 +116,10 @@ export async function saveConfig(data) {
   }
   return response.json()
 }
+
+export const SETTINGS_UPDATED_EVENT = 'aiusage:settings-updated'
+
+export function notifySettingsUpdated(patch) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(SETTINGS_UPDATED_EVENT, { detail: patch }))
+}

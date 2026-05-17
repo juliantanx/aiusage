@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { tweened } from 'svelte/motion'
   import { cubicOut } from 'svelte/easing'
-  import { fetchSummary, refreshData as triggerRefresh, fetchConfig } from '$lib/api.js'
+  import { fetchSummary, refreshData as triggerRefresh, fetchConfig, SETTINGS_UPDATED_EVENT } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
 
   // ── Display config (localStorage, homepage-only) ──────────────────────────
@@ -123,6 +123,12 @@
     silentRefresh().then(() => startRefreshCycle())
   }
 
+  function handleSettingsUpdated(event) {
+    const nextMs = event?.detail?.dashboardPollInterval
+    globalRefreshMs = nextMs || 30000
+    startRefreshCycle()
+  }
+
   // ── Clock & pulse ─────────────────────────────────────────────────────────
   let now         = new Date()
   let clockTimer  = null
@@ -146,6 +152,8 @@
     await triggerRefresh().catch(() => {})
     await loadData()
     startRefreshCycle()
+
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
   })
 
   onDestroy(() => {
@@ -153,6 +161,7 @@
     clearInterval(countdownTimer)
     clearInterval(pulseTimer)
     clearTimeout(refreshTimeout)
+    window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
   })
 
   // ── Derived ───────────────────────────────────────────────────────────────
