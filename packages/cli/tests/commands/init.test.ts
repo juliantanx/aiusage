@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, readFileSync } from 'node:fs'
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual('node:os')
@@ -15,6 +15,7 @@ vi.mock('node:os', async () => {
 const { runInit } = await import('../../src/commands/init.js')
 
 const testDir = join(tmpdir(), 'aiusage-init-cmd-test')
+const configPath = join(testDir, '.aiusage', 'config.json')
 
 describe('Init Command', () => {
   beforeEach(() => {
@@ -59,6 +60,18 @@ describe('Init Command', () => {
     expect(result.message).toContain('GitHub sync configured')
   })
 
+  it('uses a GitHub credentialRef that matches the stored credential key', () => {
+    runInit({
+      backend: 'github',
+      repo: 'user/aiusage-data',
+      token: 'ghp_test123',
+    })
+
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+    expect(config.sync.credentialRef).toBe('github/user/aiusage-data/token')
+    expect(config.credentials['github/user/aiusage-data/token']).toBe('ghp_test123')
+  })
+
   it('fails when S3 bucket is missing', () => {
     const result = runInit({ backend: 's3', accessKeyId: 'k', secretAccessKey: 's' })
     expect(result.success).toBe(false)
@@ -83,5 +96,20 @@ describe('Init Command', () => {
     })
     expect(result.success).toBe(true)
     expect(result.message).toContain('S3 sync configured')
+  })
+
+  it('uses an S3 credentialRef that matches the stored access key credential key', () => {
+    runInit({
+      backend: 's3',
+      bucket: 'my-bucket',
+      prefix: 'aiusage/',
+      accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+      secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    })
+
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+    expect(config.sync.credentialRef).toBe('s3/my-bucket/accessKeyId')
+    expect(config.credentials['s3/my-bucket/accessKeyId']).toBe('AKIAIOSFODNN7EXAMPLE')
+    expect(config.credentials['s3/my-bucket/secretAccessKey']).toBe('wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY')
   })
 })

@@ -44,7 +44,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       sync: {
         backend: 'github',
         repo: options.repo,
-        credentialRef: `keychain://aiusage/github/${options.repo}`,
+        credentialRef: `github/${options.repo}/token`,
       },
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
@@ -95,7 +95,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
         prefix,
         endpoint: options.endpoint,
         region: options.region ?? 'auto',
-        credentialRef: `keychain://aiusage/s3/${options.bucket}`,
+        credentialRef: `s3/${options.bucket}/accessKeyId`,
       },
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
