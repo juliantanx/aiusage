@@ -49,6 +49,12 @@ cd packages/cli
 npm link
 ```
 
+拉取更新后，重新构建以应用最新代码：
+
+```bash
+pnpm build
+```
+
 </details>
 
 ## 截图
@@ -88,6 +94,7 @@ aiusage serve
 - **Projects** — 按项目汇总的使用数据。
 - **会话** — 支持筛选和分页的会话浏览。
 - **Pricing** — 当前模型定价参考。
+- **设置** — 在界面中配置设备名称、周起始日、数据来源路径、同步后端和数据保留策略，无需手动编辑配置文件。
 
 ---
 
@@ -308,7 +315,7 @@ docker build -t aiusage .
 
 ### 自定义来源路径
 
-如果某个工具安装在非默认位置，可以在 `~/.aiusage/config.json` 中覆盖路径：
+如果某个工具安装在非默认位置，可以在 Web 仪表盘的**设置**页面（`http://localhost:3847/settings` → 数据源）中修改，或者直接编辑 `~/.aiusage/config.json`：
 
 ```json
 {

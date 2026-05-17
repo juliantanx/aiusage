@@ -49,6 +49,12 @@ cd packages/cli
 npm link
 ```
 
+After pulling updates, rebuild to pick up changes:
+
+```bash
+pnpm build
+```
+
 </details>
 
 ## Screenshot
@@ -88,6 +94,7 @@ On the overview page's first load, the dashboard triggers `/api/refresh`, which 
 - **Projects** — project-level usage rollups.
 - **Sessions** — session browsing with filters and pagination.
 - **Pricing** — active model pricing reference.
+- **Settings** — configure device name, week start day, source paths, sync backend, and data retention without editing config files manually.
 
 ---
 
@@ -308,7 +315,7 @@ docker build -t aiusage .
 
 ### Custom Source Paths
 
-If you installed a tool to a non-default location, override the paths in `~/.aiusage/config.json`:
+If you installed a tool to a non-default location, override the paths in the **Settings** page of the web dashboard (`http://localhost:3847/settings` → Sources section), or edit `~/.aiusage/config.json` directly:
 
 ```json
 {
