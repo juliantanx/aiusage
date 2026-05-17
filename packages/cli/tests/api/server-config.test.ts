@@ -174,6 +174,42 @@ describe('PUT /api/config', () => {
     expect(saved).not.toHaveProperty('sync')
   })
 
+  it('invokes onConfigUpdated after saving config', async () => {
+    vi.mocked(loadConfig).mockReturnValue({} as any)
+    const onConfigUpdated = vi.fn()
+    const callbackServer = createApiServer(db, { onConfigUpdated })
+    const address = await new Promise<any>((resolve) => {
+      callbackServer.listen(0, '127.0.0.1', () => resolve(callbackServer.address()))
+    })
+    const callbackUrl = `http://127.0.0.1:${address.port}`
+
+    const res = await fetch(`${callbackUrl}/api/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parseInterval: 0, retentionDays: null }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(onConfigUpdated).toHaveBeenCalledTimes(1)
+    callbackServer.close()
+  })
+
+  it('removes parseInterval and retentionDays when saving zero-like values', async () => {
+    vi.mocked(loadConfig).mockReturnValue({
+      parseInterval: 60,
+      retentionDays: 30,
+    } as any)
+
+    const res = await fetch(`${baseUrl}/api/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parseInterval: 0, retentionDays: 0 }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(vi.mocked(saveConfig)).toHaveBeenCalledWith({})
+  })
+
   it('returns 400 for invalid JSON', async () => {
     const res = await fetch(`${baseUrl}/api/config`, {
       method: 'PUT',

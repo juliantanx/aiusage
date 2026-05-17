@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
 import { runParse } from './parse.js'
 import { runSync } from './sync.js'
+import { cleanOldData } from './clean.js'
 import { getState } from '../init.js'
 import { AIUSAGE_DIR, loadConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
+import { RuntimeSettingsController } from '../runtime/settings-controller.js'
 import { setPriceOverride } from '@aiusage/core'
 import type Database from 'better-sqlite3'
 
@@ -43,11 +45,20 @@ export function serve(options: ServeOptions): void {
     getPersistedState: () => getState(AIUSAGE_DIR),
   })
 
+  const runtimeSettings = new RuntimeSettingsController({
+    db: options.db,
+    loadConfig,
+    runParse,
+    runCleanup: cleanOldData,
+  })
+  runtimeSettings.start()
+
   const apiServer = createApiServer(options.db, {
     currentDeviceInstanceId: getState(AIUSAGE_DIR)?.deviceInstanceId,
     onRefresh: () => runParse(options.db),
     onSyncStart: () => syncRuntime.start(),
     getSyncStatus: () => syncRuntime.getStatus(),
+    onConfigUpdated: () => runtimeSettings.reload(),
   })
   const webBuildDir = (() => {
     const prodDir = join(dirname(fileURLToPath(import.meta.url)), 'web')
@@ -104,12 +115,14 @@ export function serve(options: ServeOptions): void {
   // Graceful shutdown
   process.on('SIGINT', () => {
     console.log('\nShutting down...')
+    runtimeSettings.stop()
     server.close(() => {
       process.exit(0)
     })
   })
 
   process.on('SIGTERM', () => {
+    runtimeSettings.stop()
     server.close(() => {
       process.exit(0)
     })

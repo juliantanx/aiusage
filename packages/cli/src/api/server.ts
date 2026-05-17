@@ -53,6 +53,7 @@ export interface ApiServerOptions {
   onRefresh?: () => Promise<{ parsedCount: number; toolCallCount: number; errors: string[] }>
   onSyncStart?: () => SyncStartResult
   getSyncStatus?: () => SyncStatusSnapshot | null
+  onConfigUpdated?: () => void
 }
 
 interface DeviceFilter {
@@ -946,6 +947,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             }
 
             saveConfig(existing)
+            options?.onConfigUpdated?.()
             json(res, { ok: true })
           } catch {
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
