@@ -14,6 +14,7 @@
     { path: '/projects', key: 'nav.projects' },
     { path: '/sessions', key: 'nav.sessions' },
     { path: '/pricing', key: 'nav.pricing' },
+    { path: '/settings', key: 'nav.settings' },
   ]
 
   const themeIcons = {

@@ -11,6 +11,7 @@ const translations = {
       projects: 'Projects',
       sessions: 'Sessions',
       pricing: 'Pricing',
+      settings: 'Settings',
     },
     common: {
       loading: 'Loading...',
@@ -198,6 +199,7 @@ const translations = {
       projects: '项目',
       sessions: '会话',
       pricing: '定价',
+      settings: '设置',
     },
     common: {
       loading: '加载中...',
