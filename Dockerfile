@@ -1,5 +1,11 @@
 FROM node:20-slim
 
+LABEL org.opencontainers.image.title="aiusage" \
+      org.opencontainers.image.description="Track AI coding assistant usage, token consumption, cost, and tool calls across Claude Code, Codex, OpenCode, and more" \
+      org.opencontainers.image.url="https://github.com/juliantanx/aiusage" \
+      org.opencontainers.image.source="https://github.com/juliantanx/aiusage" \
+      org.opencontainers.image.licenses="MIT"
+
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app

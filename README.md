@@ -2,7 +2,7 @@
 
 Track AI coding assistant usage, token consumption, cost, and tool calls in one place across Claude Code, Codex, OpenClaw, and OpenCode.
 
-English | [中文](./README_zh.md)
+English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
 ## Why aiusage
 

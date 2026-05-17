@@ -2,7 +2,7 @@
 
 在一个地方追踪 Claude Code、Codex、OpenClaw、OpenCode 的 AI 编程助手使用情况，包括 token 消耗、费用和工具调用。
 
-[English](./README.md) | 中文
+[English](https://github.com/juliantanx/aiusage/blob/main/README.md) | 中文
 
 ## 为什么使用 aiusage
 

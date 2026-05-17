@@ -1,8 +1,28 @@
 {
   "name": "@juliantanx/aiusage",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "type": "module",
   "description": "Track and analyze AI coding assistant usage across Claude Code, Codex, and more",
+  "keywords": [
+    "ai",
+    "claude",
+    "codex",
+    "opencode",
+    "usage",
+    "token",
+    "cost",
+    "analytics",
+    "dashboard"
+  ],
+  "homepage": "https://github.com/juliantanx/aiusage#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/juliantanx/aiusage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/juliantanx/aiusage/issues"
+  },
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
