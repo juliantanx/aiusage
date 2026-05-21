@@ -625,6 +625,13 @@ aiusage sync --dry-run         # Preview without pushing</code></pre>
     overflow-y: auto;
     scrollbar-width: thin;
   }
+  /* On mobile (≤800px) the sticky header is ~52px tall; add clearance */
+  @media (max-width: 800px) and (min-width: 701px) {
+    .toc {
+      top: 4.5rem;
+      max-height: calc(100vh - 6rem);
+    }
+  }
 
   .toc-header {
     font-family: var(--mono);
@@ -822,7 +829,7 @@ aiusage sync --dry-run         # Preview without pushing</code></pre>
   }
 
   /* ── Responsive ───────────────────────────────────────────────────────── */
-  @media (max-width: 700px) {
+  @media (max-width: 800px) {
     .docs-layout {
       grid-template-columns: 1fr;
     }

@@ -27,7 +27,7 @@
   $: $dateRange, $selectedDevice, $selectedTool, loadData()
 
   function getTotal(d) {
-    return d.inputTokens + d.outputTokens + (d.cacheReadTokens || 0) + (d.cacheWriteTokens || 0) + d.thinkingTokens
+    return d.inputTokens + d.outputTokens + (d.cacheReadTokens || 0) + (d.cacheWriteTokens || 0) + (d.thinkingTokens || 0)
   }
 
   function getMaxTokens() {
@@ -154,6 +154,7 @@
           <th>{$t('tokens.output')}</th>
           <th>{$t('tokens.cacheRead')}</th>
           <th>{$t('tokens.cacheWrite')}</th>
+          <th>{$t('tokens.thinking')}</th>
           <th>{$t('tokens.total')}</th>
         </tr>
       </thead>
@@ -165,8 +166,9 @@
             <td class="mono blue">{formatTokens(day.outputTokens)}</td>
             <td class="mono cache-color">{formatTokens(day.cacheReadTokens || 0)}</td>
             <td class="mono cache-color">{formatTokens(day.cacheWriteTokens || 0)}</td>
+            <td class="mono" style="color:var(--purple)">{formatTokens(day.thinkingTokens || 0)}</td>
             <td class="mono" style="color:var(--text-primary); font-weight:600">
-              {formatTokens(day.inputTokens + day.outputTokens + (day.cacheReadTokens || 0) + (day.cacheWriteTokens || 0) + day.thinkingTokens)}
+              {formatTokens(getTotal(day))}
             </td>
           </tr>
         {/each}

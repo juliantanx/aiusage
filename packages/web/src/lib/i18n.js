@@ -15,6 +15,7 @@ const translations = {
       settings: 'Settings',
       docs: 'Docs',
       collapse: 'Collapse',
+      expand: 'Expand',
       group: {
         analytics: 'Analytics',
         data: 'Data',
@@ -243,6 +244,7 @@ const translations = {
       settings: '设置',
       docs: '文档',
       collapse: '收起',
+      expand: '展开',
       group: {
         analytics: '统计',
         data: '数据',

@@ -213,7 +213,7 @@
         </button>
 
         <!-- Collapse toggle -->
-        <button class="ctrl-btn collapse-btn" on:click={toggleSidebar} title={collapsed ? 'Expand' : 'Collapse'}>
+        <button class="ctrl-btn collapse-btn" on:click={toggleSidebar} title={$t(collapsed ? 'nav.expand' : 'nav.collapse')}>
           <span class="ctrl-icon">{collapsed ? '›' : '‹'}</span>
           {#if !collapsed}
             <span class="ctrl-label">{$t('nav.collapse')}</span>
