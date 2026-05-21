@@ -59,9 +59,11 @@ pnpm build
 
 ## 截图
 
-![本周首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/weekly-overview.png)
+![首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/dashboard.png)
 
-首页按“本周”筛选后的仪表盘，展示来自本地真实数据的多助手使用情况。
+![概览页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/overview.png)
+
+![Token 用量页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/token.png)
 
 ## 常用命令
 

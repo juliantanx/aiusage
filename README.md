@@ -57,11 +57,13 @@ pnpm build
 
 </details>
 
-## Screenshot
+## Screenshots
 
-![This Week homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/weekly-overview.png)
+![Homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/dashboard.png)
 
-Homepage dashboard filtered to This Week, showing real local usage data across assistants.
+![Overview page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/overview.png)
+
+![Token usage page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/token.png)
 
 ## Common Commands
 
