@@ -676,6 +676,7 @@ aiusage sync --dry-run         # Preview without pushing</code></pre>
   /* ── Content ──────────────────────────────────────────────────────────── */
   .docs-content {
     min-width: 0;
+    max-width: 72ch;
   }
 
   .docs-content :global(.page-header) {

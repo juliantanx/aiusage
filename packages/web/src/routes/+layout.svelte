@@ -622,7 +622,6 @@
   .page-content {
     flex: 1;
     padding: 2rem 2.5rem;
-    max-width: 1100px;
     width: 100%;
     animation: fadeUp 0.35s ease;
   }
