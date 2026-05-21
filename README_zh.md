@@ -59,7 +59,7 @@ pnpm build
 
 ## 截图
 
-![首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/dashboard.png)
+![首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/home.png)
 
 ![概览页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/overview.png)
 
@@ -87,11 +87,11 @@ aiusage serve
 # 打开 http://localhost:3847
 ```
 
-`aiusage serve` 会提供两个顶层入口：
+`aiusage serve` 提供以下仪表盘页面：
 
 - **首页（`/`）** — 实时计数主页。首次加载时会调用 `/api/refresh`，先执行一次本地增量 parse，再加载汇总数据；之后按已配置的仪表盘轮询间隔自动刷新。
 - **概览（`/overview`）** — 可按今天、本周、本月、近 30 天或全部时间查看总量、费用、活跃天数和按工具分组的汇总。
-- **Token** — token 用量随时间的变化趋势。
+- **Token** — token 用量随时间的变化趋势，支持分类视图和总量视图切换。
 - **费用** — 费用趋势，以及按工具、按模型拆分的统计。
 - **模型** — 模型占比和分布。
 - **工具调用** — 工具调用频率和排行。
@@ -99,6 +99,7 @@ aiusage serve
 - **会话** — 支持筛选和分页的会话浏览。
 - **定价** — 当前模型定价参考。
 - **设置** — 在界面中配置设备名称、周起始日、仪表盘轮询间隔、自动解析间隔、数据来源路径、同步后端、凭据和本地数据保留策略，无需手动编辑配置文件。
+- **文档** — 内置文档页，包含 CLI 命令参考和功能使用说明。
 
 **设置行为**
 

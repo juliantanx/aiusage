@@ -59,7 +59,7 @@ pnpm build
 
 ## Screenshots
 
-![Homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/dashboard.png)
+![Homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/home.png)
 
 ![Overview page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/overview.png)
 
@@ -87,11 +87,11 @@ aiusage serve
 # Open http://localhost:3847
 ```
 
-`aiusage serve` hosts two top-level dashboard entry points:
+`aiusage serve` hosts the following dashboard pages:
 
 - **Home (`/`)** — live counter homepage. On first load it calls `/api/refresh`, runs one incremental local parse, then loads summary data. After that, it refreshes on the configured dashboard poll interval.
 - **Overview (`/overview`)** — totals, cost, active days, and per-tool breakdowns for Today, This Week, This Month, Last 30d, or All Time.
-- **Tokens** — token usage trends over time.
+- **Tokens** — token usage trends over time, with breakdown-by-type or combined total view.
 - **Cost** — cost trends with by-tool and by-model breakdowns.
 - **Models** — model share and distribution.
 - **Tool Calls** — tool call frequency and ranking.
@@ -99,6 +99,7 @@ aiusage serve
 - **Sessions** — session browsing with filters and pagination.
 - **Pricing** — active model pricing reference.
 - **Settings** — configure device name, week start day, dashboard poll interval, auto-parse interval, source paths, sync backend, credentials, and local data retention without editing config files manually.
+- **Docs** — in-app documentation with CLI reference and feature guides.
 
 **Settings behavior**
 
