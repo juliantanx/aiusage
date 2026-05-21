@@ -18,6 +18,8 @@ export interface ServeOptions {
   db: Database.Database
 }
 
+const MAX_PORT_ATTEMPTS = 10
+
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'application/javascript',
@@ -108,9 +110,34 @@ export function serve(options: ServeOptions): void {
     res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Web dashboard not found. Reinstall the package: npm install -g aiusage' } }))
   })
 
-  server.listen(options.port, '0.0.0.0', () => {
-    console.log(`aiusage serve listening on http://localhost:${options.port}`)
+  let currentPort = options.port
+  let started = false
+
+  const listenOnPort = (port: number): void => {
+    currentPort = port
+    server.listen(port, '0.0.0.0')
+  }
+
+  server.on('listening', () => {
+    started = true
+    console.log(`aiusage serve listening on http://localhost:${currentPort}`)
   })
+
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE' && !started && currentPort < options.port + MAX_PORT_ATTEMPTS - 1) {
+      const nextPort = currentPort + 1
+      console.warn(`Port ${currentPort} is already in use, trying ${nextPort}...`)
+      server.close(() => {
+        listenOnPort(nextPort)
+      })
+      return
+    }
+
+    runtimeSettings.stop()
+    throw error
+  })
+
+  listenOnPort(options.port)
 
   // Graceful shutdown
   process.on('SIGINT', () => {
