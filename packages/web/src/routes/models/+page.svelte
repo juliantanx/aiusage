@@ -30,6 +30,11 @@
   <title>{$t('models.title')} — AIUsage</title>
 </svelte:head>
 
+<div class="page-header">
+  <h1>{$t('models.title')}</h1>
+  <p>{$t('models.desc')}</p>
+</div>
+
 <div class="filter-bar">
   <DateRangeSelector />
   <DeviceSelector />
@@ -80,13 +85,6 @@
 {/if}
 
 <style>
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
   .model-name {
     font-weight: 600;
     color: var(--text-primary);

@@ -9,6 +9,7 @@
   let data = null
   let error = null
   let loading = true
+  let chartMode = 'breakdown' // 'breakdown' | 'total'
 
   async function loadData() {
     loading = true
@@ -25,9 +26,13 @@
 
   $: $dateRange, $selectedDevice, $selectedTool, loadData()
 
+  function getTotal(d) {
+    return d.inputTokens + d.outputTokens + (d.cacheReadTokens || 0) + (d.cacheWriteTokens || 0) + d.thinkingTokens
+  }
+
   function getMaxTokens() {
     if (!data?.data.length) return 0
-    return Math.max(...data.data.map(d => d.inputTokens + d.outputTokens + (d.cacheReadTokens || 0) + (d.cacheWriteTokens || 0) + d.thinkingTokens))
+    return Math.max(...data.data.map(d => getTotal(d)))
   }
 
   function getBarHeight(tokens, max) {
@@ -38,6 +43,11 @@
 <svelte:head>
   <title>{$t('tokens.title')} — AIUsage</title>
 </svelte:head>
+
+<div class="page-header">
+  <h1>{$t('tokens.title')}</h1>
+  <p>{$t('tokens.desc')}</p>
+</div>
 
 <div class="filter-bar">
   <DateRangeSelector />
@@ -56,55 +66,83 @@
   </div>
 {:else}
   <div class="card chart-section">
-    <div class="section-title">{$t('tokens.chartTitle')}</div>
+    <div class="chart-header">
+      <div class="section-title">{$t('tokens.chartTitle')}</div>
+      <div class="mode-toggle">
+        <button
+          class="mode-btn"
+          class:active={chartMode === 'breakdown'}
+          on:click={() => chartMode = 'breakdown'}
+        >{$t('tokens.modeBreakdown')}</button>
+        <button
+          class="mode-btn"
+          class:active={chartMode === 'total'}
+          on:click={() => chartMode = 'total'}
+        >{$t('tokens.modeTotal')}</button>
+      </div>
+    </div>
     <div class="chart">
       {#each data.data as day, i}
         {@const max = getMaxTokens()}
         <div class="bar-group" style="animation-delay: {i * 30}ms">
           <div class="bars">
-            <div
-              class="bar input"
-              style="height: {getBarHeight(day.inputTokens, max)}px"
-              title="{$t('tokens.input')}: {formatTokens(day.inputTokens)}"
-            ></div>
-            <div
-              class="bar output"
-              style="height: {getBarHeight(day.outputTokens, max)}px"
-              title="{$t('tokens.output')}: {formatTokens(day.outputTokens)}"
-            ></div>
-            {#if (day.cacheReadTokens || 0) > 0}
+            {#if chartMode === 'total'}
               <div
-                class="bar cache-read"
-                style="height: {getBarHeight(day.cacheReadTokens, max)}px"
-                title="{$t('tokens.cacheRead')}: {formatTokens(day.cacheReadTokens)}"
+                class="bar total-bar"
+                style="height: {getBarHeight(getTotal(day), max)}px"
+                title="{$t('tokens.total')}: {formatTokens(getTotal(day))}"
               ></div>
-            {/if}
-            {#if (day.cacheWriteTokens || 0) > 0}
+            {:else}
               <div
-                class="bar cache-write"
-                style="height: {getBarHeight(day.cacheWriteTokens, max)}px"
-                title="{$t('tokens.cacheWrite')}: {formatTokens(day.cacheWriteTokens)}"
+                class="bar input"
+                style="height: {getBarHeight(day.inputTokens, max)}px"
+                title="{$t('tokens.input')}: {formatTokens(day.inputTokens)}"
               ></div>
-            {/if}
-            {#if day.thinkingTokens > 0}
               <div
-                class="bar thinking"
-                style="height: {getBarHeight(day.thinkingTokens, max)}px"
-                title="{$t('tokens.thinking')}: {formatTokens(day.thinkingTokens)}"
+                class="bar output"
+                style="height: {getBarHeight(day.outputTokens, max)}px"
+                title="{$t('tokens.output')}: {formatTokens(day.outputTokens)}"
               ></div>
+              {#if (day.cacheReadTokens || 0) > 0}
+                <div
+                  class="bar cache-read"
+                  style="height: {getBarHeight(day.cacheReadTokens, max)}px"
+                  title="{$t('tokens.cacheRead')}: {formatTokens(day.cacheReadTokens)}"
+                ></div>
+              {/if}
+              {#if (day.cacheWriteTokens || 0) > 0}
+                <div
+                  class="bar cache-write"
+                  style="height: {getBarHeight(day.cacheWriteTokens, max)}px"
+                  title="{$t('tokens.cacheWrite')}: {formatTokens(day.cacheWriteTokens)}"
+                ></div>
+              {/if}
+              {#if day.thinkingTokens > 0}
+                <div
+                  class="bar thinking"
+                  style="height: {getBarHeight(day.thinkingTokens, max)}px"
+                  title="{$t('tokens.thinking')}: {formatTokens(day.thinkingTokens)}"
+                ></div>
+              {/if}
             {/if}
           </div>
           <div class="label">{day.date.slice(5)}</div>
         </div>
       {/each}
     </div>
-    <div class="legend">
-      <span class="legend-item"><span class="dot input"></span> {$t('tokens.input')}</span>
-      <span class="legend-item"><span class="dot output"></span> {$t('tokens.output')}</span>
-      <span class="legend-item"><span class="dot cache-read"></span> {$t('tokens.cacheRead')}</span>
-      <span class="legend-item"><span class="dot cache-write"></span> {$t('tokens.cacheWrite')}</span>
-      <span class="legend-item"><span class="dot thinking"></span> {$t('tokens.thinking')}</span>
-    </div>
+    {#if chartMode === 'breakdown'}
+      <div class="legend">
+        <span class="legend-item"><span class="dot input"></span> {$t('tokens.input')}</span>
+        <span class="legend-item"><span class="dot output"></span> {$t('tokens.output')}</span>
+        <span class="legend-item"><span class="dot cache-read"></span> {$t('tokens.cacheRead')}</span>
+        <span class="legend-item"><span class="dot cache-write"></span> {$t('tokens.cacheWrite')}</span>
+        <span class="legend-item"><span class="dot thinking"></span> {$t('tokens.thinking')}</span>
+      </div>
+    {:else}
+      <div class="legend">
+        <span class="legend-item"><span class="dot total-bar"></span> {$t('tokens.total')}</span>
+      </div>
+    {/if}
   </div>
 
   <div class="card" style="margin-top: 1rem;">
@@ -138,15 +176,46 @@
 {/if}
 
 <style>
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
   .chart-section {
     padding-bottom: 1.5rem;
+  }
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .chart-header .section-title {
+    margin-bottom: 0;
+  }
+  .mode-toggle {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .mode-btn {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.22rem 0.65rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.14s, color 0.14s;
+  }
+  .mode-btn:hover {
+    color: var(--text-secondary);
+  }
+  .mode-btn.active {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
   .chart {
     display: flex;
@@ -182,6 +251,7 @@
   .bar.cache-read { background: #d4a574; }
   .bar.cache-write { background: #a0845e; }
   .bar.thinking { background: var(--purple); }
+  .bar.total-bar { background: var(--accent); width: 14px; }
   .cache-color { color: #d4a574; }
   .label {
     font-family: var(--mono);
@@ -212,6 +282,7 @@
   .dot.cache-read { background: #d4a574; }
   .dot.cache-write { background: #a0845e; }
   .dot.thinking { background: var(--purple); }
+  .dot.total-bar { background: var(--accent); }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(6px); }

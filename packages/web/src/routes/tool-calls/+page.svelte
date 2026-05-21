@@ -30,6 +30,11 @@
   <title>{$t('toolCalls.title')} — AIUsage</title>
 </svelte:head>
 
+<div class="page-header">
+  <h1>{$t('toolCalls.title')}</h1>
+  <p>{$t('toolCalls.desc')}</p>
+</div>
+
 <div class="filter-bar">
   <DateRangeSelector />
   <DeviceSelector />
@@ -62,13 +67,6 @@
 {/if}
 
 <style>
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
   .ranking {
     display: flex;
     flex-direction: column;

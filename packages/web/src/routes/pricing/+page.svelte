@@ -312,9 +312,9 @@
     white-space: nowrap;
   }
   .badge.default { background: var(--accent-dim); color: var(--accent); }
-  .badge.override { background: #2d1f00; color: #f5a623; }
-  .badge.matched { background: #0d2818; color: #4ade80; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  .badge.no-price { background: #2d1010; color: #f87171; }
+  .badge.override { background: var(--badge-override-bg); color: var(--badge-override-fg); }
+  .badge.matched { background: var(--badge-matched-bg); color: var(--badge-matched-fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .badge.no-price { background: var(--badge-noprice-bg); color: var(--badge-noprice-fg); }
 
   .btn-sm {
     font-family: var(--mono);
@@ -363,6 +363,6 @@
   .edit-btns { display: flex; gap: 0.5rem; }
 
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
-  .state-msg.error { color: #f87171; }
+  .state-msg.error { color: var(--rose); }
   .mono { font-weight: 500; }
 </style>

@@ -3,6 +3,7 @@ import { writable, derived } from 'svelte/store'
 const translations = {
   en: {
     nav: {
+      home: 'Home',
       overview: 'Overview',
       tokens: 'Tokens',
       cost: 'Cost',
@@ -12,6 +13,13 @@ const translations = {
       sessions: 'Sessions',
       pricing: 'Pricing',
       settings: 'Settings',
+      docs: 'Docs',
+      collapse: 'Collapse',
+      group: {
+        analytics: 'Analytics',
+        data: 'Data',
+        manage: 'Manage',
+      },
     },
     common: {
       loading: 'Loading...',
@@ -37,6 +45,7 @@ const translations = {
     },
     overview: {
       title: 'Overview',
+      desc: 'Aggregated token, cost and session stats across all AI tools.',
       totalTokens: 'Total Tokens',
       totalCost: 'Total Cost',
       activeDays: 'Active Days',
@@ -56,6 +65,7 @@ const translations = {
     },
     tokens: {
       title: 'Tokens',
+      desc: 'Daily token usage breakdown by type.',
       chartTitle: 'Token Usage by Day',
       input: 'Input',
       output: 'Output',
@@ -64,11 +74,14 @@ const translations = {
       thinking: 'Thinking',
       date: 'Date',
       total: 'Total',
+      modeBreakdown: 'Breakdown',
+      modeTotal: 'Total',
       noData: 'No token data',
       noDataHint: 'No token usage recorded for this period.',
     },
     projects: {
       title: 'Projects',
+      desc: 'Token usage and cost ranked by project directory.',
       project: 'Project',
       sessions: 'Sessions',
       tokens: 'Tokens',
@@ -79,6 +92,7 @@ const translations = {
     },
     cost: {
       title: 'Cost',
+      desc: 'Daily spending trends and cost breakdown by tool and model.',
       totalCost: 'Total Cost',
       chartTitle: 'Cost by Day',
       byTool: 'By AI Assistant',
@@ -88,6 +102,7 @@ const translations = {
     },
     models: {
       title: 'Models',
+      desc: 'Usage ranking across all AI models.',
       model: 'Model',
       provider: 'Provider',
       calls: 'Calls',
@@ -98,11 +113,13 @@ const translations = {
     },
     toolCalls: {
       title: 'Tool Calls',
+      desc: 'Most frequently invoked tools by AI assistants.',
       noData: 'No tool call data',
       noDataHint: 'No tool calls recorded for this period.',
     },
     sessions: {
       title: 'Sessions',
+      desc: 'Per-session log with token and cost details.',
       assistant: 'AI Assistant',
       time: 'Time',
       tool: 'Tool',
@@ -214,6 +231,7 @@ const translations = {
   },
   zh: {
     nav: {
+      home: '首页',
       overview: '概览',
       tokens: 'Token',
       cost: '费用',
@@ -223,6 +241,13 @@ const translations = {
       sessions: '会话',
       pricing: '定价',
       settings: '设置',
+      docs: '文档',
+      collapse: '收起',
+      group: {
+        analytics: '统计',
+        data: '数据',
+        manage: '管理',
+      },
     },
     common: {
       loading: '加载中...',
@@ -248,6 +273,7 @@ const translations = {
     },
     overview: {
       title: '概览',
+      desc: '所有 AI 工具的 Token、费用和会话聚合统计。',
       totalTokens: '总 Token',
       totalCost: '总费用',
       activeDays: '活跃天数',
@@ -267,6 +293,7 @@ const translations = {
     },
     tokens: {
       title: 'Token',
+      desc: '按类型分类的每日 Token 用量趋势。',
       chartTitle: '每日 Token 用量',
       input: '输入',
       output: '输出',
@@ -275,11 +302,14 @@ const translations = {
       thinking: '思考',
       date: '日期',
       total: '合计',
+      modeBreakdown: '分类',
+      modeTotal: '总量',
       noData: '暂无 Token 数据',
       noDataHint: '当前时间段内无 Token 使用记录。',
     },
     projects: {
       title: '项目',
+      desc: '按项目目录排列的 Token 用量和费用排名。',
       project: '项目',
       sessions: '会话',
       tokens: 'Token',
@@ -290,6 +320,7 @@ const translations = {
     },
     cost: {
       title: '费用',
+      desc: '每日费用趋势及按工具、模型的费用分布。',
       totalCost: '总费用',
       chartTitle: '每日费用',
       byTool: '按 AI 助手',
@@ -299,6 +330,7 @@ const translations = {
     },
     models: {
       title: '模型',
+      desc: '各 AI 模型的用量排名。',
       model: '模型',
       provider: '提供商',
       calls: '调用次数',
@@ -309,11 +341,13 @@ const translations = {
     },
     toolCalls: {
       title: '工具调用',
+      desc: 'AI 助手最常调用的工具排名。',
       noData: '暂无工具调用数据',
       noDataHint: '当前时间段内无工具调用记录。',
     },
     sessions: {
       title: '会话',
+      desc: '每条会话的 Token 用量和费用详细记录。',
       assistant: 'AI 助手',
       time: '时间',
       tool: '工具',

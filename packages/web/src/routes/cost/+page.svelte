@@ -50,6 +50,11 @@
   <title>{$t('cost.title')} — AIUsage</title>
 </svelte:head>
 
+<div class="page-header">
+  <h1>{$t('cost.title')}</h1>
+  <p>{$t('cost.desc')}</p>
+</div>
+
 <div class="filter-bar">
   <DateRangeSelector />
   <DeviceSelector />
@@ -111,13 +116,6 @@
 {/if}
 
 <style>
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
   .hero-card {
     display: inline-flex;
     flex-direction: column;

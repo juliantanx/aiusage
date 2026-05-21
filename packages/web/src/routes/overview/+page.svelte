@@ -39,6 +39,11 @@
   <title>{$t('overview.title')} — AIUsage</title>
 </svelte:head>
 
+<div class="page-header">
+  <h1>{$t('overview.title')}</h1>
+  <p>{$t('overview.desc')}</p>
+</div>
+
 <div class="filter-bar">
   <DateRangeSelector />
   <DeviceSelector />
@@ -272,14 +277,6 @@
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
-  }
-
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
   }
 
   @media (max-width: 768px) {
