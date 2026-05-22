@@ -32,6 +32,8 @@ export interface SourcesConfig {
   'openclaw'?: string
   /** Custom path to opencode.db file (default: platform-specific) */
   'opencode'?: string
+  /** Custom path to Hermes state.db (default: ~/.hermes/state.db) */
+  'hermes'?: string
 }
 
 export interface Config {
