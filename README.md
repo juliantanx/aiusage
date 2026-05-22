@@ -1,6 +1,6 @@
 # aiusage
 
-Track AI coding assistant usage, token consumption, cost, and tool calls in one place across Claude Code, Codex, OpenClaw, and OpenCode.
+Track AI coding assistant usage, token consumption, cost, and tool calls in one place across Claude Code, Codex, OpenClaw, OpenCode, and Hermes.
 
 English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
@@ -14,7 +14,7 @@ English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
 ## Quick Start
 
-**Prerequisites:** Node.js >= 18
+**Prerequisites:** Node.js >= 18 (tested on v18 LTS and v22 LTS; Node.js 16 and below are not supported)
 
 ```bash
 # Install
@@ -124,7 +124,7 @@ For single-machine usage, Quick Start is enough.
 
 ### Multi-Machine Sync
 
-Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, and OpenCode.
+Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, OpenCode, and Hermes.
 
 **Architecture:**
 
@@ -149,7 +149,7 @@ Machine C ──┘
 
 **Step 2 — Install and configure on each machine**
 
-On every machine that uses Claude Code, Codex, OpenClaw, or OpenCode:
+On every machine that uses Claude Code, Codex, OpenClaw, OpenCode, or Hermes:
 
 ```bash
 # Install aiusage CLI
@@ -324,6 +324,7 @@ docker build -t aiusage .
 | Codex | `~/.codex/sessions/` | `~/.codex/sessions/` | `%USERPROFILE%\.codex\sessions\` |
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
+| Hermes | `~/.hermes/state.db` | `~/.hermes/state.db` | `%USERPROFILE%\.hermes\state.db` |
 
 Discovery behavior:
 
@@ -331,6 +332,7 @@ Discovery behavior:
 - **Codex** — recursively scans `~/.codex/sessions/**` for `.jsonl` files.
 - **OpenClaw** — scans each agent's `sessions/` directory under `~/.openclaw/agents/*/sessions/` and skips checkpoint files.
 - **OpenCode** — reads the SQLite database file directly instead of `.jsonl` logs.
+- **Hermes** — reads the SQLite database file (`state.db`) directly. Sessions without a recorded end time are still imported if they have token data (e.g. sessions from a force-quit).
 
 > On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
 
@@ -344,7 +346,8 @@ If you installed a tool to a non-default location, override the paths in the **S
     "claude-code": "/custom/path/.claude/projects",
     "codex": "/custom/path/.codex/sessions",
     "openclaw": "/custom/sessions-dir",
-    "opencode": "/custom/path/opencode.db"
+    "opencode": "/custom/path/opencode.db",
+    "hermes": "/custom/path/.hermes/state.db"
   }
 }
 ```
