@@ -89,11 +89,27 @@ describe('runParseHermes', () => {
     expect(result.errors).toHaveLength(0)
   })
 
-  it('skips sessions with ended_at IS NULL (still running)', () => {
+  it('imports sessions with ended_at IS NULL when they have tokens (orphaned sessions)', () => {
     db.prepare(`
       INSERT INTO sessions (id, model, started_at, ended_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('sess_running', 'deepseek-v4-flash', 1779408317.5, null, 5000, 200, 0, 0, 0)
+    `).run('sess_orphan', 'deepseek-v4-flash', 1779408317.5, null, 5000, 200, 0, 0, 0)
+
+    const result = runParseHermes(db, BASE_OPTIONS)
+
+    expect(result.records).toHaveLength(1)
+    expect(result.records[0].inputTokens).toBe(5000)
+    expect(result.records[0].outputTokens).toBe(200)
+    // ts falls back to started_at when ended_at is null
+    expect(result.records[0].ts).toBe(Math.round(1779408317.5 * 1000))
+    expect(result.nextCursor).not.toBeNull()
+  })
+
+  it('skips sessions with ended_at IS NULL and zero tokens (truly in-progress)', () => {
+    db.prepare(`
+      INSERT INTO sessions (id, model, started_at, ended_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('sess_running', 'deepseek-v4-flash', 1779408317.5, null, 0, 0, 0, 0, 0)
 
     const result = runParseHermes(db, BASE_OPTIONS)
 
@@ -234,6 +250,22 @@ describe('runParseHermes', () => {
     expect(result.records).toHaveLength(1)
     expect(result.toolCalls).toHaveLength(0)
     expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  it('records error for tool_calls JSON that is valid but not an array', () => {
+    db.prepare(`
+      INSERT INTO sessions (id, model, billing_provider, started_at, ended_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('sess_1', 'deepseek-v4-flash', null, 1779408317.5, 1779408400.0, 100, 20, 0, 0, 0)
+
+    db.prepare(`INSERT INTO messages (session_id, role, tool_calls, timestamp) VALUES (?, ?, ?, ?)`)
+      .run('sess_1', 'assistant', JSON.stringify({ function: { name: 'terminal' } }), 1779408330.0)
+
+    const result = runParseHermes(db, BASE_OPTIONS)
+
+    expect(result.records).toHaveLength(1)
+    expect(result.toolCalls).toHaveLength(0)
+    expect(result.errors.some(e => e.includes('tool_calls payload is not an array'))).toBe(true)
   })
 
   it('respects cursor for incremental import', () => {

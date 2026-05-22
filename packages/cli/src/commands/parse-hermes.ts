@@ -24,7 +24,8 @@ interface SessionRow {
   model: string | null
   billing_provider: string | null
   started_at: number
-  ended_at: number
+  ended_at: number | null
+  session_ts: number
   input_tokens: number
   output_tokens: number
   cache_read_tokens: number
@@ -55,11 +56,12 @@ export function runParseHermes(
     .prepare(
       `SELECT id, model, billing_provider, started_at, ended_at,
               input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-              reasoning_tokens, estimated_cost_usd, actual_cost_usd
+              reasoning_tokens, estimated_cost_usd, actual_cost_usd,
+              COALESCE(ended_at, started_at) AS session_ts
        FROM sessions
-       WHERE ended_at IS NOT NULL
-         AND (ended_at > ? OR (ended_at = ? AND id > ?))
-       ORDER BY ended_at, id`,
+       WHERE (ended_at IS NOT NULL OR input_tokens > 0 OR output_tokens > 0)
+         AND (COALESCE(ended_at, started_at) > ? OR (COALESCE(ended_at, started_at) = ? AND id > ?))
+       ORDER BY COALESCE(ended_at, started_at), id`,
     )
     .all(
       cursor?.lastEndedAt ?? 0,
@@ -75,7 +77,7 @@ export function runParseHermes(
   )
 
   for (const session of sessions) {
-    lastCursor = { lastEndedAt: session.ended_at, lastId: session.id }
+    lastCursor = { lastEndedAt: session.session_ts, lastId: session.id }
 
     const model = session.model ?? 'unknown'
     const ts = Math.round(session.started_at * 1000)
@@ -143,7 +145,12 @@ export function runParseHermes(
     for (const message of messages) {
       let toolCallList: Array<{ function?: { name?: string } }>
       try {
-        toolCallList = JSON.parse(message.tool_calls!)
+        const parsed = JSON.parse(message.tool_calls!)
+        if (!Array.isArray(parsed)) {
+          errors.push(`session ${session.id} message ${message.id}: tool_calls payload is not an array`)
+          continue
+        }
+        toolCallList = parsed as Array<{ function?: { name?: string } }>
       } catch (e) {
         errors.push(`session ${session.id} message ${message.id}: invalid tool_calls JSON: ${e instanceof Error ? e.message : e}`)
         continue

@@ -132,7 +132,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
     // Validate tool parameter early — same style as range validation
     const toolParam = url.searchParams.get('tool')
-    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode']
+    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes']
     if (toolParam && !VALID_TOOLS.includes(toolParam)) {
       json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid tool' } }, 400)
       return

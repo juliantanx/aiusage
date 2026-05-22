@@ -67,4 +67,56 @@ describe('SyncRecord Mapper', () => {
     const sync2 = mapStatsRecordToSyncRecord(record2)
     expect(sync1.id).not.toBe(sync2.id)
   })
+
+  it('uses record.id for Hermes DB-backed records to avoid sync ID collisions', () => {
+    const hermes1: StatsRecord = {
+      ...testRecord,
+      id: 'hermes-record-1',
+      tool: 'hermes',
+      sourceFile: '/Users/test/.hermes/state.db',
+      lineOffset: 0,
+      sessionId: 'sess-1',
+    }
+    const hermes2: StatsRecord = {
+      ...testRecord,
+      id: 'hermes-record-2',
+      tool: 'hermes',
+      sourceFile: '/Users/test/.hermes/state.db',
+      lineOffset: 0,
+      sessionId: 'sess-2',
+    }
+
+    const sync1 = mapStatsRecordToSyncRecord(hermes1)
+    const sync2 = mapStatsRecordToSyncRecord(hermes2)
+
+    expect(sync1.id).toBe('hermes-record-1')
+    expect(sync2.id).toBe('hermes-record-2')
+    expect(sync1.id).not.toBe(sync2.id)
+  })
+
+  it('uses record.id for OpenCode DB-backed records to avoid sync ID collisions', () => {
+    const opencode1: StatsRecord = {
+      ...testRecord,
+      id: 'opencode-record-1',
+      tool: 'opencode',
+      sourceFile: '/Users/test/.local/share/opencode/opencode.db',
+      lineOffset: 0,
+      sessionId: 'sess-1',
+    }
+    const opencode2: StatsRecord = {
+      ...testRecord,
+      id: 'opencode-record-2',
+      tool: 'opencode',
+      sourceFile: '/Users/test/.local/share/opencode/opencode.db',
+      lineOffset: 0,
+      sessionId: 'sess-2',
+    }
+
+    const sync1 = mapStatsRecordToSyncRecord(opencode1)
+    const sync2 = mapStatsRecordToSyncRecord(opencode2)
+
+    expect(sync1.id).toBe('opencode-record-1')
+    expect(sync2.id).toBe('opencode-record-2')
+    expect(sync1.id).not.toBe(sync2.id)
+  })
 })
