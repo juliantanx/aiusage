@@ -5,8 +5,6 @@ directories:
   buildResources: build
 files:
   - dist/**
-  - "!dist/renderer/**"
-  - dist/renderer/**
   - node_modules/**
 extraMetadata:
   main: dist/main.js

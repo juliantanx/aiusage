@@ -14,10 +14,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-sqlite3": "*",
-    "electron": "^33.0.0"
+    "better-sqlite3": "^11.0.0"
   },
   "devDependencies": {
+    "electron": "^33.0.0",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
     "@types/better-sqlite3": "*",
     "@types/node": "*",
