@@ -31,13 +31,14 @@ export function queryWidgetData(db: Database.Database): WidgetData {
   const todayRow = db.prepare(`
     SELECT
       COALESCE(SUM(input_tokens), 0) AS input,
-      COALESCE(SUM(output_tokens), 0) AS output
+      COALESCE(SUM(output_tokens), 0) AS output,
+      COALESCE(SUM(cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS other
     FROM records
     WHERE ts >= ? AND ts < ?
-  `).get(todayStart, tomorrow) as { input: number; output: number }
+  `).get(todayStart, tomorrow) as { input: number; output: number; other: number }
 
   const monthRow = db.prepare(`
-    SELECT COALESCE(SUM(input_tokens + output_tokens), 0) AS total
+    SELECT COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS total
     FROM records
     WHERE ts >= ? AND ts < ?
   `).get(monthStart, nextMonthStart) as { total: number }
@@ -45,7 +46,7 @@ export function queryWidgetData(db: Database.Database): WidgetData {
   const modelRows = db.prepare(`
     SELECT
       model,
-      SUM(input_tokens + output_tokens) AS tokens
+      SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens
     FROM records
     WHERE ts >= ? AND ts < ?
     GROUP BY model
@@ -64,7 +65,7 @@ export function queryWidgetData(db: Database.Database): WidgetData {
 
   return {
     todayTokens: {
-      total: todayRow.input + todayRow.output,
+      total: todayRow.input + todayRow.output + todayRow.other,
       input: todayRow.input,
       output: todayRow.output,
     },
@@ -77,22 +78,16 @@ export function queryWidgetData(db: Database.Database): WidgetData {
 }
 
 function getTodayStartMs(): number {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d.getTime()
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
 }
 
 function getMonthStartMs(): number {
-  const d = new Date()
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  return d.getTime()
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1).getTime()
 }
 
 function getNextMonthStartMs(): number {
-  const d = new Date()
-  d.setDate(1)
-  d.setHours(0, 0, 0, 0)
-  d.setMonth(d.getMonth() + 1)
-  return d.getTime()
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime()
 }

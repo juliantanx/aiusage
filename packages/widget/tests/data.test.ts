@@ -105,6 +105,19 @@ describe('queryWidgetData', () => {
     expect(result.topModel!.share).toBe(80)
   })
 
+  it('includes cache and thinking tokens in totals', () => {
+    const now = Date.now()
+    db.prepare(`INSERT INTO records (id, ts, tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run('r1', now, 'claude-code', 'claude-sonnet-4-6', 100, 50, 200, 300, 400, 0)
+
+    const result = queryWidgetData(db)
+    // total = input(100) + output(50) + cache_read(200) + cache_write(300) + thinking(400) = 1050
+    expect(result.todayTokens.total).toBe(1050)
+    expect(result.todayTokens.input).toBe(100)
+    expect(result.todayTokens.output).toBe(50)
+    expect(result.monthTokens.total).toBe(1050)
+  })
+
   it('returns null topModel when no today records', () => {
     const yesterday = todayMs() - 1
     db.prepare(`INSERT INTO records (id, ts, tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
