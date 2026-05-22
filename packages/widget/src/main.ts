@@ -4,6 +4,12 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 import { queryWidgetData } from './data'
+import {
+  getTrayIconDataUrl,
+  shouldHideWindowOnBlur,
+  shouldHideWindowOnClose,
+  shouldShowWindowOnLaunch,
+} from './ui'
 
 const nodeRequire = createRequire(__filename)
 const Database = nodeRequire('better-sqlite3') as typeof import('better-sqlite3')
@@ -31,6 +37,10 @@ app.whenReady().then(() => {
   createTray()
   createWindow()
   startAutoRefresh()
+
+  if (shouldShowWindowOnLaunch(app.isPackaged)) {
+    showWindow()
+  }
 })
 
 app.on('window-all-closed', () => {
@@ -42,10 +52,14 @@ app.on('before-quit', () => {
 })
 
 function createTray(): void {
-  // Use an empty icon as placeholder; production builds should use a real icon file
-  const icon = nativeImage.createEmpty()
+  const icon = nativeImage.createFromDataURL(getTrayIconDataUrl())
   tray = new Tray(icon)
   tray.setToolTip('aiusage Widget')
+
+  // On macOS, SVG icons silently fail — use a text label as the visible entry
+  if (process.platform === 'darwin') {
+    tray.setTitle('⚡')
+  }
 
   tray.on('click', () => toggleWindow())
   tray.on('right-click', () => {
@@ -79,7 +93,9 @@ function createWindow(): void {
   const rendererPath = join(__dirname, 'renderer', 'index.html')
   win.loadFile(rendererPath)
 
-  win.on('blur', () => win?.hide())
+  if (shouldHideWindowOnBlur(app.isPackaged)) {
+    win.on('blur', () => win?.hide())
+  }
 }
 
 function showWindow(): void {
@@ -135,7 +151,9 @@ ipcMain.handle('widget:open-dashboard', async () => {
   shell.openExternal(`http://localhost:${DASHBOARD_PORT}`)
 })
 
-ipcMain.on('widget:hide-window', () => win?.hide())
+ipcMain.on('widget:hide-window', () => {
+  win?.hide()
+})
 
 async function isDashboardReachable(): Promise<boolean> {
   return new Promise((resolve) => {

@@ -8,11 +8,13 @@
     "aiusage-widget": "bin/launcher.js"
   },
   "scripts": {
-    "rebuild": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers --build-from-source'; execSync(cmd, {stdio:'inherit'})\"",
-    "dev": "pnpm run rebuild && concurrently \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"pnpm exec wait-on dist/main.js && pnpm exec electron .\"",
+    "rebuild": "pnpm run rebuild:electron",
+    "rebuild:electron": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers --build-from-source'; execSync(cmd, {stdio:'inherit'})\"",
+    "rebuild:node": "npm rebuild better-sqlite3 --build-from-source",
+    "dev": "pnpm run rebuild:electron && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"pnpm exec wait-on dist/main.js && pnpm exec electron .\"",
     "build": "vite build && tsc -p tsconfig.json",
     "pack": "pnpm build && electron-builder",
-    "test": "vitest run"
+    "test": "pnpm run rebuild:node && vitest run"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0"
