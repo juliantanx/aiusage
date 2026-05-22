@@ -5,6 +5,7 @@
   "scripts": {
     "build": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter @juliantanx/aiusage build && pnpm --filter @juliantanx/aiusage-widget build",
     "dev": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter @juliantanx/aiusage dev",
+    "dev:widget": "pnpm --filter @aiusage/core build && pnpm --filter @juliantanx/aiusage-widget dev",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "rebuild:sqlite": "node -e \"const path=require('path'),{execSync}=require('child_process'),dir=path.dirname(require.resolve('better-sqlite3/package.json',{paths:['packages/cli/node_modules','node_modules']}));execSync('npm run install',{cwd:dir,stdio:'inherit'})\""
