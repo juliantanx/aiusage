@@ -118,3 +118,47 @@ describe('WatermarkManager', () => {
     expect(wm.getOpenCodeCursor()).toBeNull()
   })
 })
+
+describe('WatermarkManager - HermesCursor', () => {
+  const testDir = join(tmpdir(), 'aiusage-watermark-hermes-test')
+  const watermarkPath = join(testDir, 'watermark.json')
+
+  beforeEach(() => {
+    mkdirSync(testDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  it('returns null when no hermes cursor is set', () => {
+    const wm = new WatermarkManager(watermarkPath)
+    expect(wm.getHermesCursor()).toBeNull()
+  })
+
+  it('saves and loads hermes cursor', () => {
+    const wm = new WatermarkManager(watermarkPath)
+    wm.setHermesCursor({ lastEndedAt: 1779408317.5, lastId: '20260522_080254_59211c' })
+    wm.save()
+
+    const wm2 = new WatermarkManager(watermarkPath)
+    expect(wm2.getHermesCursor()).toEqual({
+      lastEndedAt: 1779408317.5,
+      lastId: '20260522_080254_59211c',
+    })
+  })
+
+  it('loads legacy watermark file without hermes key', () => {
+    writeFileSync(watermarkPath, JSON.stringify({
+      files: { 'claude-code': {}, 'codex': {}, 'openclaw': {}, 'opencode': {}, 'hermes': {} },
+    }))
+    const wm = new WatermarkManager(watermarkPath)
+    expect(wm.getHermesCursor()).toBeNull()
+  })
+
+  it('hermes key included in defaultFileData', () => {
+    const wm = new WatermarkManager(watermarkPath)
+    // setEntry for hermes should not throw (key exists in files map)
+    expect(() => wm.setEntry('hermes', '/some/path', { offset: 0, size: 0, mtime: 0 })).not.toThrow()
+  })
+})

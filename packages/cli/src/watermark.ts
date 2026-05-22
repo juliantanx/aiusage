@@ -9,6 +9,11 @@ export interface WatermarkEntry {
   headFingerprint?: string
 }
 
+export interface HermesCursor {
+  lastEndedAt: number  // Unix timestamp in seconds (float)
+  lastId: string
+}
+
 export interface OpenCodeCursor {
   lastMessageCreatedAt: number
   lastMessageId: string
@@ -19,6 +24,7 @@ export type FileWatermarkData = Record<Tool, Record<string, WatermarkEntry>>
 export interface WatermarkState {
   files: FileWatermarkData
   opencode?: OpenCodeCursor | null
+  hermes?: HermesCursor | null
 }
 
 /** @deprecated Use FileWatermarkData instead */
@@ -30,6 +36,7 @@ function defaultFileData(): FileWatermarkData {
     'codex': {},
     'openclaw': {},
     'opencode': {},
+    'hermes': {},
   }
 }
 
@@ -53,7 +60,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: parsed.files ?? defaultFileData(), opencode: parsed.opencode ?? null }
+      return { files: parsed.files ?? defaultFileData(), opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null }
     } catch {
       return { files: defaultFileData() }
     }
@@ -91,5 +98,13 @@ export class WatermarkManager {
 
   setOpenCodeCursor(cursor: OpenCodeCursor): void {
     this.data.opencode = cursor
+  }
+
+  getHermesCursor(): HermesCursor | null {
+    return this.data.hermes ?? null
+  }
+
+  setHermesCursor(cursor: HermesCursor): void {
+    this.data.hermes = cursor
   }
 }
