@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { runParseHermes } from '../../src/commands/parse-hermes.js'
+import { initializeDatabase } from '../../src/db/index.js'
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual('node:os')
@@ -147,7 +148,6 @@ describe('runParseHermes', () => {
   })
 
   it('falls back to pricing table when both cost fields are 0 or null', () => {
-    // claude-sonnet-4-6: input $3/1M, output $15/1M
     db.prepare(`
       INSERT INTO sessions (id, model, billing_provider, started_at, ended_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens, actual_cost_usd, estimated_cost_usd)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -246,12 +246,10 @@ describe('runParseHermes', () => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run('sess_2', 'deepseek-v4-flash', null, 1779408500.0, 1779408600.0, 200, 40, 0, 0, 0)
 
-    // First import: get both
     const result1 = runParseHermes(db, BASE_OPTIONS)
     expect(result1.records).toHaveLength(2)
     expect(result1.nextCursor).toEqual({ lastEndedAt: 1779408600.0, lastId: 'sess_2' })
 
-    // Second import with cursor: get nothing
     const result2 = runParseHermes(db, { ...BASE_OPTIONS, cursor: result1.nextCursor })
     expect(result2.records).toHaveLength(0)
     expect(result2.nextCursor).toBeNull()
@@ -266,5 +264,73 @@ describe('runParseHermes', () => {
     const result = runParseHermes(db, BASE_OPTIONS)
 
     expect(result.nextCursor).toEqual({ lastEndedAt: 1779408400.0, lastId: 'sess_1' })
+  })
+})
+
+describe('runParse with hermes', () => {
+  const testDir = join(tmpdir(), 'aiusage-parse-hermes-test')
+  let cacheDb: Database.Database
+  let hermesDbPath: string
+
+  beforeEach(() => {
+    mkdirSync(join(testDir, '.aiusage'), { recursive: true })
+    writeFileSync(join(testDir, '.aiusage', 'watermark.json'), '{}')
+
+    cacheDb = new Database(':memory:')
+    initializeDatabase(cacheDb)
+
+    hermesDbPath = join(testDir, '.hermes', 'state.db')
+    mkdirSync(join(testDir, '.hermes'), { recursive: true })
+
+    const hermesDb = new Database(hermesDbPath)
+    createHermesDb(hermesDb)
+    hermesDb.prepare(`
+      INSERT INTO sessions (id, model, billing_provider, started_at, ended_at, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('sess_1', 'deepseek-v4-flash', 'custom', 1779408317.5, 1779408400.0, 5000, 200, 100, 50, 10)
+    hermesDb.prepare(`
+      INSERT INTO messages (session_id, role, tool_calls, timestamp)
+      VALUES (?, ?, ?, ?)
+    `).run('sess_1', 'assistant', JSON.stringify([
+      { id: 'tc1', type: 'function', function: { name: 'terminal', arguments: '{}' } },
+    ]), 1779408350.0)
+    hermesDb.close()
+  })
+
+  afterEach(() => {
+    cacheDb.close()
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  it('runParse imports hermes records when tool filter is hermes', async () => {
+    const result = await runParse(cacheDb, 'hermes', { hermesDbPath })
+    expect(result.parsedCount).toBe(1)
+    expect(result.toolCallCount).toBe(1)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('runParse skips hermes when filter is different tool', async () => {
+    const result = await runParse(cacheDb, 'claude-code', { hermesDbPath })
+    expect(result.parsedCount).toBe(0)
+    expect(result.toolCallCount).toBe(0)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('runParse handles missing hermes db gracefully', async () => {
+    const result = await runParse(cacheDb, 'hermes', { hermesDbPath: join(testDir, 'nonexistent.db') })
+    expect(result.parsedCount).toBe(0)
+    expect(result.toolCallCount).toBe(0)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('runParse persists cursor so second call imports nothing new', async () => {
+    const result1 = await runParse(cacheDb, 'hermes', { hermesDbPath })
+    expect(result1.parsedCount).toBe(1)
+    expect(result1.toolCallCount).toBe(1)
+
+    const result2 = await runParse(cacheDb, 'hermes', { hermesDbPath })
+    expect(result2.parsedCount).toBe(0)
+    expect(result2.toolCallCount).toBe(0)
+    expect(result2.errors).toHaveLength(0)
   })
 })

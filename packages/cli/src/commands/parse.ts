@@ -9,6 +9,7 @@ import { getState } from '../init.js'
 import { loadConfig, AIUSAGE_DIR } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
 import { runParseOpenCode } from './parse-opencode.js'
+import { runParseHermes } from './parse-hermes.js'
 
 interface ParseResult {
   parsedCount: number
@@ -52,6 +53,10 @@ function defaultOpenCodeDbPath(): string {
   // Linux: $XDG_DATA_HOME/opencode/opencode.db (defaults to ~/.local/share)
   const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
   return join(xdgDataHome, 'opencode', 'opencode.db')
+}
+
+function defaultHermesDbPath(): string {
+  return join(homedir(), '.hermes', 'state.db')
 }
 
 function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
@@ -126,7 +131,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
   return 'unknown'
 }
 
-export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string }): Promise<ParseResult> {
+export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string }): Promise<ParseResult> {
   const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
@@ -247,6 +252,38 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
       }
     } catch (e) {
       errors.push(`${openCodeDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // Hermes: SQLite database
+  const hermesDbPath = options?.hermesDbPath ?? config?.sources?.['hermes'] ?? defaultHermesDbPath()
+  if ((!filterTool || filterTool === 'hermes') && existsSync(hermesDbPath)) {
+    try {
+      const hermesDb = new Database(hermesDbPath, { readonly: true })
+      try {
+        const result = runParseHermes(hermesDb, {
+          dbPath: hermesDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getHermesCursor(),
+        })
+
+        for (const record of result.records) insertRecord(db, record)
+        for (const tc of result.toolCalls) insertToolCall(db, tc)
+        if (result.nextCursor) {
+          wm.setHermesCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        toolCallCount += result.toolCalls.length
+        errors.push(...result.errors)
+      } finally {
+        hermesDb.close()
+      }
+    } catch (e) {
+      errors.push(`${hermesDbPath}: ${e instanceof Error ? e.message : e}`)
     }
   }
 
