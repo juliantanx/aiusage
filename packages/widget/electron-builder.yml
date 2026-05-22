@@ -1,0 +1,24 @@
+appId: com.juliantanx.aiusage-widget
+productName: aiusage Widget
+directories:
+  output: dist-electron
+  buildResources: build
+files:
+  - dist/**
+  - "!dist/renderer/**"
+  - dist/renderer/**
+  - node_modules/**
+extraMetadata:
+  main: dist/main.js
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+    - target: zip
+win:
+  target:
+    - target: nsis
+linux:
+  target:
+    - target: AppImage
+    - target: deb

@@ -1,0 +1,32 @@
+{
+  "name": "@juliantanx/aiusage-widget",
+  "version": "1.0.0",
+  "private": false,
+  "description": "System tray widget for aiusage",
+  "main": "dist/main.js",
+  "bin": {
+    "aiusage-widget": "bin/launcher.js"
+  },
+  "scripts": {
+    "dev": "concurrently \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"wait-on dist/main.js && electron .\"",
+    "build": "vite build && tsc -p tsconfig.json",
+    "pack": "pnpm build && electron-builder",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "*",
+    "electron": "^33.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "@types/better-sqlite3": "*",
+    "@types/node": "*",
+    "concurrently": "^8.0.0",
+    "electron-builder": "^25.0.0",
+    "svelte": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "vitest": "^2.0.0",
+    "wait-on": "^7.0.0"
+  }
+}
