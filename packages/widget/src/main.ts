@@ -5,8 +5,8 @@ import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 import { queryWidgetData } from './data'
 
-const require = createRequire(__filename)
-const Database = require('better-sqlite3') as typeof import('better-sqlite3')
+const nodeRequire = createRequire(__filename)
+const Database = nodeRequire('better-sqlite3') as typeof import('better-sqlite3')
 
 const DB_PATH = join(homedir(), '.aiusage', 'cache.db')
 const DASHBOARD_PORT = 3847
@@ -135,7 +135,7 @@ ipcMain.on('widget:hide-window', () => win?.hide())
 
 async function isDashboardReachable(): Promise<boolean> {
   return new Promise((resolve) => {
-    const http = require('http') as typeof import('http')
+    const http = nodeRequire('http') as typeof import('http')
     const req = http.get(`http://localhost:${DASHBOARD_PORT}`, (res) => {
       res.destroy()
       resolve(res.statusCode !== undefined)
@@ -146,7 +146,7 @@ async function isDashboardReachable(): Promise<boolean> {
 }
 
 async function launchDashboard(): Promise<void> {
-  const { spawn } = require('child_process') as typeof import('child_process')
+  const { spawn } = nodeRequire('child_process') as typeof import('child_process')
   const child = spawn('aiusage', ['serve'], {
     detached: true,
     stdio: 'ignore',
