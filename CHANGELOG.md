@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.1] - 2026-05-22
+
+- Add Node.js 18–24 compatibility and multi-version CI testing
+- Add `pnpm rebuild:sqlite` script for native module recompile after switching Node versions
+- Sync README (EN/ZH): Node version notes, rebuild docs, Hermes support
+- Add automated Star History daily refresh workflow
+- Add Release Patch workflow for one-click patch releases
+
+---
+
+
 ## [1.1.1] - 2026-05-21
 
 ### Fixed
