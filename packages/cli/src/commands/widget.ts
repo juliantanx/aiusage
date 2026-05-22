@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { spawn, execSync } from 'node:child_process'
 import { join } from 'node:path'
 import { AIUSAGE_DIR } from '../config.js'
@@ -26,10 +26,7 @@ export async function launchWidget(): Promise<void> {
   })
   child.unref()
 
-  if (child.pid) {
-    writeFileSync(WIDGET_PID_PATH, String(child.pid), { encoding: 'utf-8' })
-    console.log('aiusage widget started.')
-  }
+  console.log('aiusage widget started.')
 }
 
 function isWidgetRunning(): boolean {

@@ -37,6 +37,10 @@ app.on('window-all-closed', () => {
   // Keep the app running in the tray — do not quit
 })
 
+app.on('before-quit', () => {
+  db?.close()
+})
+
 function createTray(): void {
   // Use an empty icon as placeholder; production builds should use a real icon file
   const icon = nativeImage.createEmpty()
@@ -138,7 +142,7 @@ async function isDashboardReachable(): Promise<boolean> {
     const http = nodeRequire('http') as typeof import('http')
     const req = http.get(`http://localhost:${DASHBOARD_PORT}`, (res) => {
       res.destroy()
-      resolve(res.statusCode !== undefined)
+      resolve(res.statusCode !== undefined && res.statusCode < 500)
     })
     req.on('error', () => resolve(false))
     req.setTimeout(1000, () => { req.destroy(); resolve(false) })
