@@ -11,6 +11,7 @@ import { runReset } from './commands/reset.js'
 import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
 import { ProgressReporter } from './progress.js'
+import { launchWidget } from './commands/widget.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
@@ -271,6 +272,14 @@ program
       process.exit(1)
     }
     db.close()
+  })
+
+// widget command
+program
+  .command('widget')
+  .description('Start the system tray widget')
+  .action(async () => {
+    await launchWidget()
   })
 
 export { program }
