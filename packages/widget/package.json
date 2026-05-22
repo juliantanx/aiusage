@@ -8,7 +8,8 @@
     "aiusage-widget": "bin/launcher.js"
   },
   "scripts": {
-    "dev": "concurrently \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"wait-on dist/main.js && electron .\"",
+    "rebuild": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers --build-from-source'; execSync(cmd, {stdio:'inherit'})\"",
+    "dev": "pnpm run rebuild && concurrently \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"pnpm exec wait-on dist/main.js && pnpm exec electron .\"",
     "build": "vite build && tsc -p tsconfig.json",
     "pack": "pnpm build && electron-builder",
     "test": "vitest run"
