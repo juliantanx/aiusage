@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('widget', {
   openDashboard: () => ipcRenderer.invoke('widget:open-dashboard'),
   hideWindow: () => ipcRenderer.send('widget:hide-window'),
   onDataUpdate: (callback: (data: WidgetData) => void) => {
+    ipcRenderer.removeAllListeners('widget:data-update')
     ipcRenderer.on('widget:data-update', (_event, data) => callback(data))
   },
 } satisfies WidgetAPI)
