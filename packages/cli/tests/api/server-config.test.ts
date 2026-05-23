@@ -56,7 +56,7 @@ describe('GET /api/config', () => {
     expect(data.device).toBeNull()
     expect(data.retentionDays).toBeNull()
     expect(data.credentialKeys).toEqual([])
-    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null })
+    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null, hermes: null, qoder: null })
     expect(data.sync).toBeNull()
   })
 

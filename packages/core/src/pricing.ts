@@ -103,6 +103,15 @@ export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
   'ernie-4.5-300b':        { input: 0.28,  output: 0.9 },
   'ernie-4.5-21b':         { input: 0.07,  output: 0.28 },
   'ernie-x1':              { input: 0.28,  output: 1.1 },
+  // Qoder credits — https://docs.qoder.com/user-guide/chat/model-tier-selector
+  // Qoder publishes credit multipliers and a $0.02 / credit pack price, but
+  // not a full per-token tariff. Estimate 1.0x as 1 credit / 10K tokens.
+  // Ultimate uses the current official limited-time 0.8x discount.
+  'qoder-auto':            { input: 2.0,   output: 2.0,   cacheRead: 2.0,   cacheWrite: 2.0 },
+  'qoder-ultimate':        { input: 1.6,   output: 1.6,   cacheRead: 1.6,   cacheWrite: 1.6 },
+  'qoder-performance':     { input: 2.2,   output: 2.2,   cacheRead: 2.2,   cacheWrite: 2.2 },
+  'qoder-efficient':       { input: 0.6,   output: 0.6,   cacheRead: 0.6,   cacheWrite: 0.6 },
+  'qoder-lite':            { input: 0,     output: 0,     cacheRead: 0,     cacheWrite: 0 },
 }
 
 // Runtime-mutable price table (user overrides merge with defaults)

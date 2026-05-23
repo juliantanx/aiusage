@@ -34,6 +34,8 @@ export interface SourcesConfig {
   'opencode'?: string
   /** Custom path to Hermes state.db (default: ~/.hermes/state.db) */
   'hermes'?: string
+  /** Custom path to Qoder .qoder root or session logs dir (default: platform-specific logs/sessions candidates) */
+  'qoder'?: string
 }
 
 export interface Config {

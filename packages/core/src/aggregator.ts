@@ -3,6 +3,7 @@ import type { Parser } from './parsers/index.js'
 import { ClaudeCodeParser } from './parsers/claude-code.js'
 import { CodexParser } from './parsers/codex.js'
 import { OpenClawParser } from './parsers/openclaw.js'
+import { QoderParser } from './parsers/qoder.js'
 
 export interface CreateContextOptions {
   tool: Tool
@@ -23,6 +24,7 @@ export class Aggregator {
       ['claude-code', new ClaudeCodeParser()],
       ['codex', new CodexParser()],
       ['openclaw', new OpenClawParser()],
+      ['qoder', new QoderParser()],
     ])
   }
 

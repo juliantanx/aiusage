@@ -154,6 +154,7 @@ describe('WatermarkManager - HermesCursor', () => {
     }))
     const wm = new WatermarkManager(watermarkPath)
     expect(wm.getHermesCursor()).toBeNull()
+    expect(() => wm.setEntry('qoder', '/some/path/qodercli.log', { offset: 0, size: 0, mtime: 0 })).not.toThrow()
   })
 
   it('hermes key included in defaultFileData', () => {

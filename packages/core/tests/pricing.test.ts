@@ -29,6 +29,9 @@ describe('PRICE_TABLE', () => {
     expect(PRICE_TABLE).toHaveProperty('hunyuan-t1')
     // ERNIE (Baidu)
     expect(PRICE_TABLE).toHaveProperty('ernie-4.5-300b')
+    // Qoder tiers
+    expect(PRICE_TABLE).toHaveProperty('qoder-ultimate')
+    expect(PRICE_TABLE).toHaveProperty('qoder-efficient')
   })
 
   it('has correct price structure', () => {
@@ -112,6 +115,28 @@ describe('calculateCost', () => {
     })
     // (1000/1M * 10) - uses output price for thinking
     expect(cost).toBeCloseTo(0.01, 6)
+  })
+
+  it('calculates qoder tier cost estimates', () => {
+    const cost = calculateCost('qoder-ultimate', {
+      inputTokens: 1000000,
+      outputTokens: 500000,
+      cacheReadTokens: 250000,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+    })
+    expect(cost).toBeCloseTo(2.8, 6)
+  })
+
+  it('does not treat bare qoder tier names as global model aliases', () => {
+    const cost = calculateCost('ultimate', {
+      inputTokens: 1000000,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+    })
+    expect(cost).toBe(0)
   })
 })
 

@@ -1,4 +1,4 @@
-export type Tool = 'claude-code' | 'codex' | 'openclaw' | 'opencode' | 'hermes'
+export type Tool = 'claude-code' | 'codex' | 'openclaw' | 'opencode' | 'hermes' | 'qoder'
 
 export interface StatsRecord {
   id: string                           // sha256(sourceFile + lineOffset) 前 16 位 hex

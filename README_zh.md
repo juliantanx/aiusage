@@ -1,6 +1,6 @@
 # aiusage
 
-在一个地方追踪 Claude Code、Codex、OpenClaw、OpenCode 和 Hermes 的 AI 编程助手使用情况，包括 token 消耗、费用和工具调用。
+在一个地方追踪 Claude Code、Codex、OpenClaw、OpenCode、Hermes 和 Qoder 的 AI 编程助手使用情况，包括 token 消耗、费用和工具调用。
 
 [English](https://github.com/juliantanx/aiusage/blob/main/README.md) | 中文
 
@@ -132,7 +132,7 @@ aiusage serve
 
 ### 多机同步
 
-适合把多台机器上的 Claude Code、Codex、OpenClaw、OpenCode、Hermes 使用数据聚合到同一个仪表盘中。
+适合把多台机器上的 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder 使用数据聚合到同一个仪表盘中。
 
 **架构：**
 
@@ -157,7 +157,7 @@ aiusage serve
 
 **第二步 — 在每台机器上安装并配置**
 
-在每一台使用 Claude Code、Codex、OpenClaw、OpenCode 或 Hermes 的机器上执行：
+在每一台使用 Claude Code、Codex、OpenClaw、OpenCode、Hermes 或 Qoder 的机器上执行：
 
 ```bash
 # 安装 aiusage CLI
@@ -333,6 +333,7 @@ docker build -t aiusage .
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
 | Hermes | `~/.hermes/state.db` | `~/.hermes/state.db` | `%USERPROFILE%\.hermes\state.db` |
+| Qoder | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/`，以及 WSL 挂载的 Windows 用户目录 | `%USERPROFILE%\.qoder\logs\sessions\` |
 
 发现行为：
 
@@ -341,8 +342,11 @@ docker build -t aiusage .
 - **OpenClaw** — 扫描 `~/.openclaw/agents/*/sessions/` 下各 agent 的 `sessions/` 目录，并跳过 checkpoint 文件。
 - **OpenCode** — 直接读取 SQLite 数据库文件，而不是 `.jsonl` 日志。
 - **Hermes** — 直接读取 SQLite 数据库文件（`state.db`）。没有记录结束时间的会话，只要有 token 数据也会被导入（例如强制退出的会话）。
+- **Qoder** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
+
+Qoder 桌面端还会在 `Program Files` 下写入安装文件，在 `AppData/Roaming/Qoder`、`AppData/Local/.qoder` 下写入界面状态和缓存，在 `%USERPROFILE%\.qoder\projects` 或 `%USERPROFILE%\.qoder\cache` 下写入 transcript/conversation-history。这些不会作为 token 记录导入：桌面端 `Context usage update` 日志是会话上下文窗口的重复快照，transcript/conversation-history 文件也不包含每次模型请求的 token usage。
 
 ### 自定义来源路径
 
@@ -355,12 +359,13 @@ docker build -t aiusage .
     "codex": "/自定义路径/.codex/sessions",
     "openclaw": "/自定义/sessions目录",
     "opencode": "/自定义路径/opencode.db",
-    "hermes": "/自定义路径/.hermes/state.db"
+    "hermes": "/自定义路径/.hermes/state.db",
+    "qoder": "/自定义路径/.qoder"
   }
 }
 ```
 
-只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。
+只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。Qoder 的自定义路径既可以指向 `.qoder` 根目录，也可以直接指向 `logs/sessions`。
 
 ## 数据库可视化查看
 

@@ -13,6 +13,7 @@ export const MODEL_PROVIDER_MAP: [string, string][] = [
   ['kimi-',     'moonshot'],
   ['qianfan-',  'baidu'],
   ['qwen',      'alibaba'],
+  ['qoder-',    'qoder'],
   ['z-ai/',     'zhipu'],
   ['accounts/fireworks/', 'fireworks'],
   ['frank/',    'zhipu'],

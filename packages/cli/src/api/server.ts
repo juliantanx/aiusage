@@ -1,7 +1,7 @@
 import http from 'node:http'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
-import { getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice } from '@aiusage/core'
+import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
@@ -132,7 +132,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
     // Validate tool parameter early — same style as range validation
     const toolParam = url.searchParams.get('tool')
-    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes']
+    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder']
     if (toolParam && !VALID_TOOLS.includes(toolParam)) {
       json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid tool' } }, 400)
       return
@@ -707,27 +707,33 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/pricing/recalc ─────────────────────────────────────────
       if (url.pathname === '/api/pricing/recalc' && req.method === 'POST') {
-        const { resolvePrice } = await import('@aiusage/core')
         const BATCH_SIZE = 1000
         let updated = 0
         let lastId = ''
         while (true) {
           const records = db.prepare(
-            'SELECT id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens FROM records WHERE id > ? ORDER BY id LIMIT ?'
+            'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
           ).all(lastId, BATCH_SIZE) as any[]
           if (records.length === 0) break
-          const updateStmt = db.prepare('UPDATE records SET cost = ?, cost_source = ? WHERE id = ?')
+          const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
           const tx = db.transaction((batch: any[]) => {
             for (const r of batch) {
-              const price = resolvePrice(r.model)
-              if (!price) continue
-              const cost =
-                (r.input_tokens / 1e6) * price.input +
-                (r.output_tokens / 1e6) * price.output +
-                (r.cache_read_tokens / 1e6) * (price.cacheRead ?? 0) +
-                (r.cache_write_tokens / 1e6) * (price.cacheWrite ?? 0) +
-                (r.thinking_tokens / 1e6) * (price.thinking ?? price.output)
-              updateStmt.run(cost, 'pricing', r.id)
+              if (r.cost_source === 'log') continue
+
+              const model = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
+              const provider = model !== r.model ? inferProvider(model) : r.provider
+              const hasPrice = resolvePrice(model) != null
+              const cost = hasPrice ? calculateCost(model, {
+                inputTokens: r.input_tokens,
+                outputTokens: r.output_tokens,
+                cacheReadTokens: r.cache_read_tokens,
+                cacheWriteTokens: r.cache_write_tokens,
+                thinkingTokens: r.thinking_tokens,
+              }) : 0
+              const costSource = hasPrice ? 'pricing' : 'unknown'
+
+              if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
+              updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)
               updated++
             }
           })
@@ -881,6 +887,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               codex: rest.sources?.codex ?? null,
               openclaw: rest.sources?.openclaw ?? null,
               opencode: rest.sources?.opencode ?? null,
+              hermes: rest.sources?.hermes ?? null,
+              qoder: rest.sources?.qoder ?? null,
             },
             sync: rest.sync ?? null,
             credentialKeys: credentials ? Object.keys(credentials) : [],
@@ -924,7 +932,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (update.sources && typeof update.sources === 'object') {
               const src = update.sources as Record<string, unknown>
               const s: SourcesConfig = existing.sources ?? {}
-              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode'] as const) {
+              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder'] as const) {
                 if (key in src) {
                   if (!src[key]) delete s[key]
                   else s[key] = String(src[key])

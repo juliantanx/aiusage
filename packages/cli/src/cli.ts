@@ -63,7 +63,7 @@ program
   .option('--from <date>', 'Start date (YYYY-MM-DD)')
   .option('--to <date>', 'End date (YYYY-MM-DD)')
   .option('--device <id>', 'Filter by device instance ID')
-  .option('--tool <tool>', 'Filter by tool type (claude-code|codex|openclaw|opencode|hermes)')
+  .option('--tool <tool>', 'Filter by tool type (claude-code|codex|openclaw|opencode|hermes|qoder)')
   .action((options) => {
     const db = createDatabase(DB_PATH)
     const state = getState(AIUSAGE_DIR)
@@ -140,7 +140,7 @@ program
 program
   .command('parse')
   .description('Parse AI tool session logs')
-  .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw|opencode|hermes)')
+  .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw|opencode|hermes|qoder)')
   .action(async (options) => {
     const db = createDatabase(DB_PATH)
     try {

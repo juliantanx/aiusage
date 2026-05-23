@@ -45,4 +45,23 @@ describe('Recalc Command', () => {
     const result = recalcPricing(db)
     expect(result.skippedCount).toBe(1)
   })
+
+  it('normalizes legacy qoder tier models and recalculates cost', () => {
+    insertRecord(db, {
+      id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
+      lineOffset: 100, tool: 'qoder', model: 'ultimate', provider: 'unknown',
+      inputTokens: 1000000, outputTokens: 500000, cacheReadTokens: 250000, cacheWriteTokens: 0,
+      thinkingTokens: 0, cost: 0, costSource: 'pricing', sessionId: 's1',
+      sourceFile: '/f1', device: 'd1', deviceInstanceId: 'di1',
+    })
+
+    const result = recalcPricing(db)
+    expect(result.updatedCount).toBe(1)
+
+    const record = db.prepare('SELECT * FROM records WHERE id = ?').get('r1') as any
+    expect(record.model).toBe('qoder-ultimate')
+    expect(record.provider).toBe('qoder')
+    expect(record.cost_source).toBe('pricing')
+    expect(record.cost).toBeGreaterThan(0)
+  })
 })

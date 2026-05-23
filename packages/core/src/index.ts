@@ -1,6 +1,7 @@
 export * from './types.js'
 export * from './provider.js'
 export * from './pricing.js'
+export * from './qoder-model.js'
 export * from './record-id.js'
 export * from './parsers/index.js'
 export * from './aggregator.js'
