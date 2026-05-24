@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.js'
   import { fetchConfig, saveConfig, fetchCredential, notifySettingsUpdated } from '$lib/api.js'
+  import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let loading = true
   let loadError = null
@@ -42,11 +43,16 @@
   let dataSection = { retentionDays: '' }
   let effectiveDeviceName = ''
 
+  // Currency settings
+  let currency = { displayCurrency: 'USD', exchangeRate: '' }
+  let cachedRate = 0.137
+
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
   let sourcesSaving = false; let sourcesError = ''; let sourcesSaved = false
   let syncSaving = false;    let syncError = '';    let syncSaved = false
   let dataSaving = false;    let dataError = '';    let dataSaved = false
+  let currencySaving = false; let currencyError = ''; let currencySaved = false
 
   // Credential key derivation — must match sync.ts createBackend()
   function ghKey(repo)    { return `github/${repo}/token` }
@@ -123,6 +129,11 @@
 
       dataSection = { retentionDays: cfg.retentionDays != null ? String(cfg.retentionDays) : '' }
       effectiveDeviceName = cfg.device || currentHostname || 'hostname'
+
+      // Load currency settings
+      currency.displayCurrency = cfg.displayCurrency || 'USD'
+      currency.exchangeRate = cfg.exchangeRate != null ? String(cfg.exchangeRate) : ''
+      if (cfg.exchangeRateCache?.CNY_USD) cachedRate = cfg.exchangeRateCache.CNY_USD
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -237,6 +248,27 @@
       dataError = e instanceof Error ? e.message : 'Save failed'
     } finally {
       dataSaving = false
+    }
+  }
+
+  async function saveCurrency() {
+    currencySaving = true; currencyError = ''
+    try {
+      await saveConfig({
+        displayCurrency: currency.displayCurrency,
+        exchangeRate: currency.exchangeRate ? Number(currency.exchangeRate) : null,
+      })
+      // Update global stores immediately
+      displayCurrency.set(currency.displayCurrency)
+      if (currency.exchangeRate) {
+        exchangeRate.set(Number(currency.exchangeRate))
+      }
+      currencySaved = true
+      setTimeout(() => { currencySaved = false }, 2000)
+    } catch (e) {
+      currencyError = e instanceof Error ? e.message : 'Save failed'
+    } finally {
+      currencySaving = false
     }
   }
 
@@ -485,6 +517,33 @@
       <div class="section-footer">
         <button class="btn-save" class:saved={dataSaved} on:click={saveData} disabled={dataSaving}>
           {btnLabel(dataSaving, dataSaved, $t('settings.save'), $t('settings.saved'))}
+        </button>
+      </div>
+    </div>
+
+    <!-- Currency -->
+    <div class="card">
+      <div class="group-title">Currency</div>
+      <div class="fields">
+        <div class="field">
+          <label class="field-label" for="field-display-currency">Display Currency</label>
+          <select id="field-display-currency" bind:value={currency.displayCurrency} class="field-input">
+            <option value="USD">USD ($)</option>
+            <option value="CNY">CNY (¥)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="field-exchange-rate">Exchange Rate Override (CNY → USD)</label>
+          <input id="field-exchange-rate" type="number" step="0.001" min="0"
+            bind:value={currency.exchangeRate} class="field-input"
+            placeholder="Auto: {cachedRate}" />
+          <div class="field-hint">Leave empty to use auto-fetched rate</div>
+        </div>
+      </div>
+      {#if currencyError}<p class="section-error">{currencyError}</p>{/if}
+      <div class="section-footer">
+        <button class="btn-save" class:saved={currencySaved} on:click={saveCurrency} disabled={currencySaving}>
+          {btnLabel(currencySaving, currencySaved, $t('settings.save'), $t('settings.saved'))}
         </button>
       </div>
     </div>
