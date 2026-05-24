@@ -25,8 +25,11 @@
     }
   }
 
+  let editingCurrency = null
+
   function startEdit(m) {
     editingModel = m.model
+    editingCurrency = m.currency || 'USD'
     editValues = {
       input: m.price?.input ?? 0,
       output: m.price?.output ?? 0,
@@ -36,7 +39,7 @@
     }
   }
 
-  function cancelEdit() { editingModel = null; editValues = {} }
+  function cancelEdit() { editingModel = null; editingCurrency = null; editValues = {} }
 
   async function saveEdit(name) {
     try {
@@ -95,21 +98,26 @@
         {#if editing}
           <div class="card-head">
             <span class="model-name mono">{m.model}</span>
+            {#if editingCurrency === 'CNY'}
+              <span class="badge cny">CNY (¥)</span>
+            {:else}
+              <span class="badge default">USD ($)</span>
+            {/if}
           </div>
           <div class="edit-fields">
-            <label>{$t('pricing.input')}
+            <label>{$t('pricing.input')} ({editingCurrency === 'CNY' ? '¥' : '$'}/1M)
               <input type="number" step="0.01" bind:value={editValues.input} class="edit-input" />
             </label>
-            <label>{$t('pricing.output')}
+            <label>{$t('pricing.output')} ({editingCurrency === 'CNY' ? '¥' : '$'}/1M)
               <input type="number" step="0.01" bind:value={editValues.output} class="edit-input" />
             </label>
-            <label>{$t('pricing.cacheRead')}
+            <label>{$t('pricing.cacheRead')} ({editingCurrency === 'CNY' ? '¥' : '$'}/1M)
               <input type="number" step="0.01" bind:value={editValues.cacheRead} class="edit-input" />
             </label>
-            <label>{$t('pricing.cacheWrite')}
+            <label>{$t('pricing.cacheWrite')} ({editingCurrency === 'CNY' ? '¥' : '$'}/1M)
               <input type="number" step="0.01" bind:value={editValues.cacheWrite} class="edit-input" />
             </label>
-            <label>{$t('pricing.thinking')}
+            <label>{$t('pricing.thinking')} ({editingCurrency === 'CNY' ? '¥' : '$'}/1M)
               <input type="number" step="0.01" bind:value={editValues.thinking} class="edit-input" />
             </label>
           </div>
@@ -131,27 +139,27 @@
           <div class="price-row">
             <div class="price-block primary">
               <span class="price-label">{$t('pricing.input')}</span>
-              <span class="price-val">{m.price ? fmt(m.price.input) : '-'}</span>
+              <span class="price-val">{m.price ? `${m.currency === 'CNY' ? '¥' : '$'}${fmt(m.price.input)}` : '-'}</span>
             </div>
             <span class="slash">/</span>
             <div class="price-block primary">
               <span class="price-label">{$t('pricing.output')}</span>
-              <span class="price-val">{m.price ? fmt(m.price.output) : '-'}</span>
+              <span class="price-val">{m.price ? `${m.currency === 'CNY' ? '¥' : '$'}${fmt(m.price.output)}` : '-'}</span>
             </div>
           </div>
 
           <div class="price-row secondary">
             <div class="price-block">
               <span class="price-label">{$t('pricing.cacheRead')}</span>
-              <span class="price-val sm">{m.price?.cacheRead != null ? fmt(m.price.cacheRead) : '-'}</span>
+              <span class="price-val sm">{m.price?.cacheRead != null ? `${m.currency === 'CNY' ? '¥' : '$'}${fmt(m.price.cacheRead)}` : '-'}</span>
             </div>
             <div class="price-block">
               <span class="price-label">{$t('pricing.cacheWrite')}</span>
-              <span class="price-val sm">{m.price?.cacheWrite != null ? fmt(m.price.cacheWrite) : '-'}</span>
+              <span class="price-val sm">{m.price?.cacheWrite != null ? `${m.currency === 'CNY' ? '¥' : '$'}${fmt(m.price.cacheWrite)}` : '-'}</span>
             </div>
             <div class="price-block">
               <span class="price-label">{$t('pricing.thinking')}</span>
-              <span class="price-val sm">{m.price?.thinking != null ? fmt(m.price.thinking) : '-'}</span>
+              <span class="price-val sm">{m.price?.thinking != null ? `${m.currency === 'CNY' ? '¥' : '$'}${fmt(m.price.thinking)}` : '-'}</span>
             </div>
           </div>
 
@@ -164,6 +172,9 @@
               <span class="badge matched">{m.matchedBy}</span>
             {:else}
               <span class="badge no-price">{$t('pricing.noPrice')}</span>
+            {/if}
+            {#if m.currency === 'CNY'}
+              <span class="badge cny">CNY</span>
             {/if}
           </div>
         {/if}
@@ -310,6 +321,7 @@
   .badge.override { background: var(--badge-override-bg); color: var(--badge-override-fg); }
   .badge.matched { background: var(--badge-matched-bg); color: var(--badge-matched-fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .badge.no-price { background: var(--badge-noprice-bg); color: var(--badge-noprice-fg); }
+  .badge.cny { background: var(--purple-dim); color: var(--purple); }
 
   .btn-sm {
     font-family: var(--mono);
