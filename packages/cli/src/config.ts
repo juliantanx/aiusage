@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { ConsentConfig } from './sync/consent.js'
-import type { PriceEntry } from '@aiusage/core'
+import type { PriceEntry, ExchangeRateCache } from '@aiusage/core'
 
 export const AIUSAGE_DIR = join(homedir(), '.aiusage')
 export const CONFIG_PATH = join(AIUSAGE_DIR, 'config.json')
@@ -51,6 +51,12 @@ export interface Config {
   sources?: SourcesConfig
   /** First day of week: 0 = Sunday (Western), 1 = Monday (ISO/Chinese). Defaults to 1. */
   weekStart?: 0 | 1
+  /** Display currency for the web UI: 'USD' (default) or 'CNY' */
+  displayCurrency?: 'USD' | 'CNY'
+  /** Manual exchange rate override (CNY → USD multiplier) */
+  exchangeRate?: number
+  /** Auto-fetched exchange rate cache */
+  exchangeRateCache?: ExchangeRateCache
 }
 
 export function loadConfig(): Config | null {

@@ -7,10 +7,10 @@ import { runParse } from './parse.js'
 import { runSync } from './sync.js'
 import { cleanOldData } from './clean.js'
 import { getState } from '../init.js'
-import { AIUSAGE_DIR, loadConfig } from '../config.js'
+import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
 import { RuntimeSettingsController } from '../runtime/settings-controller.js'
-import { setPriceOverride } from '@aiusage/core'
+import { setPriceOverride, resolveExchangeRate, fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
@@ -39,6 +39,24 @@ export function serve(options: ServeOptions): void {
   if (config?.priceOverrides) {
     for (const [model, entry] of Object.entries(config.priceOverrides)) {
       setPriceOverride(model, entry)
+    }
+  }
+
+  // Initialize exchange rate: fetch if cache missing or expired (non-blocking)
+  if (config == null || config.exchangeRate == null) {
+    const cacheAge = config?.exchangeRateCache
+      ? Date.now() - config.exchangeRateCache.fetchedAt
+      : Infinity
+    if (cacheAge >= CACHE_TTL_MS) {
+      fetchExchangeRate().then(rate => {
+        if (rate != null) {
+          const cfg = loadConfig() ?? {}
+          cfg.exchangeRateCache = { CNY_USD: rate, fetchedAt: Date.now() }
+          saveConfig(cfg)
+        }
+      }).catch(() => {
+        // Silently ignore — FALLBACK_RATE will be used
+      })
     }
   }
 
