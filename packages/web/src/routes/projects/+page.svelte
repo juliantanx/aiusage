@@ -53,7 +53,7 @@
 {:else}
   <div class="ranking">
     {#each data.projects as proj, i}
-      <div class="row" style="animation-delay: {i * 35}ms">
+      <div class="row animate-row">
         <span class="rank mono">#{i + 1}</span>
         <span class="name mono" title={proj.name}>{proj.name}</span>
         <div class="bar-container">
@@ -79,15 +79,12 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.65rem 0.85rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
+    background: var(--surface);
     border-radius: 8px;
-    transition: border-color 0.15s, background 0.15s;
-    animation: fadeUp 0.3s ease both;
+    transition: background 0.15s;
   }
   .row:hover {
-    border-color: var(--border-medium);
-    background: var(--bg-raised);
+    background: var(--hover);
   }
   .rank {
     color: var(--text-muted);
@@ -96,14 +93,14 @@
   .name {
     font-weight: 600;
     font-size: 0.85rem;
-    color: var(--text-primary);
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .bar-container {
     height: 6px;
-    background: var(--bg-raised);
+    background: var(--raised);
     border-radius: 3px;
     overflow: hidden;
   }
@@ -112,13 +109,12 @@
     background: var(--accent);
     border-radius: 3px;
     transition: width 0.6s ease;
-    box-shadow: 0 0 6px var(--accent-dim);
   }
   .tokens {
     text-align: right;
     font-size: 0.8rem;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text);
   }
   .cost {
     text-align: right;
@@ -130,8 +126,12 @@
     font-size: 0.75rem;
   }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+  .animate-row {
+    animation: fadeIn 0.2s ease both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>

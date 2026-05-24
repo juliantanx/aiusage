@@ -162,12 +162,12 @@
         {#each data.data as day}
           <tr>
             <td class="mono">{day.date}</td>
-            <td class="mono green">{formatTokens(day.inputTokens)}</td>
-            <td class="mono blue">{formatTokens(day.outputTokens)}</td>
-            <td class="mono cache-color">{formatTokens(day.cacheReadTokens || 0)}</td>
-            <td class="mono cache-color">{formatTokens(day.cacheWriteTokens || 0)}</td>
-            <td class="mono" style="color:var(--purple)">{formatTokens(day.thinkingTokens || 0)}</td>
-            <td class="mono" style="color:var(--text-primary); font-weight:600">
+            <td class="mono" style="color:var(--chart-input)">{formatTokens(day.inputTokens)}</td>
+            <td class="mono" style="color:var(--chart-output)">{formatTokens(day.outputTokens)}</td>
+            <td class="mono" style="color:var(--chart-cache-read)">{formatTokens(day.cacheReadTokens || 0)}</td>
+            <td class="mono" style="color:var(--chart-cache-write)">{formatTokens(day.cacheWriteTokens || 0)}</td>
+            <td class="mono" style="color:var(--chart-thinking)">{formatTokens(day.thinkingTokens || 0)}</td>
+            <td class="mono" style="color:var(--text); font-weight:600">
               {formatTokens(getTotal(day))}
             </td>
           </tr>
@@ -193,8 +193,7 @@
   .mode-toggle {
     display: flex;
     gap: 2px;
-    background: var(--bg-raised);
-    border: 1px solid var(--border-subtle);
+    background: var(--raised);
     border-radius: 6px;
     padding: 2px;
   }
@@ -215,9 +214,8 @@
     color: var(--text-secondary);
   }
   .mode-btn.active {
-    background: var(--bg-surface);
-    color: var(--text-primary);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    background: var(--surface);
+    color: var(--text);
   }
   .chart {
     display: flex;
@@ -235,7 +233,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    animation: fadeUp 0.3s ease both;
+    animation: fade 0.2s ease both;
   }
   .bars {
     display: flex;
@@ -248,13 +246,12 @@
     border-radius: 2px 2px 0 0;
     transition: height 0.4s ease;
   }
-  .bar.input { background: var(--green); }
-  .bar.output { background: var(--blue); }
-  .bar.cache-read { background: #d4a574; }
-  .bar.cache-write { background: #a0845e; }
-  .bar.thinking { background: var(--purple); }
-  .bar.total-bar { background: var(--accent); width: 14px; }
-  .cache-color { color: #d4a574; }
+  .bar.input { background: var(--chart-input); }
+  .bar.output { background: var(--chart-output); }
+  .bar.cache-read { background: var(--chart-cache-read); }
+  .bar.cache-write { background: var(--chart-cache-write); }
+  .bar.thinking { background: var(--chart-thinking); }
+  .bar.total-bar { background: var(--chart-total); width: 14px; }
   .label {
     font-family: var(--mono);
     font-size: 0.6rem;
@@ -279,15 +276,15 @@
     height: 8px;
     border-radius: 2px;
   }
-  .dot.input { background: var(--green); }
-  .dot.output { background: var(--blue); }
-  .dot.cache-read { background: #d4a574; }
-  .dot.cache-write { background: #a0845e; }
-  .dot.thinking { background: var(--purple); }
-  .dot.total-bar { background: var(--accent); }
+  .dot.input { background: var(--chart-input); }
+  .dot.output { background: var(--chart-output); }
+  .dot.cache-read { background: var(--chart-cache-read); }
+  .dot.cache-write { background: var(--chart-cache-write); }
+  .dot.thinking { background: var(--chart-thinking); }
+  .dot.total-bar { background: var(--chart-total); }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>

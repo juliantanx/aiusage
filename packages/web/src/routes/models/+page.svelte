@@ -63,8 +63,8 @@
         </tr>
       </thead>
       <tbody>
-        {#each data.models as model, i}
-          <tr style="animation-delay: {i * 40}ms" class="animate-row">
+        {#each data.models as model}
+          <tr class="animate-row">
             <td class="mono model-name">{model.model}</td>
             <td style="color: var(--text-muted)">{model.provider}</td>
             <td class="mono">{formatNumber(model.callCount)}</td>
@@ -87,7 +87,7 @@
 <style>
   .model-name {
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text);
   }
   .bar-cell {
     display: flex;
@@ -97,7 +97,7 @@
   .bar-track {
     flex: 1;
     height: 6px;
-    background: var(--bg-raised);
+    background: var(--raised);
     border-radius: 3px;
     overflow: hidden;
     max-width: 120px;
@@ -107,7 +107,6 @@
     background: var(--accent);
     border-radius: 3px;
     transition: width 0.6s ease;
-    box-shadow: 0 0 6px var(--accent-dim);
   }
   .pct {
     font-size: 0.75rem;
@@ -117,11 +116,11 @@
   }
 
   .animate-row {
-    animation: fadeUp 0.3s ease both;
+    animation: fadeIn 0.2s ease both;
   }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>

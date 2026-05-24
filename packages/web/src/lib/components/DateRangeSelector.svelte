@@ -130,18 +130,18 @@
   button {
     padding: 0.4rem 0.75rem;
     border: 1px solid var(--border-subtle);
-    background: var(--bg-raised);
+    background: transparent;
     color: var(--text-secondary);
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.78rem;
     font-weight: 500;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     white-space: nowrap;
   }
   button:hover {
     border-color: var(--border-medium);
-    color: var(--text-primary);
+    color: var(--text);
   }
   button.active {
     background: var(--accent-dim);
@@ -164,11 +164,12 @@
     border-radius: 6px;
     font-family: var(--mono);
     font-size: 0.78rem;
-    background: var(--bg-raised);
+    background: var(--raised);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     appearance: auto;
+    height: 32px;
   }
   .month-select:focus {
     outline: none;
@@ -189,7 +190,7 @@
     gap: 0.35rem;
     align-items: center;
     margin-left: 0.15rem;
-    animation: fadeUp 0.2s ease;
+    animation: fadeIn 0.2s ease;
   }
   .arrow {
     color: var(--text-muted);
@@ -201,9 +202,9 @@
     border-radius: 6px;
     font-size: 0.78rem;
     font-family: var(--mono);
-    background: var(--bg-raised);
+    background: var(--raised);
     color: var(--text-secondary);
-    color-scheme: dark;
+    height: 32px;
   }
   input:focus {
     outline: none;
@@ -215,8 +216,8 @@
     color: var(--accent);
   }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>

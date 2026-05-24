@@ -723,7 +723,7 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     overflow-y: auto;
     scrollbar-width: thin;
   }
-  /* On mobile (≤800px) the sticky header is ~52px tall; add clearance */
+  /* On mobile (<=800px) the sticky header is ~52px tall; add clearance */
   @media (max-width: 800px) and (min-width: 701px) {
     .toc {
       top: 4.5rem;
@@ -733,9 +733,9 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
 
   .toc-header {
     font-family: var(--mono);
-    font-size: 0.58rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
+    font-size: 0.625rem;
+    font-weight: 550;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 0.6rem;
@@ -754,19 +754,17 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     font-size: 0.78rem;
     color: var(--text-secondary);
     padding: 0.28rem 0.6rem;
-    border-left: 2px solid transparent;
-    border-radius: 0 4px 4px 0;
+    border-radius: 4px;
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s, background 0.12s;
+    transition: color 0.2s, background 0.2s;
     text-decoration: none;
   }
   .toc-item:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
+    color: var(--text);
+    background: var(--hover);
   }
   .toc-item.active {
     color: var(--accent);
-    border-left-color: var(--accent);
     background: var(--accent-dim);
     font-weight: 600;
   }
@@ -792,7 +790,7 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     font-family: var(--mono);
     font-size: 1rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text);
     letter-spacing: -0.02em;
     margin-bottom: 0.9rem;
     padding-bottom: 0.6rem;
@@ -801,10 +799,10 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
 
   section h3 {
     font-family: var(--mono);
-    font-size: 0.78rem;
-    font-weight: 700;
+    font-size: 0.625rem;
+    font-weight: 550;
     color: var(--text-secondary);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.06em;
     margin: 1.2rem 0 0.5rem;
     text-transform: uppercase;
   }
@@ -829,24 +827,23 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
   }
 
   section strong {
-    color: var(--text-primary);
+    color: var(--text);
     font-weight: 600;
   }
 
   section code {
     font-family: var(--mono);
     font-size: 0.78rem;
-    background: var(--bg-raised);
-    border: 1px solid var(--border-subtle);
+    background: var(--raised);
     border-radius: 4px;
     padding: 0.1em 0.4em;
     color: var(--accent);
   }
 
   pre {
-    background: var(--bg-raised);
-    border: 1px solid var(--border-medium);
-    border-radius: 8px;
+    background: var(--raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
     padding: 1rem 1.1rem;
     overflow-x: auto;
     margin: 0.75rem 0;
@@ -856,7 +853,7 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     border: none;
     padding: 0;
     font-size: 0.8rem;
-    color: var(--text-primary);
+    color: var(--text);
   }
 
   /* ── Callouts ─────────────────────────────────────────────────────────── */
@@ -869,7 +866,9 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     margin: 1rem 0;
     font-size: 0.84rem;
     line-height: 1.55;
-    border: 1px solid;
+    border: none;
+    border-left: 3px solid;
+    background: var(--raised);
   }
   .callout-icon {
     font-size: 0.8rem;
@@ -877,18 +876,15 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     margin-top: 0.08rem;
   }
   .callout.info {
-    background: var(--blue-dim);
-    border-color: rgba(59,130,246,0.25);
+    border-left-color: var(--blue);
     color: var(--blue);
   }
   .callout.tip {
-    background: var(--accent-dim);
-    border-color: var(--accent-glow);
+    border-left-color: var(--accent);
     color: var(--accent);
   }
   .callout.warn {
-    background: var(--rose-dim);
-    border-color: rgba(244,63,94,0.25);
+    border-left-color: var(--rose);
     color: var(--rose);
   }
 
@@ -901,15 +897,15 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
   }
   .docs-table th {
     font-family: var(--mono);
-    font-size: 0.6rem;
-    font-weight: 700;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
     text-align: left;
     padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--border-medium);
-    background: var(--bg-raised);
+    background: var(--raised);
   }
   .docs-table td {
     padding: 0.55rem 0.75rem;
@@ -918,12 +914,12 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     vertical-align: top;
   }
   .docs-table tr:hover td {
-    background: var(--bg-hover);
+    background: var(--hover);
   }
   .docs-table td:first-child {
     font-family: var(--mono);
     font-size: 0.78rem;
-    color: var(--text-primary);
+    color: var(--text);
     white-space: nowrap;
   }
 
@@ -943,10 +939,10 @@ aiusage serve -p 8080     # Start on port 8080</code></pre>
     .toc-item {
       border: 1px solid var(--border-subtle);
       border-radius: 4px;
-      border-left-width: 1px;
     }
     .toc-item.active {
       border-color: var(--accent);
+      background: var(--accent-dim);
     }
   }
 </style>

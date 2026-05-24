@@ -71,7 +71,7 @@
     <p>{$t('cost.noDataHint')}</p>
   </div>
 {:else}
-  <div class="hero-card accent">
+  <div class="hero-card">
     <span class="hero-label">{$t('cost.totalCost')}</span>
     <span class="hero-value">{formatCost(getTotalCost())}</span>
   </div>
@@ -120,19 +120,17 @@
     display: inline-flex;
     flex-direction: column;
     gap: 0.25rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--accent-dim);
-    border-radius: 10px;
+    background: var(--surface);
+    border-radius: 8px;
     padding: 1.25rem 2rem;
     margin-bottom: 1.5rem;
-    background: linear-gradient(135deg, var(--bg-surface), var(--accent-dim));
   }
   .hero-label {
     font-family: var(--mono);
-    font-size: 0.65rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
   }
   .hero-value {
@@ -140,7 +138,6 @@
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--accent);
-    text-shadow: 0 0 20px var(--accent-glow);
   }
 
   .chart-section {
@@ -160,7 +157,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    animation: fadeUp 0.3s ease both;
+    animation: fade 0.2s ease both;
   }
   .bar {
     width: 14px;
@@ -168,7 +165,6 @@
     background: var(--accent);
     border-radius: 2px 2px 0 0;
     transition: height 0.4s ease;
-    box-shadow: 0 0 8px var(--accent-dim);
   }
   .label {
     font-family: var(--mono);
@@ -194,9 +190,9 @@
     border-bottom: none;
   }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   @media (max-width: 768px) {

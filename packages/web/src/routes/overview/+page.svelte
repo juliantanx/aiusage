@@ -65,7 +65,7 @@
       <span class="hero-label">{$t('overview.totalTokens')}</span>
       <span class="hero-value">{formatTokens(data.totalTokens)}</span>
     </div>
-    <div class="hero-card accent">
+    <div class="hero-card">
       <span class="hero-label">{$t('overview.totalCost')}</span>
       <span class="hero-value">{formatCost(data.totalCost)}</span>
     </div>
@@ -88,11 +88,11 @@
       <span class="token-label">{$t('overview.outputTokens')}</span>
       <span class="token-value">{formatTokens(data.outputTokens)}</span>
     </div>
-    <div class="token-item cache">
+    <div class="token-item">
       <span class="token-label">{$t('overview.cacheRead')}</span>
       <span class="token-value">{formatTokens(data.cacheReadTokens)}</span>
     </div>
-    <div class="token-item cache">
+    <div class="token-item">
       <span class="token-label">{$t('overview.cacheWrite')}</span>
       <span class="token-value">{formatTokens(data.cacheWriteTokens)}</span>
     </div>
@@ -152,41 +152,31 @@
     margin-bottom: 1.5rem;
   }
   .hero-card {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
+    background: var(--surface);
+    border-radius: 8px;
     padding: 1.25rem 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: opacity 0.2s;
   }
   .hero-card:hover {
-    border-color: var(--border-medium);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-  }
-  .hero-card.accent {
-    border-color: var(--accent-dim);
-    background: linear-gradient(135deg, var(--bg-surface), var(--accent-dim));
+    opacity: 0.9;
   }
   .hero-label {
     font-family: var(--mono);
-    font-size: 0.65rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
   }
   .hero-value {
     font-family: var(--mono);
     font-size: 1.65rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text);
     letter-spacing: -0.02em;
-  }
-  .hero-card.accent .hero-value {
-    color: var(--accent);
-    text-shadow: 0 0 20px var(--accent-glow);
   }
 
   .token-breakdown {
@@ -198,31 +188,26 @@
   .token-item {
     flex: 1;
     min-width: 120px;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
+    background: var(--surface);
     border-radius: 8px;
     padding: 0.75rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
   }
-  .token-item.cache {
-    border-color: var(--border-subtle);
-    opacity: 0.85;
-  }
   .token-label {
     font-family: var(--mono);
-    font-size: 0.6rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
   }
   .token-value {
     font-family: var(--mono);
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text);
   }
 
   .grid-2 {
@@ -246,14 +231,14 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.5rem 0.65rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 6px;
-    background: var(--bg-raised);
+    background: var(--raised);
     transition: background 0.15s;
-    animation: fadeUp 0.3s ease both;
+    animation: fade 0.2s ease both;
   }
   .tc-row:hover {
-    background: var(--bg-hover);
+    background: var(--hover);
   }
   .tc-rank {
     font-family: var(--mono);
@@ -266,7 +251,7 @@
     flex: 1;
     font-size: 0.8rem;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text);
   }
   .tc-count {
     font-size: 0.8rem;
@@ -274,9 +259,9 @@
     color: var(--accent);
   }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   @media (max-width: 768px) {

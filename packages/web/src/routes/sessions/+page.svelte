@@ -105,7 +105,7 @@
 <style>
   .model {
     font-size: 0.8rem;
-    color: var(--text-primary);
+    color: var(--text);
   }
   .pagination {
     display: flex;
@@ -117,16 +117,15 @@
   .pagination button {
     padding: 0.4rem 0.85rem;
     border: 1px solid var(--border-subtle);
-    background: var(--bg-raised);
+    background: var(--raised);
     color: var(--text-secondary);
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.8rem;
     font-weight: 500;
-    transition: all 0.15s ease;
+    transition: color 0.2s;
   }
   .pagination button:hover:not(:disabled) {
-    border-color: var(--accent);
     color: var(--accent);
   }
   .pagination button:disabled {

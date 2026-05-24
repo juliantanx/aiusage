@@ -73,12 +73,13 @@
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
     font-family: var(--mono);
-    font-size: 0.78rem;
-    background: var(--bg-raised);
+    font-size: 0.75rem;
+    background: var(--raised);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     appearance: auto;
+    height: 32px;
   }
   select:focus {
     outline: none;

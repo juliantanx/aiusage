@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store'
+import { writable } from 'svelte/store'
 
 const THEME_KEY = 'aiusage-theme'
 
@@ -8,17 +8,13 @@ function getStored() {
 }
 
 function getSystemTheme() {
-  if (typeof window === 'undefined') return 'dark'
+  if (typeof window === 'undefined') return 'light'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-// userPref: 'system' | 'dark' | 'light'
 export const userPref = writable(getStored())
-
-// resolved: 'dark' | 'light' (the actual theme applied)
 export const resolvedTheme = writable(getSystemTheme())
 
-// Cycle: system -> dark -> light -> system
 export function cycleTheme() {
   userPref.update(current => {
     if (current === 'system') return 'dark'
@@ -27,7 +23,6 @@ export function cycleTheme() {
   })
 }
 
-// Apply theme to DOM and persist
 export function initTheme() {
   if (typeof window === 'undefined') return
 
@@ -39,16 +34,13 @@ export function initTheme() {
     resolvedTheme.set(theme)
   }
 
-  // Initial apply
   apply(getStored())
 
-  // Subscribe to userPref changes
   userPref.subscribe(pref => {
     localStorage.setItem(THEME_KEY, pref)
     apply(pref)
   })
 
-  // Listen for OS theme changes
   mq.addEventListener('change', () => {
     const pref = getStored()
     if (pref === 'system') {

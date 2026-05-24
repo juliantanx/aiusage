@@ -404,7 +404,7 @@
                   value={ghToken} on:input={e => ghToken = e.target.value}
                   class="field-input mono" autocomplete="new-password"
                   placeholder={ghTokenIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
-                <button type="button" class="btn-secondary" on:click={toggleGhToken}
+                <button type="button" class="btn-ghost" on:click={toggleGhToken}
                   disabled={ghTokenLoading}>
                   {#if ghTokenLoading}...{:else if ghTokenVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
                 </button>
@@ -440,7 +440,7 @@
                   value={s3AkidValue} on:input={e => s3AkidValue = e.target.value}
                   class="field-input mono" autocomplete="new-password"
                   placeholder={s3AkidIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
-                <button type="button" class="btn-secondary" on:click={toggleS3Akid}
+                <button type="button" class="btn-ghost" on:click={toggleS3Akid}
                   disabled={s3AkidLoading}>
                   {#if s3AkidLoading}...{:else if s3AkidVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
                 </button>
@@ -454,7 +454,7 @@
                   value={s3SakValue} on:input={e => s3SakValue = e.target.value}
                   class="field-input mono" autocomplete="new-password"
                   placeholder={s3SakIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
-                <button type="button" class="btn-secondary" on:click={toggleS3Sak}
+                <button type="button" class="btn-ghost" on:click={toggleS3Sak}
                   disabled={s3SakLoading}>
                   {#if s3SakLoading}...{:else if s3SakVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
                 </button>
@@ -502,7 +502,7 @@
     font-family: var(--mono);
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text);
   }
 
   .sections {
@@ -512,13 +512,11 @@
   }
 
   .card {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
+    background: var(--surface);
+    border-radius: 8px;
     padding: 1.25rem;
-    transition: border-color 0.2s;
+    transition: background 0.2s;
   }
-  .card:hover { border-color: var(--border-medium); }
 
   .group-title-row {
     display: flex;
@@ -529,10 +527,10 @@
 
   .group-title {
     font-family: var(--mono);
-    font-size: 0.7rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
     margin-bottom: 1rem;
   }
@@ -549,7 +547,6 @@
     border-radius: 4px;
     background: var(--accent-dim);
     color: var(--accent);
-    border: 1px solid var(--accent);
     letter-spacing: 0.04em;
   }
 
@@ -564,8 +561,8 @@
 
   .field-label {
     font-family: var(--mono);
-    font-size: 0.65rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-secondary);
@@ -579,7 +576,7 @@
   .key-hint {
     font-family: var(--mono);
     font-size: 0.7rem;
-    background: var(--bg-raised);
+    background: var(--raised);
     padding: 0.05rem 0.3rem;
     border-radius: 3px;
     border: 1px solid var(--border-subtle);
@@ -587,24 +584,24 @@
   }
 
   .field-input {
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Instrument Sans', sans-serif;
     font-size: 0.85rem;
-    padding: 0.45rem 0.65rem;
-    border: 1px solid var(--border-medium);
+    padding: 0 0.65rem;
+    border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    background: var(--bg-raised);
-    color: var(--text-primary);
-    transition: border-color 0.15s, box-shadow 0.15s;
+    background: var(--raised);
+    color: var(--text);
+    transition: border-color 0.2s;
     width: 100%;
+    height: 32px;
   }
   .field-input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-dim);
   }
   .field-input.mono { font-family: var(--mono); font-size: 0.8rem; }
 
-  select.field-input { cursor: pointer; }
+  select.field-input { cursor: pointer; appearance: auto; }
 
   .section-error {
     margin-top: 0.75rem;
@@ -627,20 +624,19 @@
     padding: 0.45rem 1.1rem;
     border: 1px solid var(--accent);
     border-radius: 6px;
-    background: var(--accent-dim);
-    color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: background 0.2s;
     min-width: 72px;
   }
   .btn-save:hover:not(:disabled) {
-    background: var(--accent);
-    color: #000;
+    background: var(--accent-hover);
   }
   .btn-save:disabled { opacity: 0.55; cursor: not-allowed; }
   .btn-save.saved {
     border-color: var(--green);
-    background: var(--green-dim);
+    background: transparent;
     color: var(--green);
   }
 
@@ -657,20 +653,25 @@
     flex: 1;
   }
 
-  .btn-secondary {
+  .btn-ghost {
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
     padding: 0.45rem 0.9rem;
-    border: 1px solid var(--border-medium);
+    border: none;
     border-radius: 6px;
-    background: var(--bg-raised);
+    background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
     white-space: nowrap;
+    transition: color 0.2s;
   }
 
-  .btn-secondary:disabled {
+  .btn-ghost:hover {
+    color: var(--accent);
+  }
+
+  .btn-ghost:disabled {
     opacity: 0.55;
     cursor: not-allowed;
   }

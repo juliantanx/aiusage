@@ -183,21 +183,21 @@
     font-family: var(--mono);
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text);
   }
   .btn {
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
     padding: 0.5rem 1rem;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--accent);
     border-radius: 6px;
-    background: var(--bg-surface);
-    color: var(--text-primary);
+    background: transparent;
+    color: var(--accent);
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: background 0.2s;
   }
-  .btn:hover { border-color: var(--accent); }
+  .btn:hover { background: var(--accent-dim); }
   .recalc-status { margin-left: 0.5rem; color: var(--accent); }
 
   .grid {
@@ -207,25 +207,20 @@
   }
 
   .card {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
+    background: var(--surface);
+    border-radius: 8px;
     padding: 1rem 1.25rem;
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    animation: fadeUp 0.3s ease both;
-  }
-  .card:hover {
-    border-color: var(--border-medium);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    transition: background 0.2s;
+    animation: fadeIn 0.2s ease both;
   }
   .card.no-price { opacity: 0.45; }
 
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .card-head {
@@ -237,7 +232,7 @@
   .model-name {
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text);
     word-break: break-all;
     line-height: 1.4;
   }
@@ -274,17 +269,17 @@
   }
   .price-label {
     font-family: var(--mono);
-    font-size: 0.55rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     color: var(--text-muted);
   }
   .price-val {
     font-family: var(--mono);
     font-size: 1.1rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
@@ -323,12 +318,12 @@
     padding: 0.2rem 0.55rem;
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
-    background: var(--bg-raised);
-    color: var(--text-primary);
+    background: var(--raised);
+    color: var(--text);
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color 0.2s, color 0.2s;
   }
-  .btn-sm:hover { border-color: var(--accent); }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
   .btn-sm.save { border-color: var(--accent); color: var(--accent); }
   .btn-sm.reset { border-color: #f87171; color: #f87171; }
 
@@ -342,8 +337,8 @@
     flex-direction: column;
     gap: 0.2rem;
     font-family: var(--mono);
-    font-size: 0.5rem;
-    font-weight: 600;
+    font-size: 0.625rem;
+    font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
@@ -353,13 +348,14 @@
     font-size: 0.75rem;
     width: 100%;
     padding: 0.3rem 0.4rem;
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    background: var(--bg-raised);
-    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--raised);
+    color: var(--text);
     text-align: right;
+    height: 32px;
   }
-  .edit-input:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-dim); }
+  .edit-input:focus { outline: none; border-color: var(--accent); }
   .edit-btns { display: flex; gap: 0.5rem; }
 
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }

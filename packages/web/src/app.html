@@ -6,12 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.css" rel="stylesheet" />
     <script>
       (function() {
         var pref = localStorage.getItem('aiusage-theme') || 'system';
         var theme = pref === 'system'
-          ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
           : pref;
         document.documentElement.setAttribute('data-theme', theme);
       })();
