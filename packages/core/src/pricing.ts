@@ -1,3 +1,5 @@
+import { FALLBACK_RATE } from './exchange-rate.js'
+
 export interface PriceEntry {
   input: number        // per 1M tokens (in currency unit)
   output: number       // per 1M tokens (in currency unit)
@@ -186,8 +188,6 @@ export function resolvePrice(model: string): PriceEntry | undefined {
   }
   return bestEntry
 }
-
-import { FALLBACK_RATE } from './exchange-rate.js'
 
 export function calculateCost(
   model: string,
