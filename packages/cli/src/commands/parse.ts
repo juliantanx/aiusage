@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { homedir, hostname, platform } from 'node:os'
-import { Aggregator, type Tool } from '@aiusage/core'
+import { Aggregator, resolveExchangeRate, type Tool } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
@@ -251,6 +251,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
 export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
   const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
+  const exchangeRate = resolveExchangeRate(config ?? {})
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
   const deviceInstanceId = state?.deviceInstanceId ?? 'unknown'
   const devicePlatform = config?.platform
@@ -320,6 +321,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             device,
             deviceInstanceId,
             platform: devicePlatform,
+            exchangeRate,
           })
 
           const result = aggregator.parseLine(line, context)
@@ -378,6 +380,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           platform: devicePlatform,
           now: Date.now(),
           cursor: wm.getOpenCodeCursor(),
+          exchangeRate,
         })
 
         for (const record of result.records) insertRecord(db, record)
@@ -411,6 +414,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           platform: devicePlatform,
           now: Date.now(),
           cursor: wm.getHermesCursor(),
+          exchangeRate,
         })
 
         for (const record of result.records) insertRecord(db, record)
@@ -444,6 +448,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           platform: devicePlatform,
           now: Date.now(),
           cursor: wm.getQoderCursor(),
+          exchangeRate,
         })
 
         for (const record of result.records) insertRecord(db, record)

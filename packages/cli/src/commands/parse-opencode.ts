@@ -10,6 +10,7 @@ export interface OpenCodeImportOptions {
   platform?: string
   now: number
   cursor: OpenCodeCursor | null
+  exchangeRate?: number
 }
 
 export interface OpenCodeImportResult {
@@ -57,7 +58,7 @@ export function runParseOpenCode(
   db: Database.Database,
   options: OpenCodeImportOptions,
 ): OpenCodeImportResult {
-  const { dbPath, device, deviceInstanceId, platform, now, cursor } = options
+  const { dbPath, device, deviceInstanceId, platform, now, cursor, exchangeRate } = options
   const records: StatsRecord[] = []
   const toolCalls: ToolCallRecord[] = []
   const errors: string[] = []
@@ -117,7 +118,7 @@ export function runParseOpenCode(
     const recordId = generateRecordId(deviceInstanceId, dbPath + ':' + message.id, message.time_created)
 
     const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens: reasoningTokens }
-    const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs) : 0
+    const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
     // OpenCode often logs cost:0 even for paid models; fall back to pricing table when that happens
     const logCostValid = parsed.cost != null && parsed.cost > 0
     const cost = logCostValid ? parsed.cost : calculatedCost

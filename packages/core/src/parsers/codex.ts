@@ -72,7 +72,7 @@ export class CodexParser implements Parser {
       cacheReadTokens,
       cacheWriteTokens,
       thinkingTokens,
-    })
+    }, context.exchangeRate)
 
     const costSource = model === 'unknown' ? 'unknown' as const : 'pricing' as const
     const provider = inferProvider(model)

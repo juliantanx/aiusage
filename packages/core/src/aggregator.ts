@@ -13,6 +13,7 @@ export interface CreateContextOptions {
   device: string
   deviceInstanceId: string
   platform?: string
+  exchangeRate?: number
 }
 
 export class Aggregator {

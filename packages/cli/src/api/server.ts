@@ -2,7 +2,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
-import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel } from '@aiusage/core'
+import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
@@ -713,6 +713,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const BATCH_SIZE = 1000
         let updated = 0
         let lastId = ''
+        const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
         while (true) {
           const records = db.prepare(
             'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
@@ -733,7 +734,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                 cacheReadTokens: r.cache_read_tokens,
                 cacheWriteTokens: r.cache_write_tokens,
                 thinkingTokens: r.thinking_tokens,
-              }) : 0
+              }, exchangeRate) : 0
               const costSource = hasPrice ? 'pricing' : 'unknown'
 
               if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue

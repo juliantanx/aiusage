@@ -78,7 +78,7 @@ export class QoderParser implements Parser {
       cacheReadTokens,
       cacheWriteTokens,
       thinkingTokens,
-    }) : 0
+    }, context.exchangeRate) : 0
     const costSource = hasPrice ? 'pricing' as const : 'unknown' as const
     const recordId = generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset)
 

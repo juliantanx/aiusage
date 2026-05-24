@@ -10,6 +10,7 @@ export interface HermesImportOptions {
   platform?: string
   now: number
   cursor: HermesCursor | null
+  exchangeRate?: number
 }
 
 export interface HermesImportResult {
@@ -46,7 +47,7 @@ export function runParseHermes(
   db: Database.Database,
   options: HermesImportOptions,
 ): HermesImportResult {
-  const { dbPath, device, deviceInstanceId, platform, now, cursor } = options
+  const { dbPath, device, deviceInstanceId, platform, now, cursor, exchangeRate } = options
   const records: StatsRecord[] = []
   const toolCalls: ToolCallRecord[] = []
   const errors: string[] = []
@@ -105,7 +106,7 @@ export function runParseHermes(
       cost = session.estimated_cost_usd
       costSource = 'log'
     } else if (model !== 'unknown') {
-      cost = calculateCost(model, tokenArgs)
+      cost = calculateCost(model, tokenArgs, exchangeRate)
       costSource = cost > 0 ? 'pricing' : 'unknown'
     } else {
       cost = 0

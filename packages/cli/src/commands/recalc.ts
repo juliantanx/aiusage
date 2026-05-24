@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
-import { calculateCost, inferProvider, normalizeQoderModel, resolvePrice } from '@aiusage/core'
+import { calculateCost, inferProvider, normalizeQoderModel, resolvePrice, resolveExchangeRate } from '@aiusage/core'
+import { loadConfig } from '../config.js'
 
 export interface RecalcResult {
   updatedCount: number
@@ -12,6 +13,7 @@ export function recalcPricing(db: Database.Database): RecalcResult {
   let updatedCount = 0
   let skippedCount = 0
   let lastId = ''
+  const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
 
   const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
 
@@ -37,7 +39,7 @@ export function recalcPricing(db: Database.Database): RecalcResult {
         cacheReadTokens: record.cache_read_tokens,
         cacheWriteTokens: record.cache_write_tokens,
         thinkingTokens: record.thinking_tokens,
-      }) : 0
+      }, exchangeRate) : 0
       const costSource = hasPrice ? 'pricing' : 'unknown'
 
       if (model !== record.model || provider !== record.provider || newCost !== record.cost || costSource !== record.cost_source) {

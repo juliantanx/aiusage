@@ -84,6 +84,7 @@ export interface ParseContext {
   device: string
   deviceInstanceId: string
   platform?: string                    // 'win32' | 'darwin' | 'linux'
+  exchangeRate?: number               // CNY→USD rate for cost calculation
 }
 
 export interface ParseResult {

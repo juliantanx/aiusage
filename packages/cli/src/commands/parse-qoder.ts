@@ -10,6 +10,7 @@ export interface QoderImportOptions {
   platform?: string
   now: number
   cursor: QoderCursor | null
+  exchangeRate?: number
 }
 
 export interface QoderImportResult {
@@ -43,7 +44,7 @@ export function runParseQoder(
   db: Database.Database,
   options: QoderImportOptions,
 ): QoderImportResult {
-  const { dbPath, device, deviceInstanceId, platform, now, cursor } = options
+  const { dbPath, device, deviceInstanceId, platform, now, cursor, exchangeRate } = options
   const records: StatsRecord[] = []
   const toolCalls: ToolCallRecord[] = []
   const errors: string[] = []
@@ -90,7 +91,7 @@ export function runParseQoder(
     const ts = row.gmt_create
 
     const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens: 0, thinkingTokens: 0 }
-    const calculatedCost = calculateCost(model, tokenArgs)
+    const calculatedCost = calculateCost(model, tokenArgs, exchangeRate)
     const cost = calculatedCost
     const costSource: StatsRecord['costSource'] = calculatedCost > 0 ? 'pricing' : 'unknown'
 

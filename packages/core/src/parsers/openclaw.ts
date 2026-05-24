@@ -50,7 +50,7 @@ export class OpenClawParser implements Parser {
         cacheReadTokens,
         cacheWriteTokens,
         thinkingTokens,
-      })
+      }, context.exchangeRate)
       costSource = 'pricing'
     }
 
