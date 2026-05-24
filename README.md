@@ -14,7 +14,7 @@ English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
 ## Quick Start
 
-**Prerequisites:** Node.js >= 18 (tested on v18 LTS and v22 LTS; Node.js 16 and below are not supported)
+**Prerequisites:** Node.js 18 or later
 
 ```bash
 # Install
@@ -320,7 +320,8 @@ docker build -t aiusage .
 |------|------|
 | Local database | `~/.aiusage/cache.db` |
 | Config | `~/.aiusage/config.json` |
-| State (watermarks, sync) | `~/.aiusage/state.json` |
+| Sync state | `~/.aiusage/state.json` |
+| Parse watermarks | `~/.aiusage/watermark.json` |
 
 ### Default Source Paths
 
@@ -333,7 +334,8 @@ docker build -t aiusage .
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
 | Hermes | `~/.hermes/state.db` | `~/.hermes/state.db` | `%USERPROFILE%\.hermes\state.db` |
-| Qoder | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/` plus WSL-mounted Windows user homes | `%USERPROFILE%\.qoder\logs\sessions\` |
+| Qoder (sessions) | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/` plus WSL-mounted Windows user homes | `%USERPROFILE%\.qoder\logs\sessions\` |
+| Qoder (SQLite) | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | `~/.local/share/Qoder/SharedClientCache/cache/db/local.db` | `%LOCALAPPDATA%\Qoder\SharedClientCache\cache\db\local.db` |
 
 Discovery behavior:
 
@@ -342,7 +344,8 @@ Discovery behavior:
 - **OpenClaw** — scans each agent's `sessions/` directory under `~/.openclaw/agents/*/sessions/` and skips checkpoint files.
 - **OpenCode** — reads the SQLite database file directly instead of `.jsonl` logs.
 - **Hermes** — reads the SQLite database file (`state.db`) directly. Sessions without a recorded end time are still imported if they have token data (e.g. sessions from a force-quit).
-- **Qoder** — recursively scans structured session segment logs (`logs/sessions/**/segments/*.jsonl`) and imports `model.response.completed` token events. On WSL, aiusage also checks mounted Windows user homes such as `/mnt/c/Users/<user>`, `/mnt/d/Users/<user>`, and `/mnt/e/Users/<user>` for the same Qoder session-log layout.
+- **Qoder (sessions)** — recursively scans structured session segment logs (`logs/sessions/**/segments/*.jsonl`) and imports `model.response.completed` token events. On WSL, aiusage also checks mounted Windows user homes such as `/mnt/c/Users/<user>`, `/mnt/d/Users/<user>`, and `/mnt/e/Users/<user>` for the same Qoder session-log layout.
+- **Qoder (SQLite)** — reads the `local.db` SQLite database directly (`SharedClientCache/cache/db/local.db`) and imports assistant messages from the `chat_message` table, joined with `chat_record` for model information. This is the primary source on macOS and is tried alongside the sessions directory.
 
 > On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
 
@@ -360,12 +363,13 @@ If you installed a tool to a non-default location, override the paths in the **S
     "openclaw": "/custom/sessions-dir",
     "opencode": "/custom/path/opencode.db",
     "hermes": "/custom/path/.hermes/state.db",
-    "qoder": "/custom/path/.qoder"
+    "qoder": "/custom/path/.qoder/logs/sessions",
+    "qoder-db": "/custom/path/local.db"
   }
 }
 ```
 
-Only the paths you specify are overridden; unspecified tools fall back to their defaults. For Qoder, the custom path may point either at the `.qoder` root or directly at `logs/sessions`.
+Only the paths you specify are overridden; unspecified tools fall back to their defaults. `qoder` points to the session logs directory; `qoder-db` points directly to the `local.db` SQLite file.
 
 ## Database Visualization
 

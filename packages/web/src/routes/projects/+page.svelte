@@ -55,7 +55,7 @@
     {#each data.projects as proj, i}
       <div class="row" style="animation-delay: {i * 35}ms">
         <span class="rank mono">#{i + 1}</span>
-        <span class="name mono">{proj.name}</span>
+        <span class="name mono" title={proj.name}>{proj.name}</span>
         <div class="bar-container">
           <div class="bar" style="width: {proj.percentage}%"></div>
         </div>
@@ -75,7 +75,7 @@
   }
   .row {
     display: grid;
-    grid-template-columns: 2.5rem 10rem 1fr 5.5rem 4.5rem 3.5rem;
+    grid-template-columns: 2.5rem 16rem 1fr 5.5rem 4.5rem 3.5rem;
     align-items: center;
     gap: 0.75rem;
     padding: 0.65rem 0.85rem;

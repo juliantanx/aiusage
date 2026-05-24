@@ -12,4 +12,10 @@ describe('normalizeQoderModel', () => {
     expect(normalizeQoderModel('gpt-4o')).toBe('gpt-4o')
     expect(normalizeQoderModel('unknown')).toBe('unknown')
   })
+
+  it('returns unknown for empty or degenerate inputs', () => {
+    expect(normalizeQoderModel('')).toBe('unknown')
+    expect(normalizeQoderModel('   ')).toBe('unknown')
+    expect(normalizeQoderModel('qoder-')).toBe('unknown')
+  })
 })

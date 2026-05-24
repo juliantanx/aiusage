@@ -57,7 +57,8 @@ export class QoderParser implements Parser {
     if (!data || typeof data !== 'object') return null
 
     const ts = toTimestamp(parsed.ts, context.now)
-    const model = normalizeQoderModel(String(data.model ?? 'unknown'))
+    const rawModel = normalizeQoderModel(String(data.model ?? ''))
+    const model = rawModel === 'unknown' ? 'qoder-auto' : rawModel
     const inputTokens = toNumber(data.input_tokens)
     const outputTokens = toNumber(data.output_tokens)
     const cacheReadTokens = toNumber(data.cache_read_input_tokens ?? data.cache_read_tokens)

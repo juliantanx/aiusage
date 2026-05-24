@@ -1,10 +1,12 @@
 import http from 'node:http'
+import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
+import { getDefaultSourcePaths } from '../commands/parse.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = '', weekStart: 0 | 1 = 1): { where: string; params: Record<string, unknown> } {
@@ -442,6 +444,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           const mergedRows = db.prepare(`
             SELECT model, provider, SUM(callCount) AS callCount, SUM(totalTokens) AS totalTokens
             FROM (${unionSql})
+            WHERE model != 'unknown'
             GROUP BY model, provider ORDER BY callCount DESC
           `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
           total = mergedRows.reduce((s, r) => s + r.callCount, 0) || 1
@@ -451,7 +454,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             SELECT model, provider,
                    COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
+            FROM synced_records WHERE 1=1 AND model != 'unknown' ${df.where} ${dr.where} ${tf.where}
             GROUP BY model, provider ORDER BY callCount DESC
           `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
           total = rows.reduce((s, r) => s + r.callCount, 0) || 1
@@ -460,7 +463,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             SELECT model, provider,
                    COUNT(*) AS callCount,
                    SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+            FROM records WHERE 1=1 AND model != 'unknown' ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY model, provider ORDER BY callCount DESC
           `).all({ ...dr.params, ...tf.params }) as any[]
           total = rows.reduce((s, r) => s + r.callCount, 0) || 1
@@ -585,7 +588,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         }
 
         const rows = db.prepare(`
-          SELECT source_file,
+          SELECT source_file, cwd,
                  COUNT(*) AS sessionCount,
                  SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
                  SUM(cost) AS cost
@@ -596,7 +599,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         // Aggregate by project
         const projectMap: Record<string, { sessions: number; tokens: number; cost: number }> = {}
         for (const row of rows) {
-          const project = extractProject(row.source_file)
+          const project = row.cwd ? path.basename(row.cwd) : extractProject(row.source_file)
           if (!projectMap[project]) projectMap[project] = { sessions: 0, tokens: 0, cost: 0 }
           projectMap[project].sessions += row.sessionCount
           projectMap[project].tokens += row.totalTokens
@@ -625,7 +628,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           const table = getPriceTable()
           const overrides = getUserOverrides()
           // Also include models from DB that have no pricing
-          const dbModels = db.prepare('SELECT DISTINCT model FROM records ORDER BY model').all() as any[]
+          const dbModels = db.prepare("SELECT DISTINCT model FROM records WHERE model != 'unknown' ORDER BY model").all() as any[]
           const models = dbModels.map(r => {
             const model = r.model
             const exactPrice = table[model]
@@ -720,7 +723,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             for (const r of batch) {
               if (r.cost_source === 'log') continue
 
-              const model = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
+              const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
+              const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
               const provider = model !== r.model ? inferProvider(model) : r.provider
               const hasPrice = resolvePrice(model) != null
               const cost = hasPrice ? calculateCost(model, {
@@ -875,7 +879,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       if (url.pathname === '/api/config') {
         if (req.method === 'GET') {
           const currentCfg = loadConfig() ?? {}
-          const { credentials, priceOverrides, platform, ...rest } = currentCfg
+          const osPlatform = platform()
+          const { credentials, priceOverrides, platform: _cfgPlatform, ...rest } = currentCfg
           json(res, {
             device: rest.device ?? null,
             weekStart: rest.weekStart ?? 1,
@@ -889,9 +894,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               opencode: rest.sources?.opencode ?? null,
               hermes: rest.sources?.hermes ?? null,
               qoder: rest.sources?.qoder ?? null,
+              'qoder-db': rest.sources?.['qoder-db'] ?? null,
             },
             sync: rest.sync ?? null,
             credentialKeys: credentials ? Object.keys(credentials) : [],
+            hostname: hostname(),
+            platform: osPlatform,
+            defaultPaths: getDefaultSourcePaths(),
           })
           return
         }
@@ -932,7 +941,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (update.sources && typeof update.sources === 'object') {
               const src = update.sources as Record<string, unknown>
               const s: SourcesConfig = existing.sources ?? {}
-              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder'] as const) {
+              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db'] as const) {
                 if (key in src) {
                   if (!src[key]) delete s[key]
                   else s[key] = String(src[key])

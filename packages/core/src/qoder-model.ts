@@ -12,6 +12,7 @@ export function normalizeQoderModel(model: string): string {
 
   const lower = raw.toLowerCase()
   const tier = lower.startsWith('qoder-') ? lower.slice('qoder-'.length) : lower
+  if (!tier) return 'unknown'
   if (QODER_TIER_MODELS.has(tier)) return `qoder-${tier}`
 
   return raw

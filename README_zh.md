@@ -14,7 +14,7 @@
 
 ## 快速开始
 
-**前置条件：** Node.js >= 18（已在 v18 LTS 和 v22 LTS 上测试；不支持 Node.js 16 及以下版本）
+**前置条件：** Node.js 18 或更高版本
 
 ```bash
 # 安装
@@ -320,7 +320,8 @@ docker build -t aiusage .
 |------|------|
 | 本地数据库 | `~/.aiusage/cache.db` |
 | 配置文件 | `~/.aiusage/config.json` |
-| 状态文件（水位线、同步状态） | `~/.aiusage/state.json` |
+| 同步状态 | `~/.aiusage/state.json` |
+| Parse 水位线 | `~/.aiusage/watermark.json` |
 
 ### 默认日志来源路径
 
@@ -333,7 +334,8 @@ docker build -t aiusage .
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
 | Hermes | `~/.hermes/state.db` | `~/.hermes/state.db` | `%USERPROFILE%\.hermes\state.db` |
-| Qoder | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/`，以及 WSL 挂载的 Windows 用户目录 | `%USERPROFILE%\.qoder\logs\sessions\` |
+| Qoder（会话日志） | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/`，以及 WSL 挂载的 Windows 用户目录 | `%USERPROFILE%\.qoder\logs\sessions\` |
+| Qoder（SQLite） | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | `~/.local/share/Qoder/SharedClientCache/cache/db/local.db` | `%LOCALAPPDATA%\Qoder\SharedClientCache\cache\db\local.db` |
 
 发现行为：
 
@@ -342,7 +344,8 @@ docker build -t aiusage .
 - **OpenClaw** — 扫描 `~/.openclaw/agents/*/sessions/` 下各 agent 的 `sessions/` 目录，并跳过 checkpoint 文件。
 - **OpenCode** — 直接读取 SQLite 数据库文件，而不是 `.jsonl` 日志。
 - **Hermes** — 直接读取 SQLite 数据库文件（`state.db`）。没有记录结束时间的会话，只要有 token 数据也会被导入（例如强制退出的会话）。
-- **Qoder** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
+- **Qoder（会话日志）** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
+- **Qoder（SQLite）** — 直接读取 `local.db` SQLite 数据库（`SharedClientCache/cache/db/local.db`），从 `chat_message` 表导入助手消息，并关联 `chat_record` 获取模型信息。这是 macOS 上的主要数据来源，与会话日志目录并行尝试。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 
@@ -360,12 +363,13 @@ Qoder 桌面端还会在 `Program Files` 下写入安装文件，在 `AppData/Ro
     "openclaw": "/自定义/sessions目录",
     "opencode": "/自定义路径/opencode.db",
     "hermes": "/自定义路径/.hermes/state.db",
-    "qoder": "/自定义路径/.qoder"
+    "qoder": "/自定义路径/.qoder/logs/sessions",
+    "qoder-db": "/自定义路径/local.db"
   }
 }
 ```
 
-只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。Qoder 的自定义路径既可以指向 `.qoder` 根目录，也可以直接指向 `logs/sessions`。
+只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。`qoder` 指向会话日志目录；`qoder-db` 直接指向 `local.db` SQLite 文件。
 
 ## 数据库可视化查看
 

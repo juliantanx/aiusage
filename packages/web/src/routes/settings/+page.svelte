@@ -8,13 +8,37 @@
 
   // Form data — all strings for simplicity, coerced on save
   let general = { device: '', weekStart: 1, dashboardPollInterval: '', parseInterval: '' }
-  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '' }
-  let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '', credentialRef: '' }
-  let credentialValue = ''
-  let credentialIsSet = false
-  let credentialVisible = false
-  let credentialLoading = false
-  let lastCredentialRef = ''
+  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '', 'qoder-db': '' }
+  let currentPlatform = ''
+  let defaultPaths = {}
+  let currentHostname = ''
+
+  const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
+
+  // Sync form — credentialRef is derived automatically, never user-editable
+  let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '' }
+
+  // GitHub credential state
+  let ghToken = ''
+  let ghTokenVisible = false
+  let ghTokenLoading = false
+  let ghTokenIsSet = false
+
+  // S3 credential state — two separate credentials required by sync.ts
+  let s3AkidValue = ''
+  let s3AkidVisible = false
+  let s3AkidLoading = false
+  let s3AkidIsSet = false
+  let s3SakValue = ''
+  let s3SakVisible = false
+  let s3SakLoading = false
+  let s3SakIsSet = false
+
+  // Track previous values to detect changes that invalidate cached credential reveals
+  let prevBackend = ''
+  let prevRepo = ''
+  let prevBucket = ''
+
   let dataSection = { retentionDays: '' }
   let effectiveDeviceName = ''
 
@@ -23,6 +47,39 @@
   let sourcesSaving = false; let sourcesError = ''; let sourcesSaved = false
   let syncSaving = false;    let syncError = '';    let syncSaved = false
   let dataSaving = false;    let dataError = '';    let dataSaved = false
+
+  // Credential key derivation — must match sync.ts createBackend()
+  function ghKey(repo)    { return `github/${repo}/token` }
+  function s3AkidKey(bucket) { return `s3/${bucket}/accessKeyId` }
+  function s3SakKey(bucket)  { return `s3/${bucket}/secretAccessKey` }
+
+  function resetAllCredentialState() {
+    ghToken = ''; ghTokenVisible = false; ghTokenLoading = false; ghTokenIsSet = false
+    s3AkidValue = ''; s3AkidVisible = false; s3AkidLoading = false; s3AkidIsSet = false
+    s3SakValue = ''; s3SakVisible = false; s3SakLoading = false; s3SakIsSet = false
+  }
+
+  function onBackendChange() {
+    resetAllCredentialState()
+    prevBackend = syncData.backend
+    prevRepo = syncData.repo
+    prevBucket = syncData.bucket
+  }
+
+  function onRepoChange() {
+    if (syncData.repo !== prevRepo) {
+      ghToken = ''; ghTokenVisible = false; ghTokenLoading = false; ghTokenIsSet = false
+      prevRepo = syncData.repo
+    }
+  }
+
+  function onBucketChange() {
+    if (syncData.bucket !== prevBucket) {
+      s3AkidValue = ''; s3AkidVisible = false; s3AkidLoading = false; s3AkidIsSet = false
+      s3SakValue = ''; s3SakVisible = false; s3SakLoading = false; s3SakIsSet = false
+      prevBucket = syncData.bucket
+    }
+  }
 
   onMount(async () => {
     try {
@@ -40,7 +97,11 @@
         opencode: cfg.sources?.opencode ?? '',
         hermes: cfg.sources?.hermes ?? '',
         qoder: cfg.sources?.qoder ?? '',
+        'qoder-db': cfg.sources?.['qoder-db'] ?? '',
       }
+      currentPlatform = cfg.platform ?? ''
+      defaultPaths = cfg.defaultPaths ?? {}
+      currentHostname = cfg.hostname ?? ''
       syncData = {
         backend: cfg.sync?.backend ?? '',
         repo: cfg.sync?.repo ?? '',
@@ -48,12 +109,20 @@
         prefix: cfg.sync?.prefix ?? '',
         endpoint: cfg.sync?.endpoint ?? '',
         region: cfg.sync?.region ?? '',
-        credentialRef: cfg.sync?.credentialRef ?? '',
       }
-      credentialIsSet = !!(cfg.sync?.credentialRef && cfg.credentialKeys?.includes(cfg.sync.credentialRef))
-      lastCredentialRef = cfg.sync?.credentialRef ?? ''
+      prevBackend = syncData.backend
+      prevRepo = syncData.repo
+      prevBucket = syncData.bucket
+
+      const keys = cfg.credentialKeys ?? []
+      // Check both the structured key (new UI) and credentialRef (old init command)
+      const oldRef = cfg.sync?.credentialRef ?? ''
+      ghTokenIsSet = !!(syncData.repo && (keys.includes(ghKey(syncData.repo)) || (oldRef && keys.includes(oldRef))))
+      s3AkidIsSet  = !!(syncData.bucket && keys.includes(s3AkidKey(syncData.bucket)))
+      s3SakIsSet   = !!(syncData.bucket && keys.includes(s3SakKey(syncData.bucket)))
+
       dataSection = { retentionDays: cfg.retentionDays != null ? String(cfg.retentionDays) : '' }
-      effectiveDeviceName = cfg.device || 'hostname'
+      effectiveDeviceName = cfg.device || currentHostname || 'hostname'
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -75,7 +144,7 @@
         device: general.device || null,
         parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
       })
-      effectiveDeviceName = general.device || 'hostname'
+      effectiveDeviceName = general.device || currentHostname || 'hostname'
       generalSaved = true
       setTimeout(() => { generalSaved = false }, 2000)
     } catch (e) {
@@ -99,17 +168,55 @@
   }
 
   async function saveSync() {
-    maybeResetCredentialForRefChange()
     syncSaving = true; syncError = ''
     try {
-      const payload = { sync: syncData.backend ? { ...syncData } : null }
-      if (credentialValue && syncData.credentialRef) {
-        payload.credentials = { [syncData.credentialRef]: credentialValue }
+      // Build the sync config payload with auto-derived credentialRef
+      let syncPayload = null
+      if (syncData.backend === 'github' && syncData.repo) {
+        syncPayload = {
+          backend: 'github',
+          repo: syncData.repo,
+          credentialRef: ghKey(syncData.repo),
+        }
+      } else if (syncData.backend === 's3' && syncData.bucket) {
+        syncPayload = {
+          backend: 's3',
+          bucket: syncData.bucket,
+          prefix: syncData.prefix || null,
+          endpoint: syncData.endpoint || null,
+          region: syncData.region || null,
+          credentialRef: s3AkidKey(syncData.bucket),
+        }
       }
+
+      // Build credentials — use the same keys sync.ts reads
+      const credentials = {}
+      if (syncData.backend === 'github' && syncData.repo && ghToken) {
+        credentials[ghKey(syncData.repo)] = ghToken
+      }
+      if (syncData.backend === 's3' && syncData.bucket) {
+        if (s3AkidValue) credentials[s3AkidKey(syncData.bucket)] = s3AkidValue
+        if (s3SakValue)  credentials[s3SakKey(syncData.bucket)]  = s3SakValue
+      }
+
+      const payload = { sync: syncPayload }
+      if (Object.keys(credentials).length > 0) payload.credentials = credentials
+
       await saveConfig(payload)
+
+      // Update isSet flags and clear entered values (don't expose creds in memory longer than needed)
+      if (syncData.backend === 'github') {
+        if (ghToken) { ghTokenIsSet = true; ghToken = ''; ghTokenVisible = false }
+      } else if (syncData.backend === 's3') {
+        if (s3AkidValue) { s3AkidIsSet = true; s3AkidValue = ''; s3AkidVisible = false }
+        if (s3SakValue)  { s3SakIsSet  = true; s3SakValue  = ''; s3SakVisible  = false }
+      }
+
+      prevBackend = syncData.backend
+      prevRepo    = syncData.repo
+      prevBucket  = syncData.bucket
+
       syncSaved = true
-      credentialIsSet = !!syncData.credentialRef
-      lastCredentialRef = syncData.credentialRef ?? ''
       setTimeout(() => { syncSaved = false }, 2000)
     } catch (e) {
       syncError = e instanceof Error ? e.message : 'Save failed'
@@ -133,44 +240,58 @@
     }
   }
 
-  function resetCredentialReveal() {
-    credentialValue = ''
-    credentialVisible = false
-    credentialLoading = false
-  }
-
-  function maybeResetCredentialForRefChange() {
-    if (syncData.credentialRef !== lastCredentialRef) {
-      lastCredentialRef = syncData.credentialRef
-      resetCredentialReveal()
-    }
-  }
-
-  async function toggleCredentialVisibility() {
+  // Per-credential toggle helpers
+  async function toggleGhToken() {
     syncError = ''
-
-    if (!syncData.credentialRef) return
-
-    if (credentialVisible) {
-      credentialVisible = false
-      return
-    }
-
-    if (credentialValue) {
-      credentialVisible = true
-      return
-    }
-
-    credentialLoading = true
+    if (!syncData.repo) return
+    if (ghTokenVisible) { ghTokenVisible = false; return }
+    if (ghToken) { ghTokenVisible = true; return }
+    ghTokenLoading = true
     try {
-      const data = await fetchCredential(syncData.credentialRef)
-      credentialValue = data.value ?? ''
-      credentialVisible = true
-      credentialIsSet = !!credentialValue
+      const data = await fetchCredential(ghKey(syncData.repo))
+      ghToken = data.value ?? ''
+      ghTokenVisible = true
+      ghTokenIsSet = !!ghToken
     } catch (e) {
       syncError = e instanceof Error ? e.message : 'Failed to load credential'
     } finally {
-      credentialLoading = false
+      ghTokenLoading = false
+    }
+  }
+
+  async function toggleS3Akid() {
+    syncError = ''
+    if (!syncData.bucket) return
+    if (s3AkidVisible) { s3AkidVisible = false; return }
+    if (s3AkidValue) { s3AkidVisible = true; return }
+    s3AkidLoading = true
+    try {
+      const data = await fetchCredential(s3AkidKey(syncData.bucket))
+      s3AkidValue = data.value ?? ''
+      s3AkidVisible = true
+      s3AkidIsSet = !!s3AkidValue
+    } catch (e) {
+      syncError = e instanceof Error ? e.message : 'Failed to load credential'
+    } finally {
+      s3AkidLoading = false
+    }
+  }
+
+  async function toggleS3Sak() {
+    syncError = ''
+    if (!syncData.bucket) return
+    if (s3SakVisible) { s3SakVisible = false; return }
+    if (s3SakValue) { s3SakVisible = true; return }
+    s3SakLoading = true
+    try {
+      const data = await fetchCredential(s3SakKey(syncData.bucket))
+      s3SakValue = data.value ?? ''
+      s3SakVisible = true
+      s3SakIsSet = !!s3SakValue
+    } catch (e) {
+      syncError = e instanceof Error ? e.message : 'Failed to load credential'
+    } finally {
+      s3SakLoading = false
     }
   }
 
@@ -202,9 +323,8 @@
       <div class="fields">
         <div class="field">
           <label class="field-label" for="field-device">{$t('settings.device')}</label>
+          <input id="field-device" type="text" bind:value={general.device} class="field-input" placeholder={currentHostname || 'hostname'} />
           <div class="field-hint">{$t('settings.deviceHint')}</div>
-          <input id="field-device" type="text" bind:value={general.device} class="field-input" placeholder="hostname" />
-          <div class="field-hint">Effective device name: {effectiveDeviceName}</div>
         </div>
         <div class="field">
           <label class="field-label" for="field-week-start">{$t('settings.weekStart')}</label>
@@ -232,13 +352,18 @@
 
     <!-- Sources -->
     <div class="card">
-      <div class="group-title">{$t('settings.sources')}</div>
+      <div class="group-title-row">
+        <span class="group-title">{$t('settings.sources')}</span>
+        {#if currentPlatform}
+          <span class="platform-badge">{PLATFORM_LABEL[currentPlatform] ?? currentPlatform}</span>
+        {/if}
+      </div>
       <div class="fields">
-        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder']] as [key, label]}
+        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder (sessions dir)'], ['qoder-db', 'Qoder (local.db)']] as [key, label]}
           <div class="field full">
             <label class="field-label" for="field-source-{key}">{label}</label>
             <div class="field-hint">{$t('settings.sourcePath')}</div>
-            <input id="field-source-{key}" type="text" bind:value={sources[key]} class="field-input mono" placeholder="~/.claude/projects" />
+            <input id="field-source-{key}" type="text" bind:value={sources[key]} class="field-input mono" placeholder={defaultPaths[key] ?? ''} />
           </div>
         {/each}
       </div>
@@ -257,22 +382,46 @@
       <div class="fields">
         <div class="field">
           <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
-          <select id="field-sync-backend" bind:value={syncData.backend} class="field-input">
+          <select id="field-sync-backend" bind:value={syncData.backend} class="field-input" on:change={onBackendChange}>
             <option value="">{$t('settings.syncBackendNone')}</option>
             <option value="github">GitHub</option>
             <option value="s3">S3 / Compatible</option>
           </select>
         </div>
+
         {#if syncData.backend === 'github'}
           <div class="field">
             <label class="field-label" for="field-sync-repo">{$t('settings.syncRepo')}</label>
-            <input id="field-sync-repo" type="text" bind:value={syncData.repo} class="field-input mono" placeholder="owner/repo" />
+            <input id="field-sync-repo" type="text" bind:value={syncData.repo} class="field-input mono"
+              placeholder="owner/repo" on:input={onRepoChange} />
           </div>
+          {#if syncData.repo}
+            <div class="field full">
+              <label class="field-label" for="field-gh-token">GitHub Token</label>
+              <div class="field-hint">Stored as <code class="key-hint">{ghKey(syncData.repo)}</code></div>
+              <div class="credential-row">
+                <input id="field-gh-token" type={ghTokenVisible ? 'text' : 'password'}
+                  value={ghToken} on:input={e => ghToken = e.target.value}
+                  class="field-input mono" autocomplete="new-password"
+                  placeholder={ghTokenIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
+                <button type="button" class="btn-secondary" on:click={toggleGhToken}
+                  disabled={ghTokenLoading}>
+                  {#if ghTokenLoading}...{:else if ghTokenVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
+                </button>
+              </div>
+            </div>
+          {/if}
         {/if}
+
         {#if syncData.backend === 's3'}
           <div class="field">
             <label class="field-label" for="field-sync-bucket">{$t('settings.syncBucket')}</label>
-            <input id="field-sync-bucket" type="text" bind:value={syncData.bucket} class="field-input mono" placeholder="my-bucket" />
+            <input id="field-sync-bucket" type="text" bind:value={syncData.bucket} class="field-input mono"
+              placeholder="my-bucket" on:input={onBucketChange} />
+          </div>
+          <div class="field">
+            <label class="field-label" for="field-sync-prefix">{$t('settings.syncPrefix')}</label>
+            <input id="field-sync-prefix" type="text" bind:value={syncData.prefix} class="field-input mono" placeholder="aiusage/" />
           </div>
           <div class="field">
             <label class="field-label" for="field-sync-endpoint">{$t('settings.syncEndpoint')}</label>
@@ -282,43 +431,36 @@
             <label class="field-label" for="field-sync-region">{$t('settings.syncRegion')}</label>
             <input id="field-sync-region" type="text" bind:value={syncData.region} class="field-input mono" placeholder="us-east-1" />
           </div>
-        {/if}
-        {#if syncData.backend}
-          <div class="field">
-            <label class="field-label" for="field-sync-prefix">{$t('settings.syncPrefix')}</label>
-            <input id="field-sync-prefix" type="text" bind:value={syncData.prefix} class="field-input mono" placeholder="aiusage/" />
-          </div>
-          <div class="field">
-            <label class="field-label" for="field-sync-credential-ref">{$t('settings.syncCredentialRef')}</label>
-            <input id="field-sync-credential-ref" type="text" bind:value={syncData.credentialRef} class="field-input mono" placeholder="GITHUB_TOKEN" on:input={maybeResetCredentialForRefChange} />
-          </div>
-          <div class="field">
-            <label class="field-label" for="field-sync-credential-value">{$t('settings.syncCredentialValue')}</label>
-            <div class="credential-row">
-              <input
-                id="field-sync-credential-value"
-                type={credentialVisible ? 'text' : 'password'}
-                value={credentialValue}
-                on:input={e => credentialValue = e.target.value}
-                class="field-input mono"
-                placeholder={credentialIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')}
-              />
-              <button
-                type="button"
-                class="btn-secondary"
-                on:click={toggleCredentialVisibility}
-                disabled={!syncData.credentialRef || credentialLoading}
-              >
-                {#if credentialLoading}
-                  ...
-                {:else if credentialVisible}
-                  {$t('settings.hideCredential')}
-                {:else}
-                  {$t('settings.showCredential')}
-                {/if}
-              </button>
+          {#if syncData.bucket}
+            <div class="field full">
+              <label class="field-label" for="field-s3-akid">Access Key ID</label>
+              <div class="field-hint">Stored as <code class="key-hint">{s3AkidKey(syncData.bucket)}</code></div>
+              <div class="credential-row">
+                <input id="field-s3-akid" type={s3AkidVisible ? 'text' : 'password'}
+                  value={s3AkidValue} on:input={e => s3AkidValue = e.target.value}
+                  class="field-input mono" autocomplete="new-password"
+                  placeholder={s3AkidIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
+                <button type="button" class="btn-secondary" on:click={toggleS3Akid}
+                  disabled={s3AkidLoading}>
+                  {#if s3AkidLoading}...{:else if s3AkidVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
+                </button>
+              </div>
             </div>
-          </div>
+            <div class="field full">
+              <label class="field-label" for="field-s3-sak">Secret Access Key</label>
+              <div class="field-hint">Stored as <code class="key-hint">{s3SakKey(syncData.bucket)}</code></div>
+              <div class="credential-row">
+                <input id="field-s3-sak" type={s3SakVisible ? 'text' : 'password'}
+                  value={s3SakValue} on:input={e => s3SakValue = e.target.value}
+                  class="field-input mono" autocomplete="new-password"
+                  placeholder={s3SakIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
+                <button type="button" class="btn-secondary" on:click={toggleS3Sak}
+                  disabled={s3SakLoading}>
+                  {#if s3SakLoading}...{:else if s3SakVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
+                </button>
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
       {#if syncError}<p class="section-error">{syncError}</p>{/if}
@@ -336,7 +478,7 @@
         <div class="field">
           <label class="field-label" for="field-retention-days">{$t('settings.retentionDays')}</label>
           <div class="field-hint">{$t('settings.retentionHint')}</div>
-          <input id="field-retention-days" type="number" bind:value={dataSection.retentionDays} class="field-input" placeholder="0" min="0" />
+          <input id="field-retention-days" type="number" bind:value={dataSection.retentionDays} class="field-input" placeholder={$t('settings.retentionPlaceholder')} min="0" />
         </div>
       </div>
       {#if dataError}<p class="section-error">{dataError}</p>{/if}
@@ -378,6 +520,13 @@
   }
   .card:hover { border-color: var(--border-medium); }
 
+  .group-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
   .group-title {
     font-family: var(--mono);
     font-size: 0.7rem;
@@ -386,6 +535,22 @@
     letter-spacing: 0.08em;
     color: var(--text-muted);
     margin-bottom: 1rem;
+  }
+
+  .group-title-row .group-title {
+    margin-bottom: 0;
+  }
+
+  .platform-badge {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    letter-spacing: 0.04em;
   }
 
   .fields {
@@ -409,6 +574,16 @@
     font-size: 0.72rem;
     color: var(--text-muted);
     margin-top: -0.1rem;
+  }
+
+  .key-hint {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    background: var(--bg-raised);
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
   }
 
   .field-input {

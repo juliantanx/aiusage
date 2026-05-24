@@ -102,6 +102,35 @@ describe('runParse with qoder', () => {
     expect(row.source_file).toBe(segmentPath)
   })
 
+  it('auto-discovers qoder sessions from USERPROFILE when no explicit source is configured', async () => {
+    // Remove the default .qoder dir created in beforeEach so only the USERPROFILE path is discovered.
+    rmSync(join(testDir, '.qoder'), { recursive: true, force: true })
+
+    const windowsHome = join(testDir, 'windows-user-home')
+    const segmentPath = join(windowsHome, '.qoder', 'logs', 'sessions', '-project', 'sess_win', 'segments', 'seg.jsonl')
+    mkdirSync(join(segmentPath, '..'), { recursive: true })
+    writeFileSync(segmentPath, [
+      '{"ts":"2026-05-24T10:00:00.000Z","type":"model.response.completed","loop_id":"l1","data":{"model":"efficient","input_tokens":100,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}',
+      '',
+    ].join('\n'))
+
+    // Remove explicit qoder source so auto-discovery via env var kicks in
+    writeFileSync(join(testDir, '.aiusage', 'config.json'), '{}')
+
+    const prev = process.env.USERPROFILE
+    process.env.USERPROFILE = windowsHome
+    try {
+      const result = await runParse(cacheDb, 'qoder')
+      expect(result.parsedCount).toBe(1)
+      expect(result.errors).toHaveLength(0)
+      const row = cacheDb.prepare('SELECT session_id FROM records').get() as any
+      expect(row.session_id).toBe('sess_win')
+    } finally {
+      if (prev === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = prev
+    }
+  })
+
   it('does not import qoder desktop transcripts or context-usage snapshots', async () => {
     const customRoot = join(testDir, 'desktop-qoder-root')
     const transcriptPath = join(customRoot, 'projects', 'project-1', 'transcript', 'session.jsonl')

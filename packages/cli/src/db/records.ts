@@ -7,12 +7,12 @@ export function insertRecord(db: Database.Database, record: StatsRecord): void {
       id, ts, ingested_at, synced_at, updated_at, line_offset,
       tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
-      cost, cost_source, session_id, source_file, device, device_instance_id, platform
+      cost, cost_source, session_id, source_file, cwd, device, device_instance_id, platform
     ) VALUES (
       @id, @ts, @ingestedAt, @syncedAt, @updatedAt, @lineOffset,
       @tool, @model, @provider, @inputTokens, @outputTokens,
       @cacheReadTokens, @cacheWriteTokens, @thinkingTokens,
-      @cost, @costSource, @sessionId, @sourceFile, @device, @deviceInstanceId, @platform
+      @cost, @costSource, @sessionId, @sourceFile, @cwd, @device, @deviceInstanceId, @platform
     )
   `).run({
     id: record.id,
@@ -33,6 +33,7 @@ export function insertRecord(db: Database.Database, record: StatsRecord): void {
     costSource: record.costSource,
     sessionId: record.sessionId,
     sourceFile: record.sourceFile,
+    cwd: record.cwd ?? '',
     device: record.device,
     deviceInstanceId: record.deviceInstanceId,
     platform: record.platform ?? '',
@@ -82,6 +83,7 @@ function mapRowToRecord(row: Record<string, unknown>): StatsRecord {
     costSource: row.cost_source as StatsRecord['costSource'],
     sessionId: row.session_id as string,
     sourceFile: row.source_file as string,
+    cwd: (row.cwd as string) || undefined,
     device: row.device as string,
     deviceInstanceId: row.device_instance_id as string,
     platform: (row.platform as string) || undefined,

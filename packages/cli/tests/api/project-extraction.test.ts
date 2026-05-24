@@ -23,7 +23,13 @@ describe('extractProject', () => {
   it('extracts qoder project names from session segment paths', () => {
     expect(
       extractProject('/Users/example/.qoder/logs/sessions/-Users-example-code-aiusage/session-1/segments/2026-05-24T02-03-23.jsonl')
-    ).toBe('-Users-example-code-aiusage')
+    ).toBe('code/aiusage')
+  })
+
+  it('joins multi-level claude project paths with / not -', () => {
+    expect(
+      extractProject('/Users/tjh/.claude/projects/-Users-tjh-WebstormProjects-myorg-myproject/session.jsonl')
+    ).toBe('myorg/myproject')
   })
 
   it('returns unknown when every directory is generic or machine-like', () => {

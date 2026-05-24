@@ -19,6 +19,7 @@ export interface StatsRecord {
   costSource: 'log' | 'pricing' | 'unknown'
   sessionId: string
   sourceFile: string                   // 来源日志文件的绝对路径
+  cwd?: string                         // 会话工作目录（原始路径，含中文等）
   device: string                       // 设备别名
   deviceInstanceId: string             // 当前安装实例生成的稳定设备实例 ID
   platform?: string                    // 'win32' | 'darwin' | 'linux'

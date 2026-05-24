@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { homedir, hostname, platform } from 'node:os'
 import { Aggregator, type Tool } from '@aiusage/core'
@@ -10,6 +10,7 @@ import { loadConfig, AIUSAGE_DIR } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
 import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
+import { runParseQoder } from './parse-qoder.js'
 
 interface ParseResult {
   parsedCount: number
@@ -71,9 +72,13 @@ function windowsUserHomesFromWsl(): string[] {
           if (['All Users', 'Default', 'Default User', 'Public'].includes(user.name)) continue
           homes.push(join(usersDir, user.name))
         }
-      } catch {}
+      } catch {
+        // Permission errors on individual user dirs are non-fatal; skip and continue.
+      }
     }
-  } catch {}
+  } catch {
+    // /mnt may exist but be unreadable; WSL detection is best-effort.
+  }
 
   return homes
 }
@@ -115,7 +120,7 @@ function qoderSessionDirs(source: string | undefined, home: string): string[] {
   return [join(source, 'logs', 'sessions')]
 }
 
-function defaultOpenCodeDbPath(): string {
+export function defaultOpenCodeDbPath(): string {
   const home = homedir()
   const plat = platform()
   if (plat === 'win32') {
@@ -132,8 +137,23 @@ function defaultOpenCodeDbPath(): string {
   return join(xdgDataHome, 'opencode', 'opencode.db')
 }
 
-function defaultHermesDbPath(): string {
+export function defaultHermesDbPath(): string {
   return join(homedir(), '.hermes', 'state.db')
+}
+
+export function defaultQoderDbPath(): string {
+  const home = homedir()
+  const plat = platform()
+  if (plat === 'darwin') {
+    return join(home, 'Library', 'Application Support', 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
+  }
+  if (plat === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
+    return join(localAppData, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
+  }
+  // Linux: $XDG_DATA_HOME/Qoder/... (defaults to ~/.local/share)
+  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
+  return join(xdgDataHome, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
 }
 
 function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
@@ -227,7 +247,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
   return 'unknown'
 }
 
-export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string }): Promise<ParseResult> {
+export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string }): Promise<ParseResult> {
   const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
@@ -258,6 +278,13 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         const content = readFileSync(filePath, 'utf-8')
         const lines = content.split('\n')
         let byteOffset = 0
+
+        // Extract cwd from the first line — it's always present in JSONL session files
+        let fileCwd: string | undefined
+        try {
+          const firstData = JSON.parse(lines[0])
+          if (typeof firstData.cwd === 'string' && firstData.cwd) fileCwd = firstData.cwd
+        } catch {}
 
         const sessionId = extractSessionId(filePath, tool)
 
@@ -305,6 +332,11 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             insertToolCall(db, tc)
             toolCallCount++
           }
+        }
+
+        // Write cwd for all records from this file that don't have it yet
+        if (fileCwd) {
+          db.prepare(`UPDATE records SET cwd = ? WHERE source_file = ? AND cwd = ''`).run(fileCwd, filePath)
         }
 
         wm.setEntry(tool, filePath, {
@@ -383,6 +415,38 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
+  // Qoder: SQLite database (Mac/Linux/Windows desktop app)
+  const qoderDbPath = options?.qoderDbPath ?? config?.sources?.['qoder-db'] ?? defaultQoderDbPath()
+  if ((!filterTool || filterTool === 'qoder') && existsSync(qoderDbPath)) {
+    try {
+      const qoderDb = new Database(qoderDbPath, { readonly: true })
+      try {
+        const result = runParseQoder(qoderDb, {
+          dbPath: qoderDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getQoderCursor(),
+        })
+
+        for (const record of result.records) insertRecord(db, record)
+        for (const tc of result.toolCalls) insertToolCall(db, tc)
+        if (result.nextCursor) {
+          wm.setQoderCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        toolCallCount += result.toolCalls.length
+        errors.push(...result.errors)
+      } finally {
+        qoderDb.close()
+      }
+    } catch (e) {
+      errors.push(`${qoderDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
   if (deviceInstanceId !== 'unknown') {
@@ -398,5 +462,37 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     ).run(devicePlatform)
   }
 
+  // Backfill cwd for records parsed before this feature was added.
+  // Reads only the first 2 KB of each file — enough to find the cwd field.
+  const staleFiles = db.prepare(
+    `SELECT DISTINCT source_file FROM records WHERE cwd = '' AND source_file NOT LIKE 'synced/%'`
+  ).all() as { source_file: string }[]
+  for (const { source_file } of staleFiles) {
+    try {
+      const fd = openSync(source_file, 'r')
+      const buf = Buffer.alloc(2048)
+      const n = readSync(fd, buf, 0, 2048, 0)
+      closeSync(fd)
+      const firstLine = buf.subarray(0, n).toString('utf8').split('\n')[0]
+      const data = JSON.parse(firstLine)
+      if (typeof data.cwd === 'string' && data.cwd) {
+        db.prepare(`UPDATE records SET cwd = ? WHERE source_file = ? AND cwd = ''`).run(data.cwd, source_file)
+      }
+    } catch {}
+  }
+
   return { parsedCount, toolCallCount, errors }
+}
+
+export function getDefaultSourcePaths(): Record<string, string> {
+  const home = homedir()
+  return {
+    'claude-code': join(home, '.claude', 'projects'),
+    'codex':       join(home, '.codex', 'sessions'),
+    'openclaw':    join(home, '.openclaw', 'agents'),
+    'opencode':    defaultOpenCodeDbPath(),
+    'hermes':      defaultHermesDbPath(),
+    'qoder':       join(home, '.qoder', 'logs', 'sessions'),
+    'qoder-db':    defaultQoderDbPath(),
+  }
 }

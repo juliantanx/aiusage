@@ -28,28 +28,41 @@ export function extractProject(sourceFile: string): string {
     ?? 'unknown'
 }
 
+/**
+ * Decode an encoded project path (where `/` was replaced with `-`) into a
+ * human-readable name. Known workspace roots (WebstormProjects, Documents, …)
+ * are stripped and the remaining segments are joined with `/` so that
+ * multi-level paths like `org/project` are preserved correctly.
+ */
+function decodeEncodedPath(raw: string): string {
+  const parts = raw.split('-').filter(Boolean)
+
+  const WORKSPACE_ROOTS = ['WebstormProjects', 'Documents', 'Projects', 'workspace', 'Workspace']
+  for (const root of WORKSPACE_ROOTS) {
+    const idx = parts.indexOf(root)
+    if (idx >= 0 && idx < parts.length - 1) {
+      return parts.slice(idx + 1).join('/')
+    }
+  }
+
+  const meaningful = parts.filter(p => !looksMachineGenerated(p))
+  if (meaningful.length === 0) return raw
+  if (meaningful.length <= 3) return meaningful[meaningful.length - 1] ?? '~'
+  return meaningful.slice(-2).join('/')
+}
+
 function extractProjectFromClaudePath(sourceFile: string): string | null {
   const normalized = sourceFile.replace(/\\/g, '/')
   const match = normalized.match(/\.claude\/projects\/([^/]+)/)
   if (!match) return null
-
-  const raw = match[1]
-  const parts = raw.split('-').filter(Boolean)
-  const webstormIndex = parts.indexOf('WebstormProjects')
-  if (webstormIndex >= 0 && webstormIndex < parts.length - 1) return parts.slice(webstormIndex + 1).join('-')
-
-  const documentsIndex = parts.indexOf('Documents')
-  if (documentsIndex >= 0 && documentsIndex < parts.length - 1) return parts.slice(documentsIndex + 1).join('-')
-
-  if (parts.length <= 3) return '~'
-  return parts.slice(-2).join('-') || raw
+  return decodeEncodedPath(match[1])
 }
 
 function extractProjectFromKnownToolPath(sourceFile: string): string | null {
   const normalized = sourceFile.replace(/\\/g, '/')
 
   const qoderSessionMatch = normalized.match(/\/\.qoder\/logs\/sessions\/([^/]+)\//)
-  if (qoderSessionMatch) return qoderSessionMatch[1]
+  if (qoderSessionMatch) return decodeEncodedPath(qoderSessionMatch[1])
 
   if (normalized.includes('/.openclaw/')) {
     const parts = normalized.split('/').filter(Boolean)
@@ -80,6 +93,15 @@ function extractProjectFromGenericPath(sourceFile: string): string | null {
     const candidate = parts[index]
     if (isSkippableDirectoryName(candidate)) continue
     if (looksMachineGenerated(candidate)) continue
+    if (isPurelyNumeric(candidate)) {
+      if (index > 0) {
+        const parent = parts[index - 1]
+        if (!isSkippableDirectoryName(parent) && !looksMachineGenerated(parent) && !isPurelyNumeric(parent)) {
+          return `${parent}/${candidate}`
+        }
+      }
+      continue  // no meaningful parent, skip this numeric segment
+    }
     return candidate
   }
 
@@ -91,9 +113,11 @@ function isSkippableDirectoryName(name: string): boolean {
 }
 
 function looksMachineGenerated(name: string): boolean {
-  return /^\d{4}$/.test(name)
-    || /^\d{2}$/.test(name)
-    || /^\d{4}-\d{2}-\d{2}T/.test(name)
+  return /^\d{4}-\d{2}-\d{2}T/.test(name)
     || /^[0-9a-f]{8,}$/i.test(name)
     || /^[0-9a-f-]{32,}$/i.test(name)
+}
+
+function isPurelyNumeric(name: string): boolean {
+  return /^\d+$/.test(name)
 }
