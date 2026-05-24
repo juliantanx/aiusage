@@ -11,6 +11,7 @@ import { WatermarkManager } from '../watermark.js'
 import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
+import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
   parsedCount: number
@@ -247,7 +248,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
   return 'unknown'
 }
 
-export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string }): Promise<ParseResult> {
+export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
   const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
   const device = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
@@ -264,16 +265,28 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   let toolCallCount = 0
   const errors: string[] = []
 
+  const onProgress = options?.onProgress ?? (() => {})
+  const totalFiles = toolPaths
+    .filter(({ tool }) => !filterTool || tool === filterTool)
+    .reduce((sum, { paths }) => sum + paths.length, 0)
+  let fileIndex = 0
+  let currentTool: string | undefined
+
   for (const { tool, paths } of toolPaths) {
     if (filterTool && tool !== filterTool) continue
+    currentTool = tool
 
     for (const filePath of paths) {
+      fileIndex++
       try {
         const stat = statSync(filePath)
         const entry = wm.getEntry(tool, filePath)
         const offset = entry?.offset ?? 0
 
-        if (offset >= stat.size) continue // No new data
+        if (offset >= stat.size) {
+          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          continue // No new data
+        }
 
         const content = readFileSync(filePath, 'utf-8')
         const lines = content.split('\n')
@@ -345,6 +358,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           mtime: stat.mtimeMs,
         })
         wm.save()
+        onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
       } catch (e) {
         errors.push(`${filePath}: ${e instanceof Error ? e.message : e}`)
       }
@@ -375,6 +389,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         parsedCount += result.records.length
         toolCallCount += result.toolCalls.length
         errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'opencode', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
       } finally {
         openCodeDb.close()
       }
@@ -407,6 +422,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         parsedCount += result.records.length
         toolCallCount += result.toolCalls.length
         errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'hermes', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
       } finally {
         hermesDb.close()
       }
@@ -439,6 +455,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         parsedCount += result.records.length
         toolCallCount += result.toolCalls.length
         errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'qoder', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
       } finally {
         qoderDb.close()
       }

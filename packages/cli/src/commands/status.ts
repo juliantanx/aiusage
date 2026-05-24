@@ -1,7 +1,8 @@
 import type Database from 'better-sqlite3'
 import { statSync, existsSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { getState } from '../init.js'
-import { AIUSAGE_DIR } from '../config.js'
+import { AIUSAGE_DIR, loadConfig } from '../config.js'
 import { join } from 'node:path'
 
 export interface StatusResult {
@@ -46,9 +47,12 @@ export function generateStatus(db: Database.Database): StatusResult {
     } catch {}
   }
 
+  const config = loadConfig()
+  const deviceName = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
+
   return {
     version: '0.0.1',
-    deviceName: state?.deviceInstanceId?.slice(0, 8) ?? 'unknown',
+    deviceName,
     dbPath,
     databaseSize,
     schemaVersion,

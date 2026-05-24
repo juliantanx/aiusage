@@ -7,8 +7,10 @@ import { generateSummary } from './commands/summary.js'
 import { generateStatus } from './commands/status.js'
 import { exportData } from './commands/export.js'
 import { cleanOldData } from './commands/clean.js'
+import { runReset } from './commands/reset.js'
 import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
+import { ProgressReporter } from './progress.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
@@ -141,15 +143,21 @@ program
   .command('parse')
   .description('Parse AI tool session logs')
   .option('--tool <tool>', 'Specific tool to parse (claude-code|codex|openclaw|opencode|hermes|qoder)')
+  .option('--progress', 'Show real-time progress')
   .action(async (options) => {
     const db = createDatabase(DB_PATH)
+    const reporter = options.progress ? new ProgressReporter() : undefined
     try {
-      const result = await runParse(db, options.tool)
+      const result = await runParse(db, options.tool, {
+        onProgress: reporter ? (info) => reporter.update(info) : undefined,
+      })
+      reporter?.done()
       console.log(`Parsed ${result.parsedCount} records, ${result.toolCallCount} tool calls.`)
       if (result.errors.length > 0) {
         console.warn(`${result.errors.length} errors encountered.`)
       }
     } catch (e) {
+      reporter?.done()
       console.error(`Parse failed: ${e instanceof Error ? e.message : e}`)
       process.exit(1)
     } finally {
@@ -176,6 +184,27 @@ program
     const db = createDatabase(DB_PATH)
     const result = cleanOldData(db, days)
     console.log(`Deleted ${result.deletedCount} records, ${result.deletedSyncedCount} synced records, ${result.deletedOrphanToolCalls} orphan tool calls.`)
+    db.close()
+  })
+
+// reset command
+program
+  .command('reset')
+  .description('Delete all parsed data and watermark, then re-parse from scratch')
+  .option('--yes', 'Skip confirmation')
+  .action((options) => {
+    if (!options.yes) {
+      console.error('This will delete ALL parsed records, tool calls, synced data, and the parse watermark.')
+      console.error('Source log files (~/.claude, ~/.codex, etc.) will NOT be affected.')
+      console.error('Use --yes to confirm.')
+      process.exit(1)
+    }
+    const db = createDatabase(DB_PATH)
+    const result = runReset(db)
+    console.log(`Deleted ${result.deletedRecords} records, ${result.deletedToolCalls} tool calls, ${result.deletedSyncedRecords} synced records.`)
+    if (result.watermarkRemoved) {
+      console.log('Watermark removed — next parse will re-import all data from scratch.')
+    }
     db.close()
   })
 
