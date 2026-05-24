@@ -73,20 +73,136 @@ pnpm rebuild:sqlite
 
 ![Token usage page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/token.png)
 
-## Common Commands
+## CLI Reference
 
-| Command | Purpose |
-| --- | --- |
-| `aiusage` | Print the same terminal summary as `aiusage summary` |
-| `aiusage parse` | Import newly appended local session data from discovered source paths |
-| `aiusage serve` | Start the local dashboard and runtime settings controller |
-| `aiusage summary` | Print a usage summary in the terminal |
-| `aiusage status` | Show database path, schema version, and record counts |
-| `aiusage sync` | Push and pull data with a configured remote backend |
-| `aiusage export` | Export records as CSV, JSON, or NDJSON |
-| `aiusage clean` | Remove old data |
-| `aiusage recalc` | Recalculate costs with updated pricing |
-| `aiusage init` | Configure a sync backend |
+### `aiusage` (default)
+
+Print a usage summary to the terminal (same as `aiusage summary`).
+
+### `aiusage parse`
+
+Import newly appended local session data from discovered source paths.
+
+| Option | Description |
+|--------|-------------|
+| `--tool <tool>` | Only parse a specific tool: `claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder` |
+| `--progress` | Show real-time progress bar on stderr (TTY only, silent in pipes/CI) |
+
+```bash
+aiusage parse                        # Parse all tools
+aiusage parse --tool claude-code     # Only parse Claude Code logs
+aiusage parse --progress             # Show progress bar while parsing
+```
+
+### `aiusage serve`
+
+Start the local web dashboard and runtime settings controller.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-p, --port <port>` | Port number | `3847` |
+
+```bash
+aiusage serve             # Start on port 3847
+aiusage serve -p 8080     # Start on port 8080
+```
+
+### `aiusage summary`
+
+Print a usage summary in the terminal.
+
+| Option | Description |
+|--------|-------------|
+| `--device <id>` | Filter by device instance ID |
+| `--tool <tool>` | Filter by tool type |
+
+```bash
+aiusage summary                        # All-time summary
+aiusage summary --tool claude-code     # Single tool
+```
+
+### `aiusage status`
+
+Show version, device name, DB path, schema version, table/view counts, record count, DB size, and sync status.
+
+### `aiusage export`
+
+Export records as CSV, JSON, or NDJSON.
+
+| Option | Description | Required |
+|--------|-------------|----------|
+| `--format <format>` | Output format: `csv`, `json`, `ndjson` | Yes |
+| `-o, --output <file>` | Output file path (default: stdout) | No |
+
+```bash
+aiusage export --format csv                 # CSV to stdout
+aiusage export --format json -o report.json # JSON to file
+aiusage export --format ndjson              # NDJSON to stdout
+```
+
+### `aiusage clean`
+
+Remove old records from the local database based on age.
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--before <duration>` | Delete data older than this duration (e.g. `30d`, `180d`) | `180d` |
+
+```bash
+aiusage clean                    # Delete records older than 180 days
+aiusage clean --before 30d       # Delete records older than 30 days
+aiusage clean --before 90d --yes # Delete records older than 90 days, skip confirm
+```
+
+### `aiusage reset`
+
+Delete all parsed records, tool calls, synced data, and the parse watermark. Source log files (`~/.claude`, `~/.codex`, etc.) are **not** affected. Use this to re-import everything from scratch.
+
+| Option | Description |
+|--------|-------------|
+| `--yes` | Skip confirmation prompt (required to execute) |
+
+```bash
+aiusage reset --yes    # Wipe all data, then run `aiusage parse` to re-import
+```
+
+### `aiusage recalc`
+
+Recalculate costs using the latest pricing data.
+
+```bash
+aiusage recalc
+```
+
+### `aiusage init`
+
+Configure a sync backend for multi-machine data aggregation.
+
+| Option | Description |
+|--------|-------------|
+| `--backend <backend>` | Sync backend: `github`, `s3`, `skip` |
+| `--repo <repo>` | GitHub repository (format: `username/repo-name`) |
+| `--token <token>` | GitHub Personal Access Token |
+| `--bucket <bucket>` | S3 bucket name |
+| `--prefix <prefix>` | S3 object prefix (default: `aiusage/`) |
+| `--endpoint <endpoint>` | S3 endpoint URL |
+| `--region <region>` | S3 region (default: `auto`) |
+| `--access-key-id <id>` | S3 access key ID |
+| `--secret-access-key <key>` | S3 secret access key |
+| `--device <alias>` | Device alias |
+
+```bash
+aiusage init --backend github --repo user/aiusage-data --token ghp_xxx
+aiusage init --backend s3 --bucket my-bucket --endpoint https://xxx.r2.cloudflarestorage.com --access-key-id AKIAxxx --secret-access-key xxx
+```
+
+### `aiusage sync`
+
+Push and pull data with the configured remote backend.
+
+```bash
+aiusage sync
+```
 
 ## Web Dashboard
 

@@ -73,20 +73,136 @@ pnpm rebuild:sqlite
 
 ![Token 用量页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/token.png)
 
-## 常用命令
+## CLI 命令参考
 
-| 命令 | 用途 |
-| --- | --- |
-| `aiusage` | 输出与 `aiusage summary` 相同的终端摘要 |
-| `aiusage parse` | 从自动发现的数据来源路径导入本地新追加的会话数据 |
-| `aiusage serve` | 启动本地仪表盘和运行时设置控制器 |
-| `aiusage summary` | 在终端输出用量摘要 |
-| `aiusage status` | 显示数据库路径、schema 版本和记录数 |
-| `aiusage sync` | 与已配置的远程后端双向同步数据 |
-| `aiusage export` | 导出 CSV、JSON 或 NDJSON 数据 |
-| `aiusage clean` | 清理旧数据 |
-| `aiusage recalc` | 按最新定价重新计算费用 |
-| `aiusage init` | 配置同步后端 |
+### `aiusage`（默认）
+
+在终端输出用量摘要（等同于 `aiusage summary`）。
+
+### `aiusage parse`
+
+从自动发现的数据来源路径导入本地新追加的会话数据。
+
+| 选项 | 说明 |
+|------|------|
+| `--tool <tool>` | 只解析指定工具：`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder` |
+| `--progress` | 在 stderr 显示实时进度条（仅 TTY 环境，管道/CI 下自动静默） |
+
+```bash
+aiusage parse                        # 解析所有工具
+aiusage parse --tool claude-code     # 只解析 Claude Code 日志
+aiusage parse --progress             # 显示进度条
+```
+
+### `aiusage serve`
+
+启动本地 Web 仪表盘和运行时设置控制器。
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `-p, --port <port>` | 端口号 | `3847` |
+
+```bash
+aiusage serve             # 使用 3847 端口启动
+aiusage serve -p 8080     # 使用 8080 端口启动
+```
+
+### `aiusage summary`
+
+在终端输出用量摘要。
+
+| 选项 | 说明 |
+|------|------|
+| `--device <id>` | 按设备实例 ID 筛选 |
+| `--tool <tool>` | 按工具类型筛选 |
+
+```bash
+aiusage summary                        # 全部时间
+aiusage summary --tool claude-code     # 只看 Claude Code
+```
+
+### `aiusage status`
+
+显示版本号、设备名称、数据库路径、schema 版本、表和视图数量、记录数、数据库大小及同步状态。
+
+### `aiusage export`
+
+导出记录为 CSV、JSON 或 NDJSON 格式。
+
+| 选项 | 说明 | 是否必填 |
+|------|------|----------|
+| `--format <format>` | 输出格式：`csv`、`json`、`ndjson` | 是 |
+| `-o, --output <file>` | 输出文件路径（默认输出到 stdout） | 否 |
+
+```bash
+aiusage export --format csv                 # CSV 输出到终端
+aiusage export --format json -o report.json # JSON 输出到文件
+aiusage export --format ndjson              # NDJSON 输出到终端
+```
+
+### `aiusage clean`
+
+按时间清理本地数据库中的旧记录。
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--before <duration>` | 删除此时间之前的数据（如 `30d`、`180d`） | `180d` |
+
+```bash
+aiusage clean                         # 删除 180 天前的记录
+aiusage clean --before 30d            # 删除 30 天前的记录
+aiusage clean --before 90d --yes      # 删除 90 天前的记录，跳过确认
+```
+
+### `aiusage reset`
+
+删除所有已解析的记录、工具调用、同步数据和 parse 水位线。原始日志文件（`~/.claude`、`~/.codex` 等）**不受影响**。用于从头重新导入所有数据。
+
+| 选项 | 说明 |
+|------|------|
+| `--yes` | 跳过确认提示（必须指定才会执行） |
+
+```bash
+aiusage reset --yes    # 清空所有数据，然后执行 `aiusage parse` 重新导入
+```
+
+### `aiusage recalc`
+
+使用最新定价数据重新计算费用。
+
+```bash
+aiusage recalc
+```
+
+### `aiusage init`
+
+配置同步后端，用于多设备数据聚合。
+
+| 选项 | 说明 |
+|------|------|
+| `--backend <backend>` | 同步后端：`github`、`s3`、`skip` |
+| `--repo <repo>` | GitHub 仓库（格式：`用户名/仓库名`） |
+| `--token <token>` | GitHub Personal Access Token |
+| `--bucket <bucket>` | S3 存储桶名称 |
+| `--prefix <prefix>` | S3 对象前缀（默认：`aiusage/`） |
+| `--endpoint <endpoint>` | S3 endpoint URL |
+| `--region <region>` | S3 区域（默认：`auto`） |
+| `--access-key-id <id>` | S3 access key ID |
+| `--secret-access-key <key>` | S3 secret access key |
+| `--device <alias>` | 设备别名 |
+
+```bash
+aiusage init --backend github --repo user/aiusage-data --token ghp_xxx
+aiusage init --backend s3 --bucket my-bucket --endpoint https://xxx.r2.cloudflarestorage.com --access-key-id AKIAxxx --secret-access-key xxx
+```
+
+### `aiusage sync`
+
+与已配置的远程后端双向同步数据。
+
+```bash
+aiusage sync
+```
 
 ## Web 仪表盘
 
