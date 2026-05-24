@@ -151,9 +151,13 @@
     height: 220px;
     padding: 0 0 16px;
     border-bottom: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-width: 0;
   }
   .bar-group {
-    flex: 1;
+    flex: 0 0 auto;
+    min-width: 18px;
     display: flex;
     flex-direction: column;
     align-items: center;

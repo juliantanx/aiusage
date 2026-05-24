@@ -294,7 +294,7 @@
     --shadow-lg:        0 4px 8px oklch(0 0 0 / 0.08), 0 12px 32px oklch(0 0 0 / 0.06);
     --overlay:          oklch(0 0 0 / 0.25);
     --mono:             'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
-    --sidebar-width:    240px;
+    --sidebar-width:    180px;
     --sidebar-collapsed: 56px;
     --chart-input:      oklch(0.65 0.14 175);
     --chart-output:     oklch(0.6 0.15 250);
@@ -544,6 +544,7 @@
   /* ── Main area ────────────────────────────────────────────────────────── */
   .main-area {
     flex: 1;
+    min-width: 0;
     margin-left: var(--sidebar-width);
     transition: margin-left 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     min-height: 100vh;
@@ -598,6 +599,7 @@
   /* Page content */
   .page-content {
     flex: 1;
+    min-width: 0;
     padding: 2rem 2.5rem;
     width: 100%;
     animation: fadeIn 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
@@ -623,6 +625,7 @@
     border-radius: 8px;
     padding: 1.25rem;
     transition: background 0.2s;
+    overflow: hidden;
   }
 
   :global(.section-title) {

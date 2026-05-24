@@ -1,14 +1,19 @@
 <script>
+  import { onMount } from 'svelte'
+  import { get } from 'svelte/store'
   import { dateRange, setRange, setCustomRange } from '../stores.js'
   import { t, lang } from '../i18n.js'
 
-  let showMonthPicker = false
   let showCustom = false
   let customFrom = ''
   let customTo = ''
   let selectedMonth = ''
 
-  // Generate last 12 months
+  onMount(() => {
+    selectedMonth = get(dateRange).month || ''
+  })
+
+  // Generate last 12 months, always include persisted month if missing
   function getMonths() {
     const months = []
     const now = new Date()
@@ -20,24 +25,29 @@
     return months
   }
 
-  const months = getMonths()
+  const baseMonths = getMonths()
+  $: months = selectedMonth && !baseMonths.includes(selectedMonth)
+    ? [selectedMonth, ...baseMonths]
+    : baseMonths
 
   function handleRangeChange(range) {
     setRange(range)
     showCustom = false
-    showMonthPicker = false
     selectedMonth = ''
   }
 
   function handleMonthSelect(e) {
     const val = e.target.value
-    if (!val) return
     selectedMonth = val
+    if (!val) {
+      setRange($dateRange.range || 'day')
+      return
+    }
     const [y, m] = val.split('-').map(Number)
     const from = `${val}-01`
     const lastDay = new Date(y, m, 0).getDate()
     const to = `${val}-${String(lastDay).padStart(2, '0')}`
-    setCustomRange(from, to)
+    setCustomRange(from, to, val)
     showCustom = false
   }
 
@@ -103,7 +113,7 @@
   <button
     class="custom-toggle"
     class:active={activeCustom}
-    on:click={() => { showCustom = !showCustom; showMonthPicker = false }}
+    on:click={() => { showCustom = !showCustom }}
     title="Custom range"
   >⊞</button>
 

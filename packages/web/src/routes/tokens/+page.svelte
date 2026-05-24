@@ -226,6 +226,7 @@
     border-bottom: 1px solid var(--border-subtle);
     overflow-x: auto;
     overflow-y: hidden;
+    min-width: 0;
   }
   .bar-group {
     flex: 0 0 auto;
