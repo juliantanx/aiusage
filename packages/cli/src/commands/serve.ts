@@ -10,7 +10,7 @@ import { getState } from '../init.js'
 import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
 import { RuntimeSettingsController } from '../runtime/settings-controller.js'
-import { setPriceOverride, resolveExchangeRate, fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
+import { setPriceOverride, fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
