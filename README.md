@@ -1,6 +1,6 @@
 # aiusage
 
-Track AI coding assistant usage, token consumption, cost, and tool calls in one place across Claude Code, Codex, OpenClaw, OpenCode, and Hermes.
+Track AI coding assistant usage, token consumption, cost, and tool calls in one place across Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.
 
 English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
@@ -132,7 +132,7 @@ For single-machine usage, Quick Start is enough.
 
 ### Multi-Machine Sync
 
-Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, OpenCode, and Hermes.
+Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.
 
 **Architecture:**
 
@@ -157,7 +157,7 @@ Machine C ──┘
 
 **Step 2 — Install and configure on each machine**
 
-On every machine that uses Claude Code, Codex, OpenClaw, OpenCode, or Hermes:
+On every machine that uses Claude Code, Codex, OpenClaw, OpenCode, Hermes, or Qoder:
 
 ```bash
 # Install aiusage CLI
@@ -333,6 +333,7 @@ docker build -t aiusage .
 | OpenClaw | `~/.openclaw/agents/*/sessions/` | `~/.openclaw/agents/*/sessions/` | `%USERPROFILE%\.openclaw\agents\*\sessions\` |
 | OpenCode | `~/Library/Application Support/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` | `%APPDATA%\opencode\opencode.db` |
 | Hermes | `~/.hermes/state.db` | `~/.hermes/state.db` | `%USERPROFILE%\.hermes\state.db` |
+| Qoder | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/` plus WSL-mounted Windows user homes | `%USERPROFILE%\.qoder\logs\sessions\` |
 
 Discovery behavior:
 
@@ -341,8 +342,11 @@ Discovery behavior:
 - **OpenClaw** — scans each agent's `sessions/` directory under `~/.openclaw/agents/*/sessions/` and skips checkpoint files.
 - **OpenCode** — reads the SQLite database file directly instead of `.jsonl` logs.
 - **Hermes** — reads the SQLite database file (`state.db`) directly. Sessions without a recorded end time are still imported if they have token data (e.g. sessions from a force-quit).
+- **Qoder** — recursively scans structured session segment logs (`logs/sessions/**/segments/*.jsonl`) and imports `model.response.completed` token events. On WSL, aiusage also checks mounted Windows user homes such as `/mnt/c/Users/<user>`, `/mnt/d/Users/<user>`, and `/mnt/e/Users/<user>` for the same Qoder session-log layout.
 
 > On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
+
+Qoder Desktop also creates installation files under `Program Files`, UI/cache data under `AppData/Roaming/Qoder` and `AppData/Local/.qoder`, and transcripts under `%USERPROFILE%\.qoder\projects` or `%USERPROFILE%\.qoder\cache`. These are not imported as token records: desktop `Context usage update` log lines are repeated context-window snapshots, and transcripts/conversation-history files do not contain per-request token usage.
 
 ### Custom Source Paths
 
@@ -355,12 +359,13 @@ If you installed a tool to a non-default location, override the paths in the **S
     "codex": "/custom/path/.codex/sessions",
     "openclaw": "/custom/sessions-dir",
     "opencode": "/custom/path/opencode.db",
-    "hermes": "/custom/path/.hermes/state.db"
+    "hermes": "/custom/path/.hermes/state.db",
+    "qoder": "/custom/path/.qoder"
   }
 }
 ```
 
-Only the paths you specify are overridden; unspecified tools fall back to their defaults.
+Only the paths you specify are overridden; unspecified tools fall back to their defaults. For Qoder, the custom path may point either at the `.qoder` root or directly at `logs/sessions`.
 
 ## Database Visualization
 

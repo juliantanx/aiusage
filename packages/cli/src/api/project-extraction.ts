@@ -13,7 +13,9 @@ const GENERIC_DIRECTORY_NAMES = new Set([
   '.codex',
   '.opencode',
   '.openclaw',
+  '.qoder',
   'projects',
+  'runs',
 ])
 
 const TOOL_DIRECTORY_NAMES = new Set(['agents', 'main'])
@@ -46,6 +48,9 @@ function extractProjectFromClaudePath(sourceFile: string): string | null {
 function extractProjectFromKnownToolPath(sourceFile: string): string | null {
   const normalized = sourceFile.replace(/\\/g, '/')
 
+  const qoderSessionMatch = normalized.match(/\/\.qoder\/logs\/sessions\/([^/]+)\//)
+  if (qoderSessionMatch) return qoderSessionMatch[1]
+
   if (normalized.includes('/.openclaw/')) {
     const parts = normalized.split('/').filter(Boolean)
     const sessionsIndex = parts.indexOf('sessions')
@@ -57,6 +62,10 @@ function extractProjectFromKnownToolPath(sourceFile: string): string | null {
 
   if (normalized.includes('/.codex/') || normalized.includes('/.opencode/')) {
     return extractProjectFromGenericPath(normalized)
+  }
+
+  if (normalized.includes('/.qoder/logs/runs/')) {
+    return 'unknown'
   }
 
   return null
@@ -84,6 +93,7 @@ function isSkippableDirectoryName(name: string): boolean {
 function looksMachineGenerated(name: string): boolean {
   return /^\d{4}$/.test(name)
     || /^\d{2}$/.test(name)
+    || /^\d{4}-\d{2}-\d{2}T/.test(name)
     || /^[0-9a-f]{8,}$/i.test(name)
     || /^[0-9a-f-]{32,}$/i.test(name)
 }

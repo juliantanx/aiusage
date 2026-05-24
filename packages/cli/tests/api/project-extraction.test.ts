@@ -20,6 +20,12 @@ describe('extractProject', () => {
     ).toBe('aiusage')
   })
 
+  it('extracts qoder project names from session segment paths', () => {
+    expect(
+      extractProject('/Users/example/.qoder/logs/sessions/-Users-example-code-aiusage/session-1/segments/2026-05-24T02-03-23.jsonl')
+    ).toBe('-Users-example-code-aiusage')
+  })
+
   it('returns unknown when every directory is generic or machine-like', () => {
     expect(
       extractProject('/tmp/data/logs/2026/05/16/123e4567-e89b-12d3-a456-426614174000.jsonl')

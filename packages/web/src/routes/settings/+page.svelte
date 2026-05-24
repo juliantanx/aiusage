@@ -8,7 +8,7 @@
 
   // Form data — all strings for simplicity, coerced on save
   let general = { device: '', weekStart: 1, dashboardPollInterval: '', parseInterval: '' }
-  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '' }
+  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '' }
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '', credentialRef: '' }
   let credentialValue = ''
   let credentialIsSet = false
@@ -38,6 +38,8 @@
         codex: cfg.sources?.codex ?? '',
         openclaw: cfg.sources?.openclaw ?? '',
         opencode: cfg.sources?.opencode ?? '',
+        hermes: cfg.sources?.hermes ?? '',
+        qoder: cfg.sources?.qoder ?? '',
       }
       syncData = {
         backend: cfg.sync?.backend ?? '',
@@ -232,7 +234,7 @@
     <div class="card">
       <div class="group-title">{$t('settings.sources')}</div>
       <div class="fields">
-        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode']] as [key, label]}
+        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder']] as [key, label]}
           <div class="field full">
             <label class="field-label" for="field-source-{key}">{label}</label>
             <div class="field-hint">{$t('settings.sourcePath')}</div>

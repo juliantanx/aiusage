@@ -8,7 +8,7 @@ describe('Tool Selector Store', () => {
   })
 
   it('setTool updates selectedTool', () => {
-    setTool('opencode')
-    expect(get(selectedTool)).toBe('opencode')
+    setTool('qoder')
+    expect(get(selectedTool)).toBe('qoder')
   })
 })

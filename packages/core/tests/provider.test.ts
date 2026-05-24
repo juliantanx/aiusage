@@ -11,6 +11,7 @@ describe('MODEL_PROVIDER_MAP', () => {
     expect(prefixes).toContain('o4-')
     expect(prefixes).toContain('deepseek-')
     expect(prefixes).toContain('gemini-')
+    expect(prefixes).toContain('qoder-')
   })
 })
 
@@ -40,6 +41,11 @@ describe('inferProvider', () => {
   it('returns google for gemini- models', () => {
     expect(inferProvider('gemini-2.0-flash')).toBe('google')
     expect(inferProvider('gemini-pro')).toBe('google')
+  })
+
+  it('returns qoder for normalized qoder tier models', () => {
+    expect(inferProvider('qoder-ultimate')).toBe('qoder')
+    expect(inferProvider('qoder-efficient')).toBe('qoder')
   })
 
   it('returns unknown for unrecognized models', () => {

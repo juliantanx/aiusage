@@ -37,6 +37,7 @@ function defaultFileData(): FileWatermarkData {
     'openclaw': {},
     'opencode': {},
     'hermes': {},
+    'qoder': {},
   }
 }
 
@@ -60,7 +61,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: parsed.files ?? defaultFileData(), opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null }
+      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null }
     } catch {
       return { files: defaultFileData() }
     }

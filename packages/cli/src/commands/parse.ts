@@ -22,6 +22,10 @@ interface ToolPaths {
   paths: string[]
 }
 
+function unique(paths: string[]): string[] {
+  return [...new Set(paths)]
+}
+
 function findJsonlFiles(dir: string): string[] {
   const results: string[] = []
   try {
@@ -36,6 +40,79 @@ function findJsonlFiles(dir: string): string[] {
     }
   } catch {}
   return results
+}
+
+function findQoderSessionSegmentFiles(dir: string): string[] {
+  return findJsonlFiles(dir).filter((filePath) => {
+    const parts = filePath.replace(/\\/g, '/').split('/').filter(Boolean)
+    const sessionsIndex = parts.lastIndexOf('sessions')
+    const segmentsIndex = parts.lastIndexOf('segments')
+    return sessionsIndex >= 0
+      && segmentsIndex > sessionsIndex
+      && segmentsIndex === parts.length - 2
+  })
+}
+
+function windowsUserHomesFromWsl(): string[] {
+  const homes: string[] = []
+  if (!existsSync('/mnt')) return homes
+
+  try {
+    const drives = readdirSync('/mnt', { withFileTypes: true })
+    for (const drive of drives) {
+      if (!drive.isDirectory() || !/^[a-z]$/i.test(drive.name)) continue
+      const usersDir = join('/mnt', drive.name, 'Users')
+      if (!existsSync(usersDir)) continue
+
+      try {
+        const users = readdirSync(usersDir, { withFileTypes: true })
+        for (const user of users) {
+          if (!user.isDirectory()) continue
+          if (['All Users', 'Default', 'Default User', 'Public'].includes(user.name)) continue
+          homes.push(join(usersDir, user.name))
+        }
+      } catch {}
+    }
+  } catch {}
+
+  return homes
+}
+
+function defaultQoderSessionDirs(home: string): string[] {
+  const windowsHomes = [
+    process.env.USERPROFILE,
+    ...windowsUserHomesFromWsl(),
+  ].filter((value): value is string => !!value)
+
+  const dirs = [
+    join(home, '.qoder', 'logs', 'sessions'),
+    ...windowsHomes.flatMap((windowsHome) => [
+      join(windowsHome, '.qoder', 'logs', 'sessions'),
+      join(windowsHome, 'AppData', 'Local', '.qoder', 'logs', 'sessions'),
+      join(windowsHome, 'AppData', 'Roaming', 'Qoder', 'logs', 'sessions'),
+    ]),
+  ]
+
+  if (process.env.LOCALAPPDATA) {
+    dirs.push(join(process.env.LOCALAPPDATA, '.qoder', 'logs', 'sessions'))
+  }
+  if (process.env.APPDATA) {
+    dirs.push(join(process.env.APPDATA, 'Qoder', 'logs', 'sessions'))
+  }
+
+  return unique(dirs)
+}
+
+function qoderSessionDirs(source: string | undefined, home: string): string[] {
+  if (!source) return defaultQoderSessionDirs(home)
+
+  const normalized = source.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (normalized.endsWith('/logs/sessions') || normalized.endsWith('/sessions') || normalized.endsWith('/segments')) {
+    return [source]
+  }
+  if (normalized.endsWith('/logs')) return [join(source, 'sessions')]
+
+  return [join(source, 'logs', 'sessions')]
 }
 
 function defaultOpenCodeDbPath(): string {
@@ -107,6 +184,17 @@ function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolP
     }
   }
 
+  // Qoder: structured session logs only. Desktop context-usage snapshots and transcripts
+  // are not per-request token records, so they are intentionally ignored.
+  const qoderPaths = unique(
+    qoderSessionDirs(sources?.['qoder'], home)
+      .filter((dir) => existsSync(dir))
+      .flatMap((dir) => findQoderSessionSegmentFiles(dir))
+  )
+  if (qoderPaths.length > 0) {
+    results.push({ tool: 'qoder', paths: qoderPaths })
+  }
+
   return results
 }
 
@@ -127,6 +215,14 @@ function extractSessionId(filePath: string, tool: Tool): string {
     // Extract from path like ~/.openclaw/agents/main/sessions/<uuid>.jsonl
     const filename = filePath.split('/').pop() ?? ''
     return filename.replace('.jsonl', '')
+  }
+  if (tool === 'qoder') {
+    // Extract from path like ~/.qoder/logs/sessions/<project>/<session>/segments/<segment>.jsonl
+    const parts = filePath.replace(/\\/g, '/').split('/').filter(Boolean)
+    const segmentsIndex = parts.lastIndexOf('segments')
+    if (segmentsIndex > 0) return parts[segmentsIndex - 1]
+    const filename = parts[parts.length - 1] ?? ''
+    return filename.replace('.jsonl', '') || 'unknown'
   }
   return 'unknown'
 }

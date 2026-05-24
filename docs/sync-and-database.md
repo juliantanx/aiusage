@@ -45,7 +45,7 @@
 | `synced_at` | INTEGER | 最近上传到云端时间，NULL = 未同步 |
 | `updated_at` | INTEGER | 业务字段最近更新时间 |
 | `line_offset` | INTEGER | 来源日志行偏移 |
-| `tool` | TEXT | `claude-code` / `codex` / `openclaw` |
+| `tool` | TEXT | `claude-code` / `codex` / `openclaw` / `opencode` / `hermes` / `qoder` |
 | `model` | TEXT | 模型名 |
 | `provider` | TEXT | 供应商 |
 | `input_tokens` | INTEGER | |
