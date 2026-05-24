@@ -138,6 +138,59 @@ describe('calculateCost', () => {
     })
     expect(cost).toBe(0)
   })
+
+  it('converts CNY model cost to USD using exchangeRate', () => {
+    // deepseek-v4-pro has currency: 'CNY' with input: 12.6, output: 25.2
+    // 1000 input tokens + 500 output tokens
+    // CNY cost: (1000/1M * 12.6) + (500/1M * 25.2) = 0.0126 + 0.0126 = 0.0252 CNY
+    // USD cost: 0.0252 * 0.14 = 0.003528
+    const cost = calculateCost('deepseek-v4-pro', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+    }, 0.14)
+    expect(cost).toBeCloseTo(0.003528, 6)
+  })
+
+  it('uses FALLBACK_RATE when no exchangeRate provided for CNY model', () => {
+    const cost = calculateCost('deepseek-v4-pro', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+    })
+    // CNY cost: 0.0252, USD cost: 0.0252 * 0.137 = 0.0034524
+    expect(cost).toBeCloseTo(0.0252 * 0.137, 6)
+  })
+
+  it('does not convert USD model even when exchangeRate is provided', () => {
+    const cost = calculateCost('claude-sonnet-4-6', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+    }, 0.14)
+    // Should still be plain USD: (1000/1M * 3) + (500/1M * 15) = 0.0105
+    expect(cost).toBeCloseTo(0.0105, 6)
+  })
+
+  it('handles CNY model with cache tokens', () => {
+    // deepseek-v4-pro: input: 12.6, output: 25.2, cacheRead: 0.105, currency: 'CNY'
+    const cost = calculateCost('deepseek-v4-pro', {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 2000,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+    }, 0.14)
+    // CNY: (1000/1M * 12.6) + (500/1M * 25.2) + (2000/1M * 0.105) = 0.0126 + 0.0126 + 0.00021 = 0.02541
+    // USD: 0.02541 * 0.14 = 0.0035574
+    expect(cost).toBeCloseTo(0.0035574, 6)
+  })
 })
 
 describe('resolvePrice', () => {

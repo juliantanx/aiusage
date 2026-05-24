@@ -1,8 +1,9 @@
 export interface PriceEntry {
-  input: number        // USD per 1M tokens
-  output: number       // USD per 1M tokens
-  cacheRead?: number   // USD per 1M tokens
-  cacheWrite?: number  // USD per 1M tokens
+  input: number        // per 1M tokens (in currency unit)
+  output: number       // per 1M tokens (in currency unit)
+  cacheRead?: number   // per 1M tokens (in currency unit)
+  cacheWrite?: number  // per 1M tokens (in currency unit)
+  currency?: 'CNY' | 'USD'  // defaults to 'USD' if omitted
 }
 
 export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
@@ -34,42 +35,42 @@ export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
   'gemini-2.5-flash':      { input: 0.3,   output: 2.5 },
   'gemini-2.0-flash':      { input: 0.1,   output: 0.4 },
   // DeepSeek — https://api-docs.deepseek.com/quick_start/pricing
-  'deepseek-v4-pro':       { input: 1.74,  output: 3.48, cacheRead: 0.0145 },
-  'deepseek-v4-flash':     { input: 0.14,  output: 0.28, cacheRead: 0.0028 },
+  'deepseek-v4-pro':       { input: 12.6,  output: 25.2, cacheRead: 0.105,  currency: 'CNY' },
+  'deepseek-v4-flash':     { input: 1.0,   output: 2.0,  cacheRead: 0.02,   currency: 'CNY' },
   // Kimi (Moonshot AI) — https://platform.kimi.ai/docs/pricing/chat
-  'kimi-k2.6':             { input: 0.95,  output: 4.0,  cacheRead: 0.16 },
-  'kimi-k2.5':             { input: 0.6,   output: 3.0,  cacheRead: 0.1 },
-  'kimi-k2-turbo':         { input: 1.15,  output: 8.0,  cacheRead: 0.15 },
-  'kimi-k2':               { input: 0.6,   output: 2.5,  cacheRead: 0.15 },
-  'moonshot-v1-128k':      { input: 2.0,   output: 5.0 },
-  'moonshot-v1-32k':       { input: 1.0,   output: 3.0 },
-  'moonshot-v1-8k':        { input: 0.2,   output: 2.0 },
+  'kimi-k2.6':             { input: 6.9,   output: 29.0, cacheRead: 1.15,   currency: 'CNY' },
+  'kimi-k2.5':             { input: 4.3,   output: 21.6, cacheRead: 0.72,   currency: 'CNY' },
+  'kimi-k2-turbo':         { input: 8.3,   output: 57.6, cacheRead: 1.08,   currency: 'CNY' },
+  'kimi-k2':               { input: 4.3,   output: 18.0, cacheRead: 1.08,   currency: 'CNY' },
+  'moonshot-v1-128k':      { input: 14.4,  output: 36.0,                    currency: 'CNY' },
+  'moonshot-v1-32k':       { input: 7.2,   output: 21.6,                    currency: 'CNY' },
+  'moonshot-v1-8k':        { input: 1.44,  output: 14.4,                    currency: 'CNY' },
   // GLM (Z.ai / Zhipu AI) — https://docs.z.ai/guides/overview/pricing
-  'glm-5.1':               { input: 1.4,   output: 4.4 },
-  'glm-5p1':               { input: 1.4,   output: 4.4 },  // Fireworks alias (accounts/fireworks/models/glm-5p1)
-  'glm-5-turbo':           { input: 1.2,   output: 4.0 },
-  'glm-5':                 { input: 1.0,   output: 3.2 },
-  'glm-4.7-flashx':        { input: 0.07,  output: 0.4 },
-  'glm-4.7':               { input: 0.6,   output: 2.2 },
-  'glm-4.6':               { input: 0.6,   output: 2.2 },
-  'glm-4.5-x':             { input: 2.2,   output: 8.9 },
-  'glm-4.5-airx':          { input: 1.1,   output: 4.5 },
-  'glm-4.5-air':           { input: 0.2,   output: 1.1 },
-  'glm-4.5':               { input: 0.6,   output: 2.2 },
+  'glm-5.1':               { input: 10.0,  output: 32.0,                    currency: 'CNY' },
+  'glm-5p1':               { input: 10.0,  output: 32.0,                    currency: 'CNY' },  // Fireworks alias (accounts/fireworks/models/glm-5p1)
+  'glm-5-turbo':           { input: 8.5,   output: 29.0,                    currency: 'CNY' },
+  'glm-5':                 { input: 7.0,   output: 23.0,                    currency: 'CNY' },
+  'glm-4.7-flashx':        { input: 0.5,   output: 2.8,                     currency: 'CNY' },
+  'glm-4.7':               { input: 4.0,   output: 16.0,                    currency: 'CNY' },
+  'glm-4.6':               { input: 4.0,   output: 16.0,                    currency: 'CNY' },
+  'glm-4.5-x':             { input: 16.0,  output: 64.0,                    currency: 'CNY' },
+  'glm-4.5-airx':          { input: 8.0,   output: 32.0,                    currency: 'CNY' },
+  'glm-4.5-air':           { input: 1.4,   output: 8.0,                     currency: 'CNY' },
+  'glm-4.5':               { input: 4.0,   output: 16.0,                    currency: 'CNY' },
   // Qwen (Alibaba Cloud) — https://www.alibabacloud.com/help/en/model-studio/model-pricing
-  'qwen3.6-plus':          { input: 0.28,  output: 1.66 },
-  'qwen3-235b':            { input: 0.7,   output: 2.8 },
-  'qwen3-32b':             { input: 0.16,  output: 0.64 },
-  'qwen3-30b':             { input: 0.2,   output: 0.8 },
-  'qwen-max':              { input: 1.6,   output: 6.4 },
-  'qwen-plus':             { input: 0.4,   output: 1.2 },
-  'qwen-turbo':            { input: 0.05,  output: 0.2 },
-  'qwen-long':             { input: 0.072, output: 0.287 },
-  'qwen2.5-72b':           { input: 1.4,   output: 5.6 },
-  'qwen2.5-7b':            { input: 0.175, output: 0.7 },
+  'qwen3.6-plus':          { input: 2.0,   output: 12.0,                    currency: 'CNY' },
+  'qwen3-235b':            { input: 5.0,   output: 20.0,                    currency: 'CNY' },
+  'qwen3-32b':             { input: 1.12,  output: 4.48,                    currency: 'CNY' },
+  'qwen3-30b':             { input: 1.4,   output: 5.6,                     currency: 'CNY' },
+  'qwen-max':              { input: 11.5,  output: 46.0,                    currency: 'CNY' },
+  'qwen-plus':             { input: 2.8,   output: 8.4,                     currency: 'CNY' },
+  'qwen-turbo':            { input: 0.35,  output: 1.4,                     currency: 'CNY' },
+  'qwen-long':             { input: 0.5,   output: 2.0,                     currency: 'CNY' },
+  'qwen2.5-72b':           { input: 10.0,  output: 40.0,                    currency: 'CNY' },
+  'qwen2.5-7b':            { input: 1.26,  output: 5.04,                    currency: 'CNY' },
   // MiniMax — https://platform.minimaxi.com/docs/guides/pricing-paygo
-  'minimax-m2.7':          { input: 0.29,  output: 1.16, cacheRead: 0.058, cacheWrite: 0.362 },
-  'minimax-m2.5':          { input: 0.29,  output: 1.16, cacheRead: 0.029, cacheWrite: 0.362 },
+  'minimax-m2.7':          { input: 2.1,   output: 8.4,  cacheRead: 0.42,  cacheWrite: 2.6,  currency: 'CNY' },
+  'minimax-m2.5':          { input: 2.1,   output: 8.4,  cacheRead: 0.21,  cacheWrite: 2.6,  currency: 'CNY' },
   // Mistral AI — https://mistral.ai/pricing
   'mistral-large':         { input: 0.5,   output: 1.5 },
   'mistral-medium':        { input: 0.4,   output: 2.0 },
@@ -87,22 +88,22 @@ export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
   'command-r-plus':        { input: 2.5,   output: 10.0 },
   'command-r':             { input: 0.15,  output: 0.6 },
   // Doubao (ByteDance) — https://www.volcengine.com/docs/82379/1544106
-  'doubao-seed-2.0-pro':   { input: 0.514, output: 2.57 },
-  'doubao-seed-2.0-code':  { input: 0.467, output: 2.34 },
-  'doubao-seed-2.0-lite':  { input: 0.088, output: 0.526 },
-  'doubao-seed-2.0-mini':  { input: 0.029, output: 0.292 },
-  'doubao-seed-1.6-flash': { input: 0.022, output: 0.219 },
-  'doubao-seed-1.6-lite':  { input: 0.044, output: 0.35 },
-  'doubao-seed-1.6':       { input: 0.117, output: 1.168 },
-  'doubao-1.5-pro':        { input: 0.117, output: 0.292 },
-  'doubao-1.5-lite':       { input: 0.044, output: 0.088 },
+  'doubao-seed-2.0-pro':   { input: 3.7,   output: 18.5,                    currency: 'CNY' },
+  'doubao-seed-2.0-code':  { input: 3.36,  output: 16.8,                    currency: 'CNY' },
+  'doubao-seed-2.0-lite':  { input: 0.63,  output: 3.78,                    currency: 'CNY' },
+  'doubao-seed-2.0-mini':  { input: 0.21,  output: 2.1,                     currency: 'CNY' },
+  'doubao-seed-1.6-flash': { input: 0.16,  output: 1.58,                    currency: 'CNY' },
+  'doubao-seed-1.6-lite':  { input: 0.32,  output: 2.52,                    currency: 'CNY' },
+  'doubao-seed-1.6':       { input: 0.84,  output: 8.4,                     currency: 'CNY' },
+  'doubao-1.5-pro':        { input: 0.84,  output: 2.1,                     currency: 'CNY' },
+  'doubao-1.5-lite':       { input: 0.32,  output: 0.63,                    currency: 'CNY' },
   // Hunyuan (Tencent) — https://cloud.tencent.com/document/product/1729
-  'hunyuan-t1':            { input: 0.066, output: 0.26,  cacheRead: 0.029 },
-  'hunyuan-a13b':          { input: 0.14,  output: 0.57 },
+  'hunyuan-t1':            { input: 0.48,  output: 1.87,  cacheRead: 0.21,  currency: 'CNY' },
+  'hunyuan-a13b':          { input: 1.0,   output: 4.1,                     currency: 'CNY' },
   // ERNIE (Baidu) — https://cloud.baidu.com/doc/WENXINWORKSHOP/s/Blfmc9dlf
-  'ernie-4.5-300b':        { input: 0.28,  output: 0.9 },
-  'ernie-4.5-21b':         { input: 0.07,  output: 0.28 },
-  'ernie-x1':              { input: 0.28,  output: 1.1 },
+  'ernie-4.5-300b':        { input: 2.0,   output: 6.5,                     currency: 'CNY' },
+  'ernie-4.5-21b':         { input: 0.5,   output: 2.0,                     currency: 'CNY' },
+  'ernie-x1':              { input: 2.0,   output: 8.0,                     currency: 'CNY' },
   // Qoder credits — https://docs.qoder.com/user-guide/chat/model-tier-selector
   // Qoder publishes credit multipliers and a $0.02 / credit pack price, but
   // not a full per-token tariff. Estimate 1.0x as 1 credit / 10K tokens.
@@ -186,6 +187,8 @@ export function resolvePrice(model: string): PriceEntry | undefined {
   return bestEntry
 }
 
+export const FALLBACK_RATE = 0.137  // CNY → USD
+
 export function calculateCost(
   model: string,
   tokens: {
@@ -194,7 +197,8 @@ export function calculateCost(
     cacheReadTokens: number
     cacheWriteTokens: number
     thinkingTokens: number
-  }
+  },
+  exchangeRate?: number
 ): number {
   const price = resolvePrice(model)
   if (!price) return 0
@@ -205,5 +209,10 @@ export function calculateCost(
   const cacheWriteCost = (tokens.cacheWriteTokens / 1_000_000) * (price.cacheWrite ?? 0)
   const thinkingCost = (tokens.thinkingTokens / 1_000_000) * price.output
 
-  return inputCost + outputCost + cacheReadCost + cacheWriteCost + thinkingCost
+  const rawCost = inputCost + outputCost + cacheReadCost + cacheWriteCost + thinkingCost
+
+  if (price.currency === 'CNY') {
+    return rawCost * (exchangeRate ?? FALLBACK_RATE)
+  }
+  return rawCost
 }
