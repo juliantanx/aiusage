@@ -2,7 +2,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
-import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate } from '@aiusage/core'
+import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, type PriceEntry } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
@@ -655,6 +655,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return {
               model,
               price: resolvedPrice ?? null,
+              currency: resolvedPrice?.currency ?? 'USD',
               isDefault,
               isOverride,
               matchedBy,
@@ -673,12 +674,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               json(res, { error: { code: 'INVALID_PARAM', message: 'model, input, output required' } }, 400)
               return
             }
-            const entry = {
+            const entry: PriceEntry = {
               input: data.input,
               output: data.output,
               cacheRead: data.cacheRead,
               cacheWrite: data.cacheWrite,
-              thinking: data.thinking,
+            }
+            if (data.currency === 'CNY') {
+              entry.currency = 'CNY'
             }
             setPriceOverride(data.model, entry)
             const cfg = loadConfig() ?? {}
