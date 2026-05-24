@@ -3,7 +3,8 @@
   import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
-  import { triggerSync, fetchSyncStatus } from '$lib/api.js'
+  import { triggerSync, fetchSyncStatus, fetchConfig } from '$lib/api.js'
+  import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   const NAV_GROUPS = [
     {
@@ -114,6 +115,12 @@
   onMount(() => {
     initTheme()
     loadSyncStatus()
+    // Initialize currency stores from config
+    fetchConfig().then(cfg => {
+      if (cfg.displayCurrency) displayCurrency.set(cfg.displayCurrency)
+      if (cfg.exchangeRateCache?.CNY_USD) exchangeRate.set(cfg.exchangeRateCache.CNY_USD)
+      if (cfg.exchangeRate) exchangeRate.set(cfg.exchangeRate)  // manual override takes precedence
+    }).catch(() => {})
     if (typeof window !== 'undefined') {
       collapsed = localStorage.getItem(SIDEBAR_KEY) === 'true'
     }

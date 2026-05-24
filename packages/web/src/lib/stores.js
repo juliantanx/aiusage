@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store'
+import { writable, get } from 'svelte/store'
 
 export const dateRange = writable({ range: 'day' })
 
@@ -15,6 +15,9 @@ export function setTool(tool) {
 }
 
 export const pollingInterval = writable(30000) // 30 seconds default
+
+export const displayCurrency = writable('USD')
+export const exchangeRate = writable(0.137)
 
 export function setRange(range) {
   dateRange.set({ range })
@@ -33,8 +36,13 @@ export function formatNumber(n) {
 }
 
 export function formatCost(n) {
-  if (n < 0.01) return `$${n.toFixed(4)}`
-  return `$${n.toFixed(2)}`
+  const curr = get(displayCurrency)
+  if (curr === 'CNY') {
+    const rate = get(exchangeRate)
+    const cny = n / rate
+    return cny < 0.01 ? `¥${cny.toFixed(4)}` : `¥${cny.toFixed(2)}`
+  }
+  return n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`
 }
 
 export function formatTokens(n) {
