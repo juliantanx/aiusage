@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig, fetchCredential, notifySettingsUpdated } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let loading = true
@@ -44,8 +44,17 @@
   let effectiveDeviceName = ''
 
   // Currency settings
+  // exchangeRate field stores USD→CNY (e.g. 7.30) for user display
+  // Config stores CNY→USD (e.g. 0.137) internally
   let currency = { displayCurrency: 'USD', exchangeRate: '' }
-  let cachedRate = 0.137
+  let cachedRate = 0.137 // CNY→USD, internal direction
+  let cachedRateFetchedAt = null
+  let rateRefreshing = false
+
+  $: cachedRateUsdToCny = cachedRate ? (1 / cachedRate).toFixed(2) : ''
+  $: rateLastUpdated = cachedRateFetchedAt
+    ? new Date(cachedRateFetchedAt).toLocaleString()
+    : null
 
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
@@ -132,8 +141,14 @@
 
       // Load currency settings
       currency.displayCurrency = cfg.displayCurrency || 'USD'
-      currency.exchangeRate = cfg.exchangeRate != null ? String(cfg.exchangeRate) : ''
-      if (cfg.exchangeRateCache?.CNY_USD) cachedRate = cfg.exchangeRateCache.CNY_USD
+      if (cfg.exchangeRateCache?.CNY_USD) {
+        cachedRate = cfg.exchangeRateCache.CNY_USD
+        cachedRateFetchedAt = cfg.exchangeRateCache.fetchedAt
+      }
+      // Show user-facing USD→CNY rate (invert stored CNY→USD)
+      if (cfg.exchangeRate) {
+        currency.exchangeRate = (1 / cfg.exchangeRate).toFixed(4)
+      }
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -254,19 +269,43 @@
   async function saveCurrency() {
     currencySaving = true; currencyError = ''
     try {
+      // Convert user-facing USD→CNY to internal CNY→USD
+      const userRate = currency.exchangeRate ? Number(currency.exchangeRate) : 0
+      const internalRate = userRate > 0 ? 1 / userRate : null
       await saveConfig({
         displayCurrency: currency.displayCurrency,
-        exchangeRate: currency.exchangeRate ? Number(currency.exchangeRate) : null,
+        exchangeRate: internalRate,
       })
-      // Update global stores immediately
       displayCurrency.set(currency.displayCurrency)
-      exchangeRate.set(currency.exchangeRate ? Number(currency.exchangeRate) : cachedRate)
+      if (internalRate) {
+        exchangeRate.set(internalRate)
+      } else {
+        // Use cached rate
+        exchangeRate.set(cachedRate)
+      }
       currencySaved = true
       setTimeout(() => { currencySaved = false }, 2000)
     } catch (e) {
       currencyError = e instanceof Error ? e.message : 'Save failed'
     } finally {
       currencySaving = false
+    }
+  }
+
+  async function handleRefreshRate() {
+    rateRefreshing = true
+    try {
+      const result = await refreshExchangeRate()
+      cachedRate = result.rate
+      cachedRateFetchedAt = result.fetchedAt
+      // Update store if no manual override
+      if (!currency.exchangeRate) {
+        exchangeRate.set(result.rate)
+      }
+    } catch (e) {
+      currencyError = e instanceof Error ? e.message : 'Refresh failed'
+    } finally {
+      rateRefreshing = false
     }
   }
 
@@ -521,22 +560,37 @@
 
     <!-- Currency -->
     <div class="card">
-      <div class="group-title">Currency</div>
+      <div class="group-title">{$t('settings.currency')}</div>
       <div class="fields">
         <div class="field">
-          <label class="field-label" for="field-display-currency">Display Currency</label>
+          <label class="field-label" for="field-display-currency">{$t('settings.displayCurrency')}</label>
           <select id="field-display-currency" bind:value={currency.displayCurrency} class="field-input">
             <option value="USD">USD ($)</option>
             <option value="CNY">CNY (¥)</option>
           </select>
         </div>
-        <div class="field">
-          <label class="field-label" for="field-exchange-rate">Exchange Rate Override (CNY → USD)</label>
-          <input id="field-exchange-rate" type="number" step="0.001" min="0"
-            bind:value={currency.exchangeRate} class="field-input"
-            placeholder="Auto: {cachedRate}" />
-          <div class="field-hint">Leave empty to use auto-fetched rate</div>
-        </div>
+        {#if currency.displayCurrency === 'CNY'}
+          <div class="field">
+            <label class="field-label" for="field-exchange-rate">
+              {$t('settings.exchangeRate')} (1 USD = ? CNY)
+            </label>
+            <div class="rate-row">
+              <input id="field-exchange-rate" type="number" step="0.01" min="0"
+                bind:value={currency.exchangeRate} class="field-input"
+                placeholder="Auto: {cachedRateUsdToCny}" />
+              <button type="button" class="btn-ghost" on:click={handleRefreshRate}
+                disabled={rateRefreshing}>
+                {rateRefreshing ? '...' : $t('settings.refreshRate')}
+              </button>
+            </div>
+            <div class="field-hint">
+              {$t('settings.exchangeRateHint')}
+              {#if rateLastUpdated}
+                <span class="rate-time">{$t('settings.rateLastUpdated')}: {rateLastUpdated}</span>
+              {/if}
+            </div>
+          </div>
+        {/if}
       </div>
       {#if currencyError}<p class="section-error">{currencyError}</p>{/if}
       <div class="section-footer">
@@ -731,5 +785,18 @@
   .btn-ghost:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  .rate-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .rate-row .field-input { flex: 1; }
+
+  .rate-time {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    margin-left: 0.25rem;
   }
 </style>

@@ -1,4 +1,4 @@
-import { FALLBACK_RATE } from './exchange-rate.js'
+import { FALLBACK_RATE, convertToUSD } from './exchange-rate.js'
 
 export interface PriceEntry {
   input: number        // per 1M tokens (in currency unit)
@@ -212,7 +212,7 @@ export function calculateCost(
   const rawCost = inputCost + outputCost + cacheReadCost + cacheWriteCost + thinkingCost
 
   if (price.currency === 'CNY') {
-    return rawCost * (exchangeRate ?? FALLBACK_RATE)
+    return convertToUSD(rawCost, exchangeRate ?? FALLBACK_RATE)
   }
   return rawCost
 }

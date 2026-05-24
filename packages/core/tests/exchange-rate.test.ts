@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { resolveExchangeRate, convertToUSD, convertFromUSD, FALLBACK_RATE, CACHE_TTL_MS } from '../src/exchange-rate.js'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { resolveExchangeRate, fetchExchangeRate, convertToUSD, convertFromUSD, FALLBACK_RATE, CACHE_TTL_MS } from '../src/exchange-rate.js'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('resolveExchangeRate', () => {
   it('returns manual override when set', () => {
@@ -47,5 +51,64 @@ describe('convertToUSD', () => {
 describe('convertFromUSD', () => {
   it('converts USD to CNY', () => {
     expect(convertFromUSD(14, 0.14)).toBeCloseTo(100, 6)
+  })
+})
+
+describe('fetchExchangeRate', () => {
+  it('returns rate on valid response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rates: { USD: 0.138 } }),
+    }))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBe(0.138)
+  })
+
+  it('returns null on non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBeNull()
+  })
+
+  it('returns null on missing USD rate', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rates: { EUR: 0.85 } }),
+    }))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBeNull()
+  })
+
+  it('returns null on zero rate', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rates: { USD: 0 } }),
+    }))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBeNull()
+  })
+
+  it('returns null on negative rate', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rates: { USD: -0.1 } }),
+    }))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBeNull()
+  })
+
+  it('returns null on network error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBeNull()
+  })
+
+  it('returns null on malformed JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.reject(new SyntaxError('Unexpected token')),
+    }))
+    const rate = await fetchExchangeRate()
+    expect(rate).toBeNull()
   })
 })

@@ -104,6 +104,15 @@ export async function fetchConfig() {
   return apiFetch('/api/config')
 }
 
+export async function refreshExchangeRate() {
+  const response = await fetch('/api/exchange-rate/refresh', { method: 'POST' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
 export async function fetchCredential(ref) {
   return apiFetch(buildUrl('/api/config/credential', { ref }))
 }

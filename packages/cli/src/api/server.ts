@@ -2,7 +2,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
-import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, type PriceEntry } from '@aiusage/core'
+import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, type PriceEntry } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
@@ -1013,6 +1013,20 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           }
           return
         }
+      }
+
+      // ── /api/exchange-rate/refresh ────────────────────────────────
+      if (url.pathname === '/api/exchange-rate/refresh' && req.method === 'POST') {
+        const rate = await fetchExchangeRate()
+        if (rate == null) {
+          json(res, { error: { code: 'FETCH_FAILED', message: 'Failed to fetch exchange rate' } }, 502)
+          return
+        }
+        const cfg = loadConfig() ?? {}
+        cfg.exchangeRateCache = { CNY_USD: rate, fetchedAt: Date.now() }
+        saveConfig(cfg)
+        json(res, { rate, fetchedAt: cfg.exchangeRateCache.fetchedAt })
+        return
       }
 
       // ── 404 ───────────────────────────────────────────────────────

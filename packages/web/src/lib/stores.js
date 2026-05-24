@@ -17,7 +17,7 @@ export function setTool(tool) {
 export const pollingInterval = writable(30000) // 30 seconds default
 
 export const displayCurrency = writable('USD')
-export const exchangeRate = writable(0.137)
+export const exchangeRate = writable(0.137) // must match FALLBACK_RATE in core/src/exchange-rate.ts
 
 export function setRange(range) {
   dateRange.set({ range })

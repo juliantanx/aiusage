@@ -4,6 +4,7 @@
   import { cubicOut } from 'svelte/easing'
   import { fetchSummary, refreshData as triggerRefresh, fetchConfig, SETTINGS_UPDATED_EVENT } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
+  import { formatCost, displayCurrency, exchangeRate } from '$lib/stores.js'
 
   const DISPLAY_KEY = 'aiusage-home-display'
 
@@ -158,9 +159,8 @@
   $: refreshPct   = refreshSecs > 0 ? (1 - countdown / refreshSecs) * 100 : 0
   $: rangeKey     = RANGE_OPTIONS.find(r => r.value === display.range)?.tKey ?? 'range.allTime'
 
-  function fmtCost(n) {
-    return n < 0.01 ? '$' + n.toFixed(4) : '$' + n.toFixed(2)
-  }
+  // Reactive cost formatting — depends on $displayCurrency and $exchangeRate so it re-evaluates on currency change
+  $: formattedCost = (() => { void $displayCurrency; void $exchangeRate; return formatCost($tCost) })()
 
   function fmtShort(n) {
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
@@ -310,7 +310,7 @@
   <div class="stats-strip">
     <div class="stat-block">
       <span class="stat-label">{$t('overview.totalCost')}</span>
-      <span class="stat-value stat-cost">{fmtCost($tCost)}</span>
+      <span class="stat-value stat-cost">{formattedCost}</span>
     </div>
     <div class="stat-block">
       <span class="stat-label">{$t('overview.totalSessions')}</span>
