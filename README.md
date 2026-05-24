@@ -67,11 +67,11 @@ pnpm rebuild:sqlite
 
 ## Screenshots
 
-![Homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/home.png)
+![Homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/home.png)
 
-![Overview page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/overview.png)
+![Overview page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/overview.png)
 
-![Token usage page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/token.png)
+![Token usage page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/token.png)
 
 ## CLI Reference
 

@@ -67,11 +67,11 @@ pnpm rebuild:sqlite
 
 ## 截图
 
-![首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/home.png)
+![首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/home.png)
 
-![概览页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/overview.png)
+![概览页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/overview.png)
 
-![Token 用量页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/docs/assets/readme/token.png)
+![Token 用量页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/token.png)
 
 ## CLI 命令参考
 
