@@ -784,7 +784,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             const m = (row.source_file as string).replace(/\\/g, '/').match(/\.claude\/projects\/([^/]+)/)
             if (m) effectiveCwd = cwdByEncodedDir[m[1]] || ''
           }
-          const project = effectiveCwd ? extractProjectFromCwd(effectiveCwd) : extractProject(row.source_file)
+          const fromCwd = effectiveCwd ? extractProjectFromCwd(effectiveCwd) : null
+          const project = (fromCwd && fromCwd !== 'unknown') ? fromCwd : extractProject(row.source_file)
           if (!projectMap[project]) projectMap[project] = { sessions: 0, tokens: 0, cost: 0, fullPath: effectiveCwd || row.source_file }
           projectMap[project].sessions += row.sessionCount
           projectMap[project].tokens += row.totalTokens
