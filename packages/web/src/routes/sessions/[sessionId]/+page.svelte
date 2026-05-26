@@ -22,6 +22,7 @@
   }
 
   function formatRelativeTs(ms) {
+    if (ms <= 0) return '+0ms'
     if (ms < 1000) return `+${ms}ms`
     const s = ms / 1000
     return `+${s % 1 === 0 ? s.toFixed(0) : s.toFixed(1)}s`
@@ -141,6 +142,11 @@
         {:else}
           <div class="no-tool-calls muted">{$t('sessions.detail.noToolCalls')}</div>
         {/if}
+      </div>
+    {:else}
+      <div class="state-msg">
+        <h2>{$t('sessions.noData')}</h2>
+        <p>{$t('sessions.noDataHint')}</p>
       </div>
     {/each}
   </div>
