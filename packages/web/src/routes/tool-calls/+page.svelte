@@ -141,7 +141,7 @@
     margin-bottom: 1rem;
     background: var(--blue-dim);
     color: var(--blue);
-    border: 1px solid var(--blue-dim);
+    border: 1px solid var(--blue);
     border-radius: 8px;
     font-size: 0.8rem;
   }
