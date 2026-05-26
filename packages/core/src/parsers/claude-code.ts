@@ -75,7 +75,7 @@ export class ClaudeCodeParser implements Parser {
         if (block.type === 'tool_use') {
           let storedName: string
           if (block.name === 'Skill') {
-            const raw = block.input?.skill ?? block.input?.name ?? ''
+            const raw = block.input?.skill ?? block.input?.skillName ?? block.input?.name ?? ''
             const skillArg = typeof raw === 'string' ? raw.trim() : ''
             storedName = skillArg ? `skill__${skillArg}` : 'skill__unknown'
           } else {

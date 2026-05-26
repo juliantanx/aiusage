@@ -595,7 +595,7 @@ function backfillSkillNames(db: Database.Database): void {
         if (block.type !== 'tool_use') continue
         if (callIndex === row.call_index) {
           if (block.name === 'Skill') {
-            const raw = block.input?.skill ?? block.input?.name ?? ''
+            const raw = block.input?.skill ?? block.input?.skillName ?? block.input?.name ?? ''
             skillArg = typeof raw === 'string' ? raw.trim() : ''
           }
           break
