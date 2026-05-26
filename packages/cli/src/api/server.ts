@@ -657,10 +657,15 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         for (const tc of toolCallRows) {
           if (!toolCallsByRecord[tc.recordId]) toolCallsByRecord[tc.recordId] = []
           const type = classifyToolCall(tc.name)
-          const parsed = type === 'mcp' ? parseMcpName(tc.name) : null
+          const mcpParsed = type === 'mcp' ? parseMcpName(tc.name) : null
+          const displayName = mcpParsed
+            ? mcpParsed.display
+            : (type === 'skill' && tc.name.startsWith('skill__'))
+              ? tc.name.slice('skill__'.length)
+              : tc.name
           toolCallsByRecord[tc.recordId].push({
             name: tc.name,
-            displayName: parsed ? parsed.display : tc.name,
+            displayName,
             type,
             ts: tc.ts,
             callIndex: tc.callIndex,
