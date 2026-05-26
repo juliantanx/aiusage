@@ -24,6 +24,11 @@ export interface QoderCursor {
   lastId: string
 }
 
+export interface CursorCursor {
+  lastCreatedAt: number  // Unix timestamp in milliseconds (composerData.createdAt)
+  lastId: string         // composerId
+}
+
 export type FileWatermarkData = Record<Tool, Record<string, WatermarkEntry>>
 
 export interface WatermarkState {
@@ -31,6 +36,7 @@ export interface WatermarkState {
   opencode?: OpenCodeCursor | null
   hermes?: HermesCursor | null
   qoder?: QoderCursor | null
+  cursor?: CursorCursor | null
 }
 
 /** @deprecated Use FileWatermarkData instead */
@@ -44,6 +50,7 @@ function defaultFileData(): FileWatermarkData {
     'opencode': {},
     'hermes': {},
     'qoder': {},
+    'cursor': {},
   }
 }
 
@@ -67,7 +74,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null }
+      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null }
     } catch {
       return { files: defaultFileData() }
     }
@@ -121,5 +128,13 @@ export class WatermarkManager {
 
   setQoderCursor(cursor: QoderCursor): void {
     this.data.qoder = cursor
+  }
+
+  getCursorCursor(): CursorCursor | null {
+    return this.data.cursor ?? null
+  }
+
+  setCursorCursor(cursor: CursorCursor): void {
+    this.data.cursor = cursor
   }
 }

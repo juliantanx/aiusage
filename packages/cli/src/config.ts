@@ -36,6 +36,8 @@ export interface SourcesConfig {
   'hermes'?: string
   /** Custom path to Qoder .qoder root or session logs dir (default: platform-specific logs/sessions candidates) */
   'qoder'?: string
+  /** Custom path to Cursor state.vscdb (default: platform-specific globalStorage path) */
+  'cursor'?: string
 }
 
 export interface Config {

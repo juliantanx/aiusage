@@ -11,6 +11,7 @@ import { WatermarkManager } from '../watermark.js'
 import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
+import { runParseCursor } from './parse-cursor.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -157,6 +158,23 @@ export function defaultQoderDbPath(): string {
   return join(xdgDataHome, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
 }
 
+export function defaultCursorDbPath(): string {
+  const home = homedir()
+  const plat = platform()
+  if (plat === 'win32') {
+    // Windows: %APPDATA%\Cursor\User\globalStorage\state.vscdb
+    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    return join(appData, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
+  }
+  if (plat === 'darwin') {
+    // macOS: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
+    return join(home, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb')
+  }
+  // Linux: ~/.config/Cursor/User/globalStorage/state.vscdb
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME ?? join(home, '.config')
+  return join(xdgConfigHome, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
+}
+
 function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
   const home = homedir()
   const results: ToolPaths[] = []
@@ -248,7 +266,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
   return 'unknown'
 }
 
-export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
+export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; cursorDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
   const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
   const exchangeRate = resolveExchangeRate(config ?? {})
@@ -469,6 +487,39 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
+  // Cursor: SQLite database (state.vscdb)
+  const cursorDbPath = options?.cursorDbPath ?? config?.sources?.['cursor'] ?? defaultCursorDbPath()
+  if ((!filterTool || filterTool === 'cursor') && existsSync(cursorDbPath)) {
+    try {
+      const cursorDb = new Database(cursorDbPath, { readonly: true })
+      try {
+        const result = runParseCursor(cursorDb, {
+          dbPath: cursorDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getCursorCursor(),
+        })
+
+        for (const record of result.records) insertRecord(db, record)
+        for (const tc of result.toolCalls) insertToolCall(db, tc)
+        if (result.nextCursor) {
+          wm.setCursorCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        toolCallCount += result.toolCalls.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'cursor', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        cursorDb.close()
+      }
+    } catch (e) {
+      errors.push(`${cursorDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
   if (deviceInstanceId !== 'unknown') {
@@ -516,5 +567,6 @@ export function getDefaultSourcePaths(): Record<string, string> {
     'hermes':      defaultHermesDbPath(),
     'qoder':       join(home, '.qoder', 'logs', 'sessions'),
     'qoder-db':    defaultQoderDbPath(),
+    'cursor':      defaultCursorDbPath(),
   }
 }

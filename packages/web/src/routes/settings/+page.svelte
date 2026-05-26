@@ -9,7 +9,7 @@
 
   // Form data — all strings for simplicity, coerced on save
   let general = { device: '', weekStart: 1, dashboardPollInterval: '', parseInterval: '' }
-  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '', 'qoder-db': '' }
+  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '', 'qoder-db': '', cursor: '' }
   let currentPlatform = ''
   let defaultPaths = {}
   let currentHostname = ''
@@ -113,6 +113,7 @@
         hermes: cfg.sources?.hermes ?? '',
         qoder: cfg.sources?.qoder ?? '',
         'qoder-db': cfg.sources?.['qoder-db'] ?? '',
+        cursor: cfg.sources?.cursor ?? '',
       }
       currentPlatform = cfg.platform ?? ''
       defaultPaths = cfg.defaultPaths ?? {}
@@ -428,7 +429,7 @@
         {/if}
       </div>
       <div class="fields">
-        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder (sessions dir)'], ['qoder-db', 'Qoder (local.db)']] as [key, label]}
+        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder (sessions dir)'], ['qoder-db', 'Qoder (local.db)'], ['cursor', 'Cursor']] as [key, label]}
           <div class="field full">
             <label class="field-label" for="field-source-{key}">{label}</label>
             <div class="field-hint">{$t('settings.sourcePath')}</div>
