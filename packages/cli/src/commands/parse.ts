@@ -327,6 +327,18 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           }
 
           if (byteOffset < offset) {
+            // Still run through the parser to update stateful fields like currentModel,
+            // but discard results — we only emit records from the watermark onwards.
+            aggregator.parseLine(line, aggregator.createContext({
+              tool,
+              sourceFile: filePath,
+              lineOffset: byteOffset,
+              sessionId,
+              device,
+              deviceInstanceId,
+              platform: devicePlatform,
+              exchangeRate,
+            }))
             byteOffset += Buffer.byteLength(line, 'utf-8') + 1
             continue
           }
