@@ -34,6 +34,20 @@ aiusage-widget
 
 组件会读取 `~/.aiusage/cache.db`。请确保至少执行过一次 `aiusage parse`，使数据库文件存在。
 
+### 使用 PM2 后台运行
+
+如需关闭终端后保持组件运行，并实现开机自启：
+
+```bash
+npm install -g pm2 pm2-startup
+
+pm2 start aiusage-widget -- --foreground
+pm2 save
+pm2-startup install
+```
+
+PM2 支持 Windows、macOS 和 Linux。
+
 **托盘操作：**
 
 - **左键点击** — 切换统计面板的显示/隐藏。

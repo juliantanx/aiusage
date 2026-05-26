@@ -39,7 +39,7 @@
     "rebuild:electron": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers'; execSync(cmd, {stdio:'inherit'})\"",
     "rebuild:node": "npm rebuild better-sqlite3",
     "dev": "pnpm run rebuild:electron && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"pnpm exec wait-on dist/main.js && pnpm exec electron .\"",
-    "build": "vite build && tsc -p tsconfig.json",
+    "build": "rm -rf dist/renderer && vite build && tsc -p tsconfig.json",
     "pack": "pnpm build && electron-builder",
     "test": "pnpm run rebuild:node && vitest run"
   },

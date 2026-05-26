@@ -1,6 +1,6 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog } from 'electron'
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 import { queryWidgetData } from './data'
@@ -15,6 +15,7 @@ const nodeRequire = createRequire(__filename)
 const Database = nodeRequire('better-sqlite3') as typeof import('better-sqlite3')
 
 const DB_PATH = join(homedir(), '.aiusage', 'cache.db')
+const PORT_FILE = join(homedir(), '.aiusage', '.serve-port')
 const DASHBOARD_PORT = 3847
 const REFRESH_INTERVAL_MS = 60_000
 
@@ -144,21 +145,39 @@ ipcMain.handle('widget:get-data', () => {
 })
 
 ipcMain.handle('widget:open-dashboard', async () => {
-  const reachable = await isDashboardReachable()
+  const port = getDashboardPort()
+  const reachable = await isDashboardReachable(port)
   if (!reachable) {
-    await launchDashboard()
+    const result = await launchDashboard()
+    if (!result.success) {
+      dialog.showErrorBox(
+        'aiusage Not Found',
+        'The aiusage CLI is not installed.\n\nInstall it with:\n  npm install -g @juliantanx/aiusage\n\nThen try again.'
+      )
+      return
+    }
   }
-  shell.openExternal(`http://localhost:${DASHBOARD_PORT}`)
+  shell.openExternal(`http://localhost:${getDashboardPort()}`)
 })
 
 ipcMain.on('widget:hide-window', () => {
   win?.hide()
 })
 
-async function isDashboardReachable(): Promise<boolean> {
+function getDashboardPort(): number {
+  try {
+    if (existsSync(PORT_FILE)) {
+      const port = parseInt(readFileSync(PORT_FILE, 'utf-8').trim(), 10)
+      if (!isNaN(port) && port > 0) return port
+    }
+  } catch {}
+  return DASHBOARD_PORT
+}
+
+async function isDashboardReachable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const http = nodeRequire('http') as typeof import('http')
-    const req = http.get(`http://localhost:${DASHBOARD_PORT}`, (res) => {
+    const req = http.get(`http://localhost:${port}`, (res) => {
       res.destroy()
       resolve(res.statusCode !== undefined && res.statusCode < 500)
     })
@@ -167,22 +186,46 @@ async function isDashboardReachable(): Promise<boolean> {
   })
 }
 
-async function launchDashboard(): Promise<void> {
+async function launchDashboard(): Promise<{ success: boolean; error?: string }> {
   const { spawn } = nodeRequire('child_process') as typeof import('child_process')
-  const child = spawn('aiusage', ['serve'], {
-    detached: true,
-    stdio: 'ignore',
-    shell: true,
+
+  return new Promise((resolve) => {
+    const child = spawn('aiusage', ['serve'], {
+      detached: true,
+      stdio: 'ignore',
+      shell: true,
+    })
+
+    let spawnError: string | null = null
+
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT') {
+        spawnError = 'aiusage command not found'
+      } else {
+        spawnError = err.message
+      }
+    })
+
+    child.unref()
+
+    // Wait up to 5 seconds for the server to be ready
+    let attempts = 0
+    const check = async () => {
+      if (spawnError) {
+        resolve({ success: false, error: spawnError })
+        return
+      }
+      if (await isDashboardReachable(getDashboardPort())) {
+        resolve({ success: true })
+        return
+      }
+      attempts++
+      if (attempts >= 10) {
+        resolve({ success: false, error: 'Server failed to start within 5 seconds' })
+        return
+      }
+      setTimeout(check, 500)
+    }
+    check()
   })
-  child.unref()
-
-  // Wait up to 5 seconds for the server to be ready
-  for (let i = 0; i < 10; i++) {
-    await sleep(500)
-    if (await isDashboardReachable()) return
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

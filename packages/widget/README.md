@@ -34,6 +34,20 @@ aiusage-widget
 
 The widget reads from `~/.aiusage/cache.db`. Make sure you have run `aiusage parse` at least once so the database exists.
 
+### Running with PM2
+
+To keep the widget running after closing the terminal and auto-start on boot:
+
+```bash
+npm install -g pm2 pm2-startup
+
+pm2 start aiusage-widget -- --foreground
+pm2 save
+pm2-startup install
+```
+
+PM2 works on Windows, macOS, and Linux.
+
 **Tray interactions:**
 
 - **Left-click** — toggle the stats panel.

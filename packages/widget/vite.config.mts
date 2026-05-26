@@ -7,6 +7,6 @@ export default defineConfig({
   plugins: [svelte({ preprocess: vitePreprocess() })],
   build: {
     outDir: '../../dist/renderer',
-    emptyOutDir: true,
+    emptyOutDir: false,
   },
 })

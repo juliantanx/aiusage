@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { readFileSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, statSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join, extname, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
@@ -19,6 +19,7 @@ export interface ServeOptions {
 }
 
 const MAX_PORT_ATTEMPTS = 10
+const PORT_FILE = join(AIUSAGE_DIR, '.serve-port')
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -138,6 +139,7 @@ export function serve(options: ServeOptions): void {
 
   server.on('listening', () => {
     started = true
+    writeFileSync(PORT_FILE, String(currentPort), 'utf-8')
     console.log(`aiusage serve listening on http://localhost:${currentPort}`)
   })
 
@@ -158,8 +160,13 @@ export function serve(options: ServeOptions): void {
   listenOnPort(options.port)
 
   // Graceful shutdown
+  const cleanup = () => {
+    try { unlinkSync(PORT_FILE) } catch {}
+  }
+
   process.on('SIGINT', () => {
     console.log('\nShutting down...')
+    cleanup()
     runtimeSettings.stop()
     server.close(() => {
       process.exit(0)
@@ -167,6 +174,7 @@ export function serve(options: ServeOptions): void {
   })
 
   process.on('SIGTERM', () => {
+    cleanup()
     runtimeSettings.stop()
     server.close(() => {
       process.exit(0)

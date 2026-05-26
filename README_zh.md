@@ -27,6 +27,32 @@ aiusage serve
 
 `aiusage` 不会内建后台解析任务。如果你需要自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`。
 
+### 后台运行（PM2）
+
+`aiusage serve` 默认在前台运行，关闭终端后服务会终止。如需在 **Windows、macOS、Linux** 上后台持续运行，请使用 [PM2](https://pm2.keymetrics.io/)：
+
+```bash
+# 安装 PM2（一次性）
+npm install -g pm2 pm2-startup
+
+# 将 aiusage serve 作为后台服务启动
+pm2 start aiusage -- serve
+
+# 将系统托盘组件作为后台服务启动（可选）
+pm2 start aiusage-widget -- --foreground
+
+# 设置开机自启（Windows / macOS / Linux）
+pm2 save
+pm2-startup install
+
+# 常用命令
+pm2 list            # 查看运行状态
+pm2 logs            # 查看日志
+pm2 stop all        # 停止所有服务
+pm2 restart all     # 重启所有服务
+pm2 delete all      # 删除所有服务
+```
+
 <details>
 <summary>从源码构建</summary>
 
@@ -86,6 +112,7 @@ aiusage 当前支持：
 - OpenCode
 - Hermes
 - Qoder
+- Cursor
 
 ## 截图
 
@@ -117,7 +144,7 @@ aiusage 当前支持：
 
 | 选项 | 说明 |
 |------|------|
-| `--tool <tool>` | 只解析指定工具：`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder` |
+| `--tool <tool>` | 只解析指定工具：`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor` |
 | `--progress` | 在 stderr 显示实时进度条（仅 TTY 环境，管道/CI 下自动静默） |
 
 ```bash
@@ -146,7 +173,7 @@ aiusage serve -p 8080     # 使用 8080 端口启动
 | 选项 | 说明 |
 |------|------|
 | `--device <id>` | 按设备实例 ID 筛选 |
-| `--tool <tool>` | 按工具类型筛选 |
+| `--tool <tool>` | 按工具类型筛选（`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor`） |
 
 ```bash
 aiusage summary                        # 全部时间
@@ -484,6 +511,7 @@ docker build -t aiusage .
 | Hermes | `~/.hermes/state.db` | `~/.hermes/state.db` | `%USERPROFILE%\.hermes\state.db` |
 | Qoder（会话日志） | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/`，以及 WSL 挂载的 Windows 用户目录 | `%USERPROFILE%\.qoder\logs\sessions\` |
 | Qoder（SQLite） | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | `~/.local/share/Qoder/SharedClientCache/cache/db/local.db` | `%LOCALAPPDATA%\Qoder\SharedClientCache\cache\db\local.db` |
+| Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | `~/.config/Cursor/User/globalStorage/state.vscdb` | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
 
 发现行为：
 
@@ -494,6 +522,7 @@ docker build -t aiusage .
 - **Hermes** — 直接读取 SQLite 数据库文件（`state.db`）。没有记录结束时间的会话，只要有 token 数据也会被导入（例如强制退出的会话）。
 - **Qoder（会话日志）** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
 - **Qoder（SQLite）** — 直接读取 `local.db` SQLite 数据库（`SharedClientCache/cache/db/local.db`），从 `chat_message` 表导入助手消息，并关联 `chat_record` 获取模型信息。这是 macOS 上的主要数据来源，与会话日志目录并行尝试。
+- **Cursor** — 直接读取 Cursor 的 `state.vscdb` SQLite 数据库，导入 composer 会话的 token 用量数据。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 
@@ -512,7 +541,8 @@ Qoder 桌面端还会在 `Program Files` 下写入安装文件，在 `AppData/Ro
     "opencode": "/自定义路径/opencode.db",
     "hermes": "/自定义路径/.hermes/state.db",
     "qoder": "/自定义路径/.qoder/logs/sessions",
-    "qoder-db": "/自定义路径/local.db"
+    "qoder-db": "/自定义路径/local.db",
+    "cursor": "/自定义路径/state.vscdb"
   }
 }
 ```

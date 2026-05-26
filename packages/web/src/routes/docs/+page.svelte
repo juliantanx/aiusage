@@ -77,8 +77,8 @@
     <div class="page-header">
       <h1>{zh ? 'AIUsage 文档' : 'AIUsage Documentation'}</h1>
       <p>{zh
-        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder 等多种 AI 工具的 Token 和费用追踪。'
-        : 'AIUsage is a local-first usage analytics platform for AI coding tools — tracking tokens, costs, sessions and more across Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.'
+        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor 等多种 AI 工具的 Token 和费用追踪。'
+        : 'AIUsage is a local-first usage analytics platform for AI coding tools — tracking tokens, costs, sessions and more across Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, and Cursor.'
       }</p>
     </div>
 
@@ -121,6 +121,48 @@ pnpm add -g @juliantanx/aiusage</code></pre>
           : 'The dashboard home page triggers a parse automatically on first load. You can also configure automatic periodic parsing in Settings (only active while aiusage serve is running).'
         }</span>
       </div>
+
+      {#if zh}
+        <h3>后台运行（PM2）</h3>
+        <p><code>aiusage serve</code> 默认在前台运行，关闭终端后服务会终止。如需在 Windows、macOS、Linux 上后台持续运行，请使用 PM2：</p>
+        <pre><code>npm install -g pm2 pm2-startup
+
+# 启动 aiusage 后台服务
+pm2 start aiusage -- serve
+
+# 启动系统托盘组件（可选）
+pm2 start aiusage-widget -- --foreground
+
+# 设置开机自启
+pm2 save
+pm2-startup install</code></pre>
+        <p>常用管理命令：</p>
+        <pre><code>pm2 list            # 查看运行状态
+pm2 logs            # 查看日志
+pm2 stop all        # 停止所有服务
+pm2 restart all     # 重启所有服务
+pm2 delete all      # 删除所有服务</code></pre>
+      {:else}
+        <h3>Running in Background (PM2)</h3>
+        <p><code>aiusage serve</code> runs in the foreground and stops when you close the terminal. To keep it running in the background on Windows, macOS, and Linux, use PM2:</p>
+        <pre><code>npm install -g pm2 pm2-startup
+
+# Start aiusage serve as a background service
+pm2 start aiusage -- serve
+
+# Start the system tray widget (optional)
+pm2 start aiusage-widget -- --foreground
+
+# Set auto-start on boot
+pm2 save
+pm2-startup install</code></pre>
+        <p>Common management commands:</p>
+        <pre><code>pm2 list            # View running status
+pm2 logs            # View logs
+pm2 stop all        # Stop all services
+pm2 restart all     # Restart all services
+pm2 delete all      # Remove all services</code></pre>
+      {/if}
     </section>
 
     <!-- ── Dashboard ────────────────────────────────────────────────────── -->
@@ -462,6 +504,7 @@ pnpm add -g @juliantanx/aiusage</code></pre>
           <li><strong>Hermes</strong>：<code>~/.hermes/state.db</code></li>
           <li><strong>Qoder（会话日志）</strong>：<code>~/.qoder/logs/sessions</code></li>
           <li><strong>Qoder（SQLite）</strong>：平台相关的 <code>local.db</code> 路径</li>
+          <li><strong>Cursor</strong>：平台相关的 <code>state.vscdb</code> 路径</li>
         </ul>
         <h3>同步</h3>
         <p>见下方「多设备同步」章节。</p>
@@ -489,6 +532,7 @@ pnpm add -g @juliantanx/aiusage</code></pre>
           <li><strong>Hermes</strong> — <code>~/.hermes/state.db</code></li>
           <li><strong>Qoder (sessions)</strong> — <code>~/.qoder/logs/sessions</code></li>
           <li><strong>Qoder (SQLite)</strong> — platform-specific <code>local.db</code> path</li>
+          <li><strong>Cursor</strong> — platform-specific <code>state.vscdb</code> path</li>
         </ul>
         <h3>Sync</h3>
         <p>See the Sync section below.</p>
@@ -564,7 +608,7 @@ pnpm add -g @juliantanx/aiusage</code></pre>
         <table class="docs-table">
           <thead><tr><th>选项</th><th>说明</th></tr></thead>
           <tbody>
-            <tr><td><code>--tool &lt;tool&gt;</code></td><td>只解析指定工具：<code>claude-code</code>、<code>codex</code>、<code>openclaw</code>、<code>opencode</code>、<code>hermes</code>、<code>qoder</code></td></tr>
+            <tr><td><code>--tool &lt;tool&gt;</code></td><td>只解析指定工具：<code>claude-code</code>、<code>codex</code>、<code>openclaw</code>、<code>opencode</code>、<code>hermes</code>、<code>qoder</code>、<code>cursor</code></td></tr>
             <tr><td><code>--progress</code></td><td>在 stderr 显示实时进度条（仅 TTY 环境，管道/CI 下自动静默）</td></tr>
           </tbody>
         </table>
@@ -636,7 +680,7 @@ aiusage serve -p 8080     # 使用 8080 端口</code></pre>
         <table class="docs-table">
           <thead><tr><th>Option</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>--tool &lt;tool&gt;</code></td><td>Only parse a specific tool: <code>claude-code</code>, <code>codex</code>, <code>openclaw</code>, <code>opencode</code>, <code>hermes</code>, <code>qoder</code></td></tr>
+            <tr><td><code>--tool &lt;tool&gt;</code></td><td>Only parse a specific tool: <code>claude-code</code>, <code>codex</code>, <code>openclaw</code>, <code>opencode</code>, <code>hermes</code>, <code>qoder</code>, <code>cursor</code></td></tr>
             <tr><td><code>--progress</code></td><td>Show real-time progress bar on stderr (TTY only, silent in pipes/CI)</td></tr>
           </tbody>
         </table>
