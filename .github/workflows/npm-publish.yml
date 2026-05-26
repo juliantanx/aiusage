@@ -56,10 +56,12 @@ jobs:
         run: pnpm build
 
       - name: Publish CLI to npm
+        continue-on-error: true
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           pnpm publish --filter @juliantanx/aiusage --no-git-checks --access public
 
       - name: Publish Widget to npm
         run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           pnpm publish --filter @juliantanx/aiusage-widget --no-git-checks --access public
