@@ -518,6 +518,10 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool, 'r')
         const toolType = url.searchParams.get('toolType')
+        if (toolType && !['mcp', 'skill', 'builtin'].includes(toolType)) {
+          json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid toolType' } }, 400)
+          return
+        }
         const ttf = getToolTypeFilter(toolType)
 
         const totalRow = db.prepare(`
