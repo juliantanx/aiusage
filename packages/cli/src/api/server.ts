@@ -76,6 +76,30 @@ function getToolFilter(tool: string | null, prefix = ''): { where: string; param
   return { where: `AND ${col} = @tool`, params: { tool } }
 }
 
+function classifyToolCall(name: string): 'mcp' | 'skill' | 'builtin' {
+  if (name.startsWith('mcp__')) return 'mcp'
+  if (name === 'Skill') return 'skill'
+  return 'builtin'
+}
+
+function parseMcpName(name: string): { server: string; action: string; display: string } {
+  const withoutPrefix = name.slice(5)
+  const idx = withoutPrefix.indexOf('__')
+  if (idx === -1) return { server: withoutPrefix, action: '', display: withoutPrefix }
+  return {
+    server: withoutPrefix.slice(0, idx),
+    action: withoutPrefix.slice(idx + 2),
+    display: `${withoutPrefix.slice(0, idx)} / ${withoutPrefix.slice(idx + 2)}`,
+  }
+}
+
+function getToolTypeFilter(toolType: string | null): string {
+  if (toolType === 'mcp') return "AND tc.name LIKE 'mcp__%'"
+  if (toolType === 'skill') return "AND tc.name = 'Skill'"
+  if (toolType === 'builtin') return "AND tc.name NOT LIKE 'mcp__%' AND tc.name != 'Skill'"
+  return ''
+}
+
 const LOCAL_ONLY_FILTER = "AND source_file NOT LIKE 'synced/%'"
 
 function getDeviceFilter(
@@ -493,11 +517,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const dr = getDateRangeFilter(range, from, to, 'r', weekStart)
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool, 'r')
+        const toolType = url.searchParams.get('toolType')
+        const ttf = getToolTypeFilter(toolType)
 
         const totalRow = db.prepare(`
           SELECT COUNT(*) AS total FROM tool_calls tc
           JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${dr.where} ${tf.where}
+          WHERE 1=1 ${dr.where} ${tf.where} ${ttf}
         `).get({ ...dr.params, ...tf.params }) as any
         const total = totalRow.total || 1
 
@@ -505,15 +531,22 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
           JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${dr.where} ${tf.where}
+          WHERE 1=1 ${dr.where} ${tf.where} ${ttf}
           GROUP BY tc.name ORDER BY count DESC
         `).all({ ...dr.params, ...tf.params }) as any[]
 
-        const toolCalls = rows.map(r => ({
-          name: r.name,
-          count: r.count,
-          percentage: Math.round((r.count / total) * 1000) / 10,
-        }))
+        const toolCalls = rows.map(r => {
+          const type = classifyToolCall(r.name)
+          const parsed = type === 'mcp' ? parseMcpName(r.name) : null
+          return {
+            name: r.name,
+            displayName: parsed ? parsed.display : r.name,
+            mcpServer: parsed ? parsed.server : null,
+            type,
+            count: r.count,
+            percentage: Math.round((r.count / total) * 1000) / 10,
+          }
+        })
 
         json(res, { toolCalls })
         return
