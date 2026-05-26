@@ -104,6 +104,10 @@ export async function fetchConfig() {
   return apiFetch('/api/config')
 }
 
+export async function fetchQuotas() {
+  return apiFetch('/api/quotas')
+}
+
 export async function refreshExchangeRate() {
   const response = await fetch('/api/exchange-rate/refresh', { method: 'POST' })
   if (!response.ok) {

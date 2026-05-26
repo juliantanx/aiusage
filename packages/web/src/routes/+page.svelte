@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { tweened } from 'svelte/motion'
   import { cubicOut } from 'svelte/easing'
-  import { fetchSummary, refreshData as triggerRefresh, fetchConfig, SETTINGS_UPDATED_EVENT } from '$lib/api.js'
+  import { fetchSummary, refreshData as triggerRefresh, fetchConfig, fetchQuotas, SETTINGS_UPDATED_EVENT } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import { formatCost, displayCurrency, exchangeRate } from '$lib/stores.js'
 
@@ -133,7 +133,7 @@
     } catch {}
 
     await triggerRefresh().catch(() => {})
-    await loadData()
+    await Promise.all([loadData(), loadQuotaWarnings()])
     startRefreshCycle()
 
     window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
@@ -161,6 +161,43 @@
 
   // Reactive cost formatting — depends on $displayCurrency and $exchangeRate so it re-evaluates on currency change
   $: formattedCost = (() => { void $displayCurrency; void $exchangeRate; return formatCost($tCost) })()
+
+  // Quota warning: load once on mount, show banner when any tier >= 80%
+  let quotaWarnings = []
+
+  async function loadQuotaWarnings() {
+    try {
+      const result = await fetchQuotas()
+      const warnings = []
+      for (const quota of result?.quotas ?? []) {
+        if (!quota.success) continue
+        for (const tier of quota.tiers ?? []) {
+          if (tier.utilization >= 80) {
+            warnings.push({ tool: quota.tool, tier: tier.name, utilization: Math.round(tier.utilization) })
+          }
+        }
+      }
+      quotaWarnings = warnings
+    } catch {
+      // Quota warnings are non-critical — silently ignore errors
+    }
+  }
+
+  const TOOL_SHORT = {
+    'claude-code': 'Claude Code',
+    codex: 'Codex',
+  }
+  const TIER_SHORT = {
+    five_hour: '5h',
+    seven_day: '7d',
+    seven_day_opus: '7d Opus',
+    seven_day_sonnet: '7d Sonnet',
+    weekly_limit: 'weekly',
+  }
+
+  function warningColor(pct) {
+    return pct >= 90 ? 'red' : 'orange'
+  }
 
   function fmtShort(n) {
     if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B'
@@ -245,6 +282,23 @@
     ⚙
   </button>
 </div>
+
+{#if quotaWarnings.length > 0}
+  <div class="quota-warning-list">
+    {#each quotaWarnings as w (w.tool + w.tier)}
+      {@const color = warningColor(w.utilization)}
+      <div class="quota-warning" class:quota-red={color === 'red'} class:quota-orange={color === 'orange'}>
+        <span class="warn-icon">{color === 'red' ? '▲' : '△'}</span>
+        <span class="warn-text">
+          <strong>{TOOL_SHORT[w.tool] ?? w.tool}</strong>
+          {TIER_SHORT[w.tier] ?? w.tier}
+          {$t('home.quotaWarningDesc')}: <strong>{w.utilization}%</strong>
+        </span>
+        <a href="/quotas" class="warn-link">{$t('home.quotaWarningLink')} →</a>
+      </div>
+    {/each}
+  </div>
+{/if}
 
 {#if loading}
   <div class="splash-loading">
@@ -735,6 +789,62 @@
     text-decoration: none;
   }
   .settings-link:hover { text-decoration: underline; }
+
+  /* ── Quota warning banner ────────────────────────────────────────────── */
+  .quota-warning-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-bottom: 0.875rem;
+  }
+
+  .quota-warning {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: 7px;
+    font-size: 0.8rem;
+    border: 1px solid transparent;
+  }
+
+  .quota-orange {
+    background: oklch(0.97 0.03 60);
+    border-color: oklch(0.87 0.08 60);
+    color: oklch(0.45 0.14 55);
+  }
+  :global(:root[data-theme="dark"]) .quota-orange {
+    background: oklch(0.2 0.04 55);
+    border-color: oklch(0.35 0.1 55);
+    color: oklch(0.78 0.14 60);
+  }
+
+  .quota-red {
+    background: var(--rose-dim);
+    border-color: oklch(0.7 0.12 25);
+    color: var(--rose);
+  }
+
+  .warn-icon {
+    font-size: 0.7rem;
+    flex-shrink: 0;
+  }
+
+  .warn-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .warn-link {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+    opacity: 0.8;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .warn-link:hover { opacity: 1; text-decoration: underline; }
 
   /* ── Splash states ───────────────────────────────────────────────────── */
   .splash-loading, .splash-error, .splash-empty {
