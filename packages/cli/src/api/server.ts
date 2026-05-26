@@ -719,7 +719,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           LEFT JOIN tool_calls tc ON tc.record_id = r.id
           WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
           GROUP BY r.session_id
-          ORDER BY ts DESC
+          ORDER BY MIN(r.ts) DESC
           LIMIT @limit OFFSET @offset
         `).all({ ...params, limit: pageSize, offset: (page - 1) * pageSize }) as any[]
 
