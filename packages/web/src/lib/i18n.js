@@ -257,7 +257,7 @@ const translations = {
       sevenDay: '7d Window',
       sevenDayOpus: '7d Opus',
       sevenDaySonnet: '7d Sonnet',
-      sevenDayOmelette: '7d Omelette',
+      sevenDayOmelette: '7d Design',
       weeklyLimit: 'Weekly',
       resetsIn: 'resets in {time}',
       toolLabels: {
@@ -522,7 +522,7 @@ const translations = {
       sevenDay: '7 天窗口',
       sevenDayOpus: '7 天 Opus',
       sevenDaySonnet: '7 天 Sonnet',
-      sevenDayOmelette: '7d Omelette',
+      sevenDayOmelette: '7 天 Design',
       weeklyLimit: '每周限额',
       resetsIn: '{time} 后重置',
       toolLabels: {
