@@ -12,6 +12,7 @@
     seven_day: 'quotas.sevenDay',
     seven_day_opus: 'quotas.sevenDayOpus',
     seven_day_sonnet: 'quotas.sevenDaySonnet',
+    seven_day_omelette: 'quotas.sevenDayOmelette',
     weekly_limit: 'quotas.weeklyLimit',
   }
 
@@ -35,9 +36,21 @@
 
   onMount(load)
 
+  // Fallback: convert snake_case tier names to readable labels
+  // e.g. "seven_day_omelette" → "7d Omelette", "five_hour" → "5h"
+  function formatUnknownTier(name) {
+    return name
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+      .replace(/^Five Hour/i, '5h')
+      .replace(/^Seven Day/i, '7d')
+      .replace(/^Weekly Limit/i, 'Weekly')
+  }
+
   function tierLabel(name) {
     const key = TIER_LABEL_KEYS[name]
-    return key ? $t(key) : name
+    return key ? $t(key) : formatUnknownTier(name)
   }
 
   function toolLabel(tool) {

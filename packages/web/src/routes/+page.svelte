@@ -192,6 +192,7 @@
     seven_day: '7d',
     seven_day_opus: '7d Opus',
     seven_day_sonnet: '7d Sonnet',
+    seven_day_omelette: '7d Omelette',
     weekly_limit: 'weekly',
   }
 
