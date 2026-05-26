@@ -18,7 +18,8 @@ COPY packages/web/package.json packages/web/
 RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm build
+# Only build server packages (skip Electron widget)
+RUN pnpm --filter @aiusage/core build && pnpm --filter @juliantanx/aiusage build && pnpm --filter @aiusage/web build
 
 VOLUME /root/.aiusage
 EXPOSE 3847

@@ -6,3 +6,4 @@ node_modules/
 packages/core/dist/
 packages/cli/dist/
 packages/web/.svelte-kit/
+packages/widget/
