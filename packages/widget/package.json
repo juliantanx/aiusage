@@ -2,15 +2,42 @@
   "name": "@juliantanx/aiusage-widget",
   "version": "1.0.0",
   "private": false,
-  "description": "System tray widget for aiusage",
+  "description": "System tray widget for aiusage — view AI token usage from your system tray",
+  "keywords": [
+    "ai",
+    "aiusage",
+    "widget",
+    "system-tray",
+    "electron",
+    "token-usage"
+  ],
+  "homepage": "https://github.com/juliantanx/aiusage/tree/main/packages/widget#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/juliantanx/aiusage.git",
+    "directory": "packages/widget"
+  },
+  "bugs": {
+    "url": "https://github.com/juliantanx/aiusage/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "main": "dist/main.js",
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "README_zh.md"
+  ],
   "bin": {
     "aiusage-widget": "bin/launcher.js"
   },
   "scripts": {
     "rebuild": "pnpm run rebuild:electron",
-    "rebuild:electron": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers --build-from-source'; execSync(cmd, {stdio:'inherit'})\"",
-    "rebuild:node": "npm rebuild better-sqlite3 --build-from-source",
+    "rebuild:electron": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers'; execSync(cmd, {stdio:'inherit'})\"",
+    "rebuild:node": "npm rebuild better-sqlite3",
     "dev": "pnpm run rebuild:electron && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"pnpm exec wait-on dist/main.js && pnpm exec electron .\"",
     "build": "vite build && tsc -p tsconfig.json",
     "pack": "pnpm build && electron-builder",

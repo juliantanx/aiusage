@@ -45,7 +45,7 @@ jobs:
           # Update version in all package.json files
           node -e "
             const fs = require('fs');
-            ['packages/core/package.json', 'packages/cli/package.json'].forEach(f => {
+            ['packages/core/package.json', 'packages/cli/package.json', 'packages/widget/package.json'].forEach(f => {
               const pkg = JSON.parse(fs.readFileSync(f, 'utf-8'));
               pkg.version = '$VERSION';
               fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + '\n');
@@ -55,7 +55,11 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish to npm
+      - name: Publish CLI to npm
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           pnpm publish --filter @juliantanx/aiusage --no-git-checks --access public
+
+      - name: Publish Widget to npm
+        run: |
+          pnpm publish --filter @juliantanx/aiusage-widget --no-git-checks --access public

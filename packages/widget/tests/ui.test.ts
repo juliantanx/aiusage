@@ -25,7 +25,11 @@ describe('widget UI helpers', () => {
   it('provides a visible tray icon asset', () => {
     const dataUrl = getTrayIconDataUrl()
 
-    expect(dataUrl.startsWith('data:image/svg+xml;base64,')).toBe(true)
-    expect(dataUrl.length).toBeGreaterThan('data:image/svg+xml;base64,'.length)
+    if (process.platform === 'win32') {
+      expect(dataUrl.startsWith('data:image/png;base64,')).toBe(true)
+    } else {
+      expect(dataUrl.startsWith('data:image/svg+xml;base64,')).toBe(true)
+    }
+    expect(dataUrl.length).toBeGreaterThan(30)
   })
 })
