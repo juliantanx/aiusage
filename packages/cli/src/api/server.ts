@@ -8,6 +8,7 @@ import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject } from './project-extraction.js'
 import { getDefaultSourcePaths } from '../commands/parse.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
+import { queryAllQuotas } from '../quota.js'
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = '', weekStart: 0 | 1 = 1): { where: string; params: Record<string, unknown> } {
   const ts = prefix ? `${prefix}.ts` : 'ts'
@@ -777,6 +778,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         }
         const result = await options.onRefresh()
         json(res, result)
+        return
+      }
+
+      // ── /api/quotas ───────────────────────────────────────────────
+      if (url.pathname === '/api/quotas' && req.method === 'GET') {
+        const results = await queryAllQuotas()
+        json(res, { quotas: results })
         return
       }
 
