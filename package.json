@@ -14,6 +14,6 @@
     "pm2:restart": "pm2 restart ecosystem.config.cjs",
     "pm2:logs": "pm2 logs",
     "pm2:status": "pm2 list",
-    "pm2:save": "pm2 save && pm2-startup install"
+    "pm2:save": "pm2 save"
   }
 }

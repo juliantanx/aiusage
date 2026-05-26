@@ -39,11 +39,13 @@ The widget reads from `~/.aiusage/cache.db`. Make sure you have run `aiusage par
 To keep the widget running after closing the terminal and auto-start on boot:
 
 ```bash
-npm install -g pm2 pm2-startup
+npm install -g pm2
 
-pm2 start aiusage-widget -- --foreground
-pm2 save
-pm2-startup install
+# Start aiusage server + widget as background services
+aiusage pm2-start
+
+# Linux / macOS: run directly; Windows: run the output command as Administrator
+pm2 startup
 ```
 
 PM2 works on Windows, macOS, and Linux.

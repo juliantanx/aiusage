@@ -125,17 +125,13 @@ pnpm add -g @juliantanx/aiusage</code></pre>
       {#if zh}
         <h3>后台运行（PM2）</h3>
         <p><code>aiusage serve</code> 默认在前台运行，关闭终端后服务会终止。如需在 Windows、macOS、Linux 上后台持续运行，请使用 PM2：</p>
-        <pre><code>npm install -g pm2 pm2-startup
+        <pre><code>npm install -g pm2
 
-# 启动 aiusage 后台服务
-pm2 start aiusage -- serve
+# 一条命令启动后台服务（自动生成配置 + 启动 PM2）
+aiusage pm2-start
 
-# 启动系统托盘组件（可选）
-pm2 start aiusage-widget -- --foreground
-
-# 设置开机自启
-pm2 save
-pm2-startup install</code></pre>
+# 设置开机自启（Windows 需以管理员身份执行输出的命令）
+pm2 startup</code></pre>
         <p>常用管理命令：</p>
         <pre><code>pm2 list            # 查看运行状态
 pm2 logs            # 查看日志
@@ -145,17 +141,13 @@ pm2 delete all      # 删除所有服务</code></pre>
       {:else}
         <h3>Running in Background (PM2)</h3>
         <p><code>aiusage serve</code> runs in the foreground and stops when you close the terminal. To keep it running in the background on Windows, macOS, and Linux, use PM2:</p>
-        <pre><code>npm install -g pm2 pm2-startup
+        <pre><code>npm install -g pm2
 
-# Start aiusage serve as a background service
-pm2 start aiusage -- serve
+# Start background services (generates config + starts PM2)
+aiusage pm2-start
 
-# Start the system tray widget (optional)
-pm2 start aiusage-widget -- --foreground
-
-# Set auto-start on boot
-pm2 save
-pm2-startup install</code></pre>
+# Set auto-start on boot (Windows: run the output command as Administrator)
+pm2 startup</code></pre>
         <p>Common management commands:</p>
         <pre><code>pm2 list            # View running status
 pm2 logs            # View logs

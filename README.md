@@ -33,17 +33,13 @@ If aiusage is useful, consider starring the repo to help more developers discove
 
 ```bash
 # Install PM2 (one-time)
-npm install -g pm2 pm2-startup
+npm install -g pm2
 
-# Start aiusage serve as a background service
-pm2 start aiusage -- serve
+# Start aiusage as background services (generates config + starts PM2)
+aiusage pm2-start
 
-# Start the system tray widget as a background service (optional)
-pm2 start aiusage-widget -- --foreground
-
-# Set auto-start on boot (Windows / macOS / Linux)
-pm2 save
-pm2-startup install
+# Set auto-start on boot (Linux / macOS: run directly; Windows: run the output command as Administrator)
+pm2 startup
 
 # Common commands
 pm2 list            # View running status

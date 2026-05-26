@@ -33,17 +33,13 @@ aiusage serve
 
 ```bash
 # 安装 PM2（一次性）
-npm install -g pm2 pm2-startup
+npm install -g pm2
 
-# 将 aiusage serve 作为后台服务启动
-pm2 start aiusage -- serve
+# 一条命令启动后台服务（自动生成配置 + 启动 PM2）
+aiusage pm2-start
 
-# 将系统托盘组件作为后台服务启动（可选）
-pm2 start aiusage-widget -- --foreground
-
-# 设置开机自启（Windows / macOS / Linux）
-pm2 save
-pm2-startup install
+# 设置开机自启（Linux / macOS: 直接执行；Windows: 以管理员身份执行输出的命令）
+pm2 startup
 
 # 常用命令
 pm2 list            # 查看运行状态

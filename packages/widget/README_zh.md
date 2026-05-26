@@ -39,11 +39,13 @@ aiusage-widget
 如需关闭终端后保持组件运行，并实现开机自启：
 
 ```bash
-npm install -g pm2 pm2-startup
+npm install -g pm2
 
-pm2 start aiusage-widget -- --foreground
-pm2 save
-pm2-startup install
+# 一条命令启动 aiusage 服务 + 托盘组件为后台服务
+aiusage pm2-start
+
+# Linux / macOS: 直接执行；Windows: 以管理员身份执行输出的命令
+pm2 startup
 ```
 
 PM2 支持 Windows、macOS 和 Linux。

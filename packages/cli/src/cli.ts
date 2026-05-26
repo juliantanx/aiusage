@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { writeFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { serve } from './commands/serve.js'
 import { runInit } from './commands/init.js'
 import { runSync } from './commands/sync.js'
@@ -280,6 +281,54 @@ program
   .description('Start the system tray widget')
   .action(async () => {
     await launchWidget()
+  })
+
+// PM2 ecosystem config
+const PM2_CONFIG = `module.exports = {
+  apps: [
+    {
+      name: 'aiusage-server',
+      script: 'aiusage',
+      args: 'serve',
+      autorestart: true,
+    },
+    {
+      name: 'aiusage-widget',
+      script: 'aiusage-widget',
+      args: '--foreground',
+      autorestart: true,
+    }
+  ]
+}
+`
+
+// pm2-setup command
+program
+  .command('pm2-setup')
+  .description('Generate ecosystem.config.cjs for PM2 background services')
+  .action(() => {
+    const configPath = join(AIUSAGE_DIR, 'ecosystem.config.cjs')
+    writeFileSync(configPath, PM2_CONFIG, 'utf-8')
+    console.log(`Config created: ${configPath}`)
+  })
+
+// pm2-start command
+program
+  .command('pm2-start')
+  .description('Setup and start PM2 background services (requires pm2 installed globally)')
+  .action(() => {
+    const configPath = join(AIUSAGE_DIR, 'ecosystem.config.cjs')
+    writeFileSync(configPath, PM2_CONFIG, 'utf-8')
+    console.log(`Config: ${configPath}`)
+
+    try {
+      execSync(`pm2 start "${configPath}"`, { stdio: 'inherit' })
+      execSync('pm2 save', { stdio: 'inherit' })
+      console.log('\nTo enable auto-start on boot, run: pm2 startup')
+    } catch {
+      console.error('Failed to start PM2. Make sure pm2 is installed: npm install -g pm2')
+      process.exit(1)
+    }
   })
 
 export { program }
