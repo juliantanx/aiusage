@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-05-26
+
+### Added
+- **Desktop system tray widget** — `@juliantanx/aiusage-widget` package with npm publish workflow ([#7](https://github.com/juliantanx/aiusage/pull/7))
+- **PM2 background support** — run aiusage as a background service via PM2
+- **Cursor tool support** — detect and display Cursor AI tool usage
+- **Widget port auto-detection** — widget automatically discovers the backend port
+- **Official subscription quota dashboard** — display subscription usage and limits
+- **Session detail page** — `/sessions/[sessionId]` with duration, tool call count, and time offset display
+- **MCP servers tab** — view top MCP servers in the overview tool calls card
+- **Tool call type classification** — filter tool calls by type (built-in, MCP, skill) with tabs on the Tool Calls page
+- **Cursor AI consumption support** — parse and display Cursor AI usage data (F1-B)
+- **Skill name extraction** — extract specific skill names from Claude Code `Skill` tool_use blocks, with display name classification and info notice for tools without tool call data
+- **Improved project name extraction** — use cwd to resolve project names with full path display
+
+### Fixed
+- SQL ambiguous column qualifiers (`ts`, `tool`) in sessions queries after LEFT JOIN
+- Codex records showing `model=unknown` — parse pre-watermark lines and scan `turn_context` events for backfill
+- Negative offset guard in `formatRelativeTs` and empty records state handling
+- Strip `skill__` prefix from display names in session detail endpoint
+- Escape SQL LIKE underscores to prevent `skill_view` matching `skill__` filter
+- Re-backfill `skill__unknown` rows (not just legacy Skill rows)
+- Extract skill name from `input.name` when `input.skill` is absent, also check `input.skillName`
+- Tool-calls info notice border color (`--blue` instead of invisible `--blue-dim`)
+- Validate `toolType` parameter in `/api/tool-calls`
+- Always include `tool` and `device` params in session detail URL
+- Fall back to `source_file` extraction when cwd-based project name is unknown
+
+### Changed
+- Remove unused `aiusage-data` gitlink
+
+---
+
 ## [1.3.0] - 2026-05-25
 
 ### Added
@@ -72,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README screenshot compressed and re-exported as clean PNG
 - README added to npm package files
 
+[1.3.1]: https://github.com/juliantanx/aiusage/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/juliantanx/aiusage/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/juliantanx/aiusage/compare/v1.1.1...v1.2.1
 [1.1.1]: https://github.com/juliantanx/aiusage/compare/v1.1.0...v1.1.1
