@@ -602,23 +602,27 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const params: Record<string, unknown> = { ...dr.params, ...tf.params }
 
         const totalRow = db.prepare(`
-          SELECT COUNT(DISTINCT session_id) AS total
-          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+          SELECT COUNT(DISTINCT r.session_id) AS total
+          FROM records r
+          WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
         `).get(params) as any
 
         const sessions = db.prepare(`
-          SELECT session_id AS sessionId,
-                 tool,
-                 model,
-                 MIN(ts) AS ts,
-                 SUM(input_tokens) AS inputTokens,
-                 SUM(output_tokens) AS outputTokens,
-                 SUM(cache_read_tokens) AS cacheReadTokens,
-                 SUM(cache_write_tokens) AS cacheWriteTokens,
-                 SUM(cost) AS cost
-          FROM records
+          SELECT r.session_id AS sessionId,
+                 r.tool,
+                 r.model,
+                 MIN(r.ts) AS ts,
+                 MAX(r.ts) - MIN(r.ts) AS duration,
+                 SUM(r.input_tokens) AS inputTokens,
+                 SUM(r.output_tokens) AS outputTokens,
+                 SUM(r.cache_read_tokens) AS cacheReadTokens,
+                 SUM(r.cache_write_tokens) AS cacheWriteTokens,
+                 SUM(r.cost) AS cost,
+                 COUNT(DISTINCT tc.id) AS toolCallCount
+          FROM records r
+          LEFT JOIN tool_calls tc ON tc.record_id = r.id
           WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-          GROUP BY session_id
+          GROUP BY r.session_id
           ORDER BY ts DESC
           LIMIT @limit OFFSET @offset
         `).all({ ...params, limit: pageSize, offset: (page - 1) * pageSize }) as any[]
