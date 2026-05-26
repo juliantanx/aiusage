@@ -18,6 +18,9 @@
     { key: 'skill',    label: () => $t('toolCalls.typeSkill') },
   ]
 
+  const NO_TOOL_CALL_TOOLS = new Set(['qoder', 'cursor'])
+  $: showNoToolCallNotice = NO_TOOL_CALL_TOOLS.has($selectedTool)
+
   async function loadData() {
     loading = true
     error = null
@@ -53,6 +56,12 @@
   <DeviceSelector />
   <ToolSelector />
 </div>
+
+{#if showNoToolCallNotice}
+  <div class="info-notice">
+    {$t('toolCalls.noToolCallData')}
+  </div>
+{/if}
 
 <div class="type-tabs">
   {#each TYPES as type}
@@ -125,6 +134,16 @@
     background: var(--accent-dim);
     border-color: var(--accent);
     font-weight: 600;
+  }
+
+  .info-notice {
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 1rem;
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 1px solid var(--blue-dim);
+    border-radius: 8px;
+    font-size: 0.8rem;
   }
 
   .ranking {

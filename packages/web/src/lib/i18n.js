@@ -128,6 +128,7 @@ const translations = {
       typeSkill: 'Skill',
       badgeMcp: 'mcp',
       badgeSkill: 'skill',
+      noToolCallData: 'Tool call data is not available in this tool\'s data source.',
     },
     sessions: {
       title: 'Sessions',
@@ -421,6 +422,7 @@ const translations = {
       typeSkill: 'Skill',
       badgeMcp: 'mcp',
       badgeSkill: 'skill',
+      noToolCallData: '该工具的数据源中不包含工具调用记录。',
     },
     sessions: {
       title: '会话',
