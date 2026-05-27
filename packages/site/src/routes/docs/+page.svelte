@@ -168,6 +168,55 @@
 
 <svelte:head>
   <title>{zh ? '文档' : 'Documentation'} — AIUsage</title>
+  <meta name="description" content={zh
+    ? 'AIUsage 完整文档：安装指南、CLI 命令参考、仪表盘使用说明、多设备同步配置、数据导出等。'
+    : 'AIUsage documentation: installation guide, CLI reference, dashboard usage, multi-device sync, data export, and more.'
+  } />
+  <link rel="canonical" href="https://aiusage.jtanx.com/docs" />
+  <meta property="og:title" content="{zh ? '文档' : 'Documentation'} — AIUsage" />
+  <meta property="og:description" content={zh
+    ? 'AIUsage 完整文档：安装指南、CLI 命令参考、仪表盘使用说明、多设备同步配置、数据导出等。'
+    : 'AIUsage documentation: installation guide, CLI reference, dashboard usage, multi-device sync, data export, and more.'
+  } />
+  <meta property="og:url" content="https://aiusage.jtanx.com/docs" />
+  <meta name="twitter:title" content="{zh ? '文档' : 'Documentation'} — AIUsage" />
+  <meta name="twitter:description" content={zh
+    ? 'AIUsage 完整文档：安装指南、CLI 命令参考、仪表盘使用说明、多设备同步配置、数据导出等。'
+    : 'AIUsage documentation: installation guide, CLI reference, dashboard usage, multi-device sync, data export, and more.'
+  } />
+
+  <!-- JSON-LD for Docs page -->
+  {@html `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: zh ? 'AIUsage 文档' : 'AIUsage Documentation',
+    description: zh
+      ? 'AIUsage 完整文档：安装指南、CLI 命令参考、仪表盘使用说明、多设备同步配置、数据导出等。'
+      : 'AIUsage documentation: installation guide, CLI reference, dashboard usage, multi-device sync, data export, and more.',
+    url: 'https://aiusage.jtanx.com/docs',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'AIUsage',
+      url: 'https://aiusage.jtanx.com'
+    },
+    breadcrumb: {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: 'https://aiusage.jtanx.com/'
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: zh ? '文档' : 'Documentation',
+          item: 'https://aiusage.jtanx.com/docs'
+        }
+      ]
+    }
+  })}</script>`}
 </svelte:head>
 
 <div class="docs-layout">

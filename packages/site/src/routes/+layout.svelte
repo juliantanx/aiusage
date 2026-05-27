@@ -16,6 +16,60 @@
     ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。本地优先，隐私至上。'
     : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more. Local-first, privacy-respecting.'
   } />
+  <meta name="keywords" content="AIUsage, AI coding, token tracker, Claude Code, Codex, Cursor, OpenClaw, OpenCode, Hermes, Qoder, AI usage analytics, token consumption, cost tracking, local-first, AI programming tools, AI编程工具, Token用量, 费用追踪" />
+  <link rel="canonical" href="https://aiusage.jtanx.com{$page.url.pathname}" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AIUsage" />
+  <meta property="og:title" content="AIUsage — {zh ? 'AI 编程用量分析平台' : 'AI Coding Usage Analytics'}" />
+  <meta property="og:description" content={zh
+    ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。本地优先，隐私至上。'
+    : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more. Local-first, privacy-respecting.'
+  } />
+  <meta property="og:url" content="https://aiusage.jtanx.com{$page.url.pathname}" />
+  <meta property="og:locale" content={zh ? 'zh_CN' : 'en_US'} />
+  <meta property="og:image" content="https://aiusage.jtanx.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:alt" content="AIUsage — AI Coding Usage Analytics" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AIUsage — {zh ? 'AI 编程用量分析平台' : 'AI Coding Usage Analytics'}" />
+  <meta name="twitter:description" content={zh
+    ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。本地优先，隐私至上。'
+    : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more. Local-first, privacy-respecting.'
+  } />
+  <meta name="twitter:image" content="https://aiusage.jtanx.com/og-image.png" />
+
+  <!-- JSON-LD Structured Data -->
+  {@html `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'AIUsage',
+    description: zh
+      ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。本地优先，隐私至上。'
+      : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more. Local-first, privacy-respecting.',
+    url: 'https://aiusage.jtanx.com',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Cross-platform',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD'
+    },
+    author: {
+      '@type': 'Organization',
+      name: 'AIUsage'
+    },
+    softwareVersion: '1.3.2',
+    downloadUrl: 'https://www.npmjs.com/package/@juliantanx/aiusage',
+    featureList: zh
+      ? 'Token用量追踪,费用估算与分析,模型使用排名,工具调用分析,项目维度统计,配额监控,多设备同步,数据导出'
+      : 'Token Usage Tracking,Cost Estimation,Model Usage Ranking,Tool Call Analytics,Project-Level Stats,Quota Monitoring,Multi-Device Sync,Data Export'
+  })}</script>`}
 </svelte:head>
 
 <div class="site">
@@ -27,7 +81,7 @@
         <span class="brand-text">AIUsage</span>
       </a>
 
-      <nav class="site-nav">
+      <nav class="site-nav" aria-label={zh ? '主导航' : 'Main navigation'}>
         <a href="/" class="nav-link" class:active={$page.url.pathname === '/'}>
           {zh ? '首页' : 'Home'}
         </a>
@@ -39,7 +93,7 @@
       </nav>
 
       <div class="header-actions">
-        <button class="lang-toggle" on:click={toggleLang}>
+        <button class="lang-toggle" on:click={toggleLang} aria-label={zh ? 'Switch to English' : '切换到中文'}>
           {zh ? 'EN' : '中文'}
         </button>
         <a href="https://www.npmjs.com/package/@juliantanx/aiusage" class="header-cta" target="_blank" rel="noopener">
@@ -50,13 +104,13 @@
   </header>
 
   <!-- Mobile header -->
-  <div class="mobile-nav-bar">
+  <div class="mobile-nav-bar" role="navigation" aria-label={zh ? '移动端导航' : 'Mobile navigation'}>
     <a href="/" class="site-brand">
       <span class="brand-mark">⌘</span>
       <span class="brand-text">AIUsage</span>
     </a>
     <div class="mobile-actions">
-      <button class="lang-toggle" on:click={toggleLang}>
+      <button class="lang-toggle" on:click={toggleLang} aria-label={zh ? 'Switch to English' : '切换到中文'}>
         {zh ? 'EN' : '中文'}
       </button>
     </div>
@@ -81,10 +135,10 @@
         </p>
         <div class="footer-badges">
           <a href="https://www.npmjs.com/package/@juliantanx/aiusage" target="_blank" rel="noopener" class="badge-link">
-            <img src="https://img.shields.io/npm/v/@juliantanx/aiusage?style=flat-square&color=0d9488" alt="npm version" />
+            <img src="https://img.shields.io/npm/v/@juliantanx/aiusage?style=flat-square&color=0d9488" alt="npm version" loading="lazy" />
           </a>
           <a href="https://github.com/juliantanx/aiusage/blob/main/LICENSE" target="_blank" rel="noopener" class="badge-link">
-            <img src="https://img.shields.io/github/license/juliantanx/aiusage?style=flat-square" alt="license" />
+            <img src="https://img.shields.io/github/license/juliantanx/aiusage?style=flat-square" alt="license" loading="lazy" />
           </a>
         </div>
       </div>

@@ -96,6 +96,82 @@
   }
 </script>
 
+<svelte:head>
+  <!-- WebSite Schema with SearchAction for sitelinks -->
+  {@html `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'AIUsage',
+    url: 'https://aiusage.jtanx.com',
+    description: zh
+      ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。'
+      : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more.',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://aiusage.jtanx.com/docs?q={search_term_string}',
+      'query-input': 'required name=search_term_string'
+    }
+  })}</script>`}
+
+  <!-- FAQ Schema for rich results -->
+  {@html `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: zh ? 'AIUsage 是什么？' : 'What is AIUsage?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: zh
+            ? 'AIUsage 是一个本地优先的 AI 编程工具用量分析平台，支持追踪 Claude Code、Codex、Cursor 等 7 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
+            : 'AIUsage is a local-first AI coding usage analytics platform that tracks token consumption, costs, and usage patterns across 7 AI tools including Claude Code, Codex, and Cursor. Data stays on your machine — no third-party servers.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: zh ? 'AIUsage 支持哪些 AI 工具？' : 'Which AI tools does AIUsage support?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: zh
+            ? 'AIUsage 支持 7 种 AI 编程工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor。'
+            : 'AIUsage supports 7 AI coding tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, and Cursor.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: zh ? 'AIUsage 是免费的吗？' : 'Is AIUsage free?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: zh
+            ? '是的，AIUsage 是完全免费的开源项目，采用 MIT 许可证。'
+            : 'Yes, AIUsage is completely free and open source under the MIT license.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: zh ? '如何安装 AIUsage？' : 'How to install AIUsage?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: zh
+            ? '通过 npm 全局安装：npm install -g @juliantanx/aiusage，然后运行 aiusage parse 解析数据，最后运行 aiusage serve 启动仪表盘。'
+            : 'Install globally via npm: npm install -g @juliantanx/aiusage, then run aiusage parse to parse data, and aiusage serve to start the dashboard.'
+        }
+      },
+      {
+        '@type': 'Question',
+        name: zh ? 'AIUsage 的数据存储在哪里？' : 'Where does AIUsage store data?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: zh
+            ? '所有数据存储在本地的 SQLite 数据库中，不会上传到任何云端服务器。支持通过 GitHub 或 S3 兼容存储进行可选的多设备同步。'
+            : 'All data is stored in a local SQLite database and never uploaded to any cloud server. Optional multi-device sync is available via GitHub or S3-compatible storage.'
+        }
+      }
+    ]
+  })}</script>`}
+</svelte:head>
+
 <!-- ═══════ HERO ═══════ -->
 <section class="hero">
   <div class="hero-inner">
@@ -358,17 +434,17 @@
       <div class="contribute-stats">
         <div class="stat-card">
           <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener">
-            <img src="https://img.shields.io/github/stars/juliantanx/aiusage?style=social" alt="GitHub stars" />
+            <img src="https://img.shields.io/github/stars/juliantanx/aiusage?style=social" alt="GitHub stars" loading="lazy" />
           </a>
         </div>
         <div class="stat-card">
           <a href="https://github.com/juliantanx/aiusage/fork" target="_blank" rel="noopener">
-            <img src="https://img.shields.io/github/forks/juliantanx/aiusage?style=social" alt="GitHub forks" />
+            <img src="https://img.shields.io/github/forks/juliantanx/aiusage?style=social" alt="GitHub forks" loading="lazy" />
           </a>
         </div>
         <div class="stat-card">
           <a href="https://github.com/juliantanx/aiusage/issues" target="_blank" rel="noopener">
-            <img src="https://img.shields.io/github/issues/juliantanx/aiusage?style=social" alt="GitHub issues" />
+            <img src="https://img.shields.io/github/issues/juliantanx/aiusage?style=social" alt="GitHub issues" loading="lazy" />
           </a>
         </div>
       </div>
