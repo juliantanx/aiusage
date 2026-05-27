@@ -117,25 +117,7 @@ const options = {
   root: Root,
   service_worker: false,
   templates: {
-    app: ({ head, body, assets: assets2, nonce, env }) => `<!doctype html>
-<html lang="zh">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0d9488" />
-    <meta name="author" content="AIUsage" />
-    <meta name="robots" content="index, follow" />
-    <meta name="google-site-verification" content="lTTVvm7hSSONLuTjxZnZFZ3B9H6p5W9FPFc3Ci7WPIY" />
-    <meta name="msvalidate.01" content="85195BB7DCA599381A92B03C935BC240" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⌘</text></svg>" />
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230d9488'/><text x='50' y='72' font-size='60' text-anchor='middle' fill='white'>⌘</text></svg>" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="dns-prefetch" href="https://img.shields.io" />
-    <title>AIUsage</title>
-    ` + head + '\n  </head>\n  <body data-sveltekit-preload-data="hover">\n    <div style="display: contents">' + body + "</div>\n  </body>\n</html>\n",
+    app: ({ head, body, assets: assets2, nonce, env }) => '<!doctype html>\n<html lang="zh">\n  <head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <meta name="theme-color" content="#0d9488" />\n    <meta name="author" content="AIUsage" />\n    <meta name="robots" content="index, follow" />\n    <meta name="google-site-verification" content="lTTVvm7hSSONLuTjxZnZFZ3B9H6p5W9FPFc3Ci7WPIY" />\n    <meta name="msvalidate.01" content="85195BB7DCA599381A92B03C935BC240" />\n    <link rel="preconnect" href="https://fonts.googleapis.com" />\n    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet" />\n    <link rel="icon" href="/logo-icon.svg" type="image/svg+xml" />\n    <link rel="apple-touch-icon" href="/logo-icon.svg" />\n    <link rel="manifest" href="/manifest.json" />\n    <link rel="dns-prefetch" href="https://img.shields.io" />\n    ' + head + '\n  </head>\n  <body data-sveltekit-preload-data="hover">\n    <div style="display: contents">' + body + "</div>\n  </body>\n</html>\n",
     error: ({ status, message }) => '<!doctype html>\n<html lang="en">\n	<head>\n		<meta charset="utf-8" />\n		<title>' + message + `</title>
 
 		<style>
@@ -207,7 +189,7 @@ const options = {
 		<div class="error">
 			<span class="status">` + status + '</span>\n			<div class="message">\n				<h1>' + message + "</h1>\n			</div>\n		</div>\n	</body>\n</html>\n"
   },
-  version_hash: "g2qi8m"
+  version_hash: "1sp7n6g"
 };
 async function get_hooks() {
   let handle;

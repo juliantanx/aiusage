@@ -253,7 +253,7 @@
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
         <span class="meta-tag">MIT</span>
-        <span class="meta-tag">v1.3.1</span>
+        <span class="meta-tag">v1.3.2</span>
       </div>
     </header>
 
@@ -299,8 +299,8 @@
       <p>{zh ? '浏览器打开 http://localhost:3847 即可查看仪表盘。' : 'Open http://localhost:3847 in your browser to view the dashboard.'}</p>
       <Callout type="info">
         {zh
-          ? '仪表盘首页在浏览器首次加载时会自动触发一次解析。您也可以在 Settings 页面配置自动定期解析。'
-          : 'The dashboard home page triggers a parse automatically on first load. You can also configure automatic periodic parsing in Settings.'
+          ? '首页会按当前时间范围从 API 拉取汇总数据，并根据设置中的轮询间隔自动刷新。需要导入新日志时，可手动运行 aiusage parse，或在设置里启用自动解析间隔。'
+          : 'The home page loads summary data for the current range and refreshes automatically based on the dashboard poll interval. To import new logs, run aiusage parse manually or enable the auto-parse interval in Settings.'
         }
       </Callout>
     </section>
@@ -332,8 +332,8 @@
       </CodeBlock>
       <Callout type="info">
         {zh
-          ? '镜像在 Docker Hub (juliantanx/aiusage) 和 GitHub Container Registry (ghcr.io/juliantanx/aiusage) 均可获取。支持 amd64 和 arm64 架构。'
-          : 'Available on Docker Hub (juliantanx/aiusage) and GitHub Container Registry (ghcr.io/juliantanx/aiusage). Supports amd64 and arm64 architectures.'
+          ? '官方镜像当前提供在 Docker Hub（juliantanx/aiusage），支持 amd64 和 arm64 架构。'
+          : 'The official image is currently published on Docker Hub (juliantanx/aiusage) with amd64 and arm64 support.'
         }
       </Callout>
     </section>
@@ -345,20 +345,29 @@
         <h2>{zh ? '仪表盘（首页）' : 'Dashboard (Home)'}</h2>
       </div>
       {#if zh}
-        <p>首页是一个实时 Token 计数器，显示所选时间范围内的累计用量，并每隔一段时间自动刷新。</p>
+        <p>首页是实时总览页，包含 LIVE 状态、当前时间范围、时钟、主 Token 计数器、配额预警、自动刷新进度条，以及费用 / 会话 / 活跃天数三项摘要。</p>
       {:else}
-        <p>The home page is a live token counter showing cumulative usage for the selected time range, auto-refreshing at a configurable interval.</p>
+        <p>The home page is a live overview with the current range, clock, main token counter, quota warnings, refresh progress, and summary stats for cost, sessions, and active days.</p>
       {/if}
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/dashboard-home.png" alt={zh ? 'AIUsage 首页仪表盘截图' : 'AIUsage dashboard home screenshot'} loading="lazy" />
+        <figcaption>{zh ? '首页展示实时累计 Token、刷新倒计时和配额预警。' : 'Home page showing live token totals, refresh countdown, and quota warnings.'}</figcaption>
+      </figure>
     </section>
 
     <section id="dash-elements">
       <h3>{zh ? '界面元素' : 'UI Elements'}</h3>
       <ul>
-        <li><strong>{zh ? '实时计数器' : 'Live counter'}</strong> — {zh ? '显示总 Token 数，支持动画计数效果' : 'Total token count with animated count-up effect'}</li>
-        <li><strong>{zh ? '子统计' : 'Sub-stats'}</strong> — {zh ? '分别展示输入、输出和缓存 Token' : 'Input, output, and cache tokens shown separately'}</li>
-        <li><strong>{zh ? '费用 / 会话 / 活跃天数' : 'Cost / Sessions / Active Days'}</strong> — {zh ? '三个辅助统计卡片' : 'Three secondary stat cards'}</li>
-        <li><strong>{zh ? 'Token 构成条' : 'Token composition bar'}</strong> — {zh ? '按比例显示输入、输出、缓存读写的分布' : 'Proportional breakdown of input, output, cache read/write'}</li>
-        <li><strong>{zh ? '刷新进度条' : 'Refresh progress bar'}</strong> — {zh ? '显示下次自动刷新的倒计时' : 'Countdown until next auto-refresh'}</li>
+        <li><strong>{zh ? '实时计数器' : 'Live counter'}</strong> — {zh ? '显示总 Token 数，支持动画计数效果' : 'Shows total tokens with a count-up animation'}</li>
+        <li><strong>{zh ? '子统计' : 'Sub-stats'}</strong> — {zh ? '分别展示输入、输出与缓存总量（缓存读写合并显示）' : 'Shows input, output, and combined cache totals'}</li>
+        <li><strong>{zh ? '范围与时钟' : 'Range and clock'}</strong> — {zh ? '顶部显示当前时间范围、实时时钟和 LIVE 状态' : 'Top bar shows the active range, live clock, and LIVE indicator'}</li>
+        <li><strong>{zh ? '费用 / 会话 / 活跃天数' : 'Cost / Sessions / Active Days'}</strong> — {zh ? '三个摘要统计块' : 'Three summary stat blocks'}</li>
+        <li><strong>{zh ? 'Token 构成条' : 'Token composition bar'}</strong> — {zh ? '按比例显示输入、输出、缓存读写分布' : 'Proportional breakdown of input, output, cache read, and cache write'}</li>
+        <li><strong>{zh ? '刷新进度条' : 'Refresh progress bar'}</strong> — {zh ? '显示下次自动刷新的倒计时，并可手动立即刷新' : 'Shows countdown to next refresh and allows manual refresh'}</li>
+        <li><strong>{zh ? '配额预警' : 'Quota warnings'}</strong> — {zh ? '当 Claude Code / Codex 配额层级达到 80% 以上时会在首页顶部提示' : 'Shows warning banners when Claude Code or Codex quota tiers reach 80%+'}</li>
       </ul>
     </section>
 
@@ -366,8 +375,9 @@
       <h3>{zh ? '显示配置' : 'Display Config'}</h3>
       <p>{zh ? '点击右上角的齿轮按钮可打开显示配置面板：' : 'Click the gear button to open the display config panel:'}</p>
       <ul>
-        <li><strong>{zh ? '时间范围' : 'Time range'}</strong> — {zh ? '今天 / 本周 / 本月 / 近 30 天 / 全部' : 'Today / This Week / This Month / Last 30d / All Time'}</li>
-        <li><strong>{zh ? '数字格式' : 'Number format'}</strong> — {zh ? '精确（1,234,567）或简短（1.2M）' : 'Exact (1,234,567) or abbreviated (1.2M)'}</li>
+        <li><strong>{zh ? '时间范围' : 'Time range'}</strong> — {zh ? '全部 / 今天 / 本周 / 本月 / 近 30 天' : 'All Time / Today / This Week / This Month / Last 30d'}</li>
+        <li><strong>{zh ? '数字格式' : 'Number format'}</strong> — {zh ? '精确（1,234,567）或简写（1.2K / 1.2M）' : 'Exact numbers or abbreviated format (1.2K / 1.2M)'}</li>
+        <li><strong>{zh ? '刷新说明' : 'Refresh info'}</strong> — {zh ? '面板底部会显示当前轮询间隔，并可跳转到 Settings 修改 dashboard poll interval' : 'The panel shows the current poll interval and links to Settings to change the dashboard poll interval'}</li>
       </ul>
     </section>
 
@@ -378,16 +388,23 @@
         <h2>{zh ? '概览' : 'Overview'}</h2>
       </div>
       {#if zh}
-        <p>概览页展示带筛选条件的聚合统计摘要，是了解整体用量的起点。</p>
+        <p>概览页展示聚合统计摘要，并支持按日期范围、设备和 AI 工具筛选。这里也是查看按工具聚合和 Top Tool Calls / MCP 服务调用的入口。</p>
       {:else}
-        <p>The Overview page shows aggregated usage stats with filters — your go-to starting point for understanding overall usage.</p>
+        <p>The Overview page shows aggregated stats with filters for date range, device, and AI tool. It also summarizes usage by tool and highlights top tool calls or MCP servers.</p>
       {/if}
       <Callout type="tip">
         {zh
-          ? '使用页面顶部的筛选栏可以按日期范围、设备、AI 助手进行过滤，所有数据页面均支持这些筛选条件。'
-          : 'Use the filter bar at the top to narrow by date range, device, and AI assistant — all data pages share these filters.'
+          ? '顶部三个筛选器（Date Range、Device、Tool）会同步影响 Overview、Tokens、Cost、Models、Tool Calls、Projects 和 Sessions 页面。'
+          : 'The Date Range, Device, and Tool filters are shared across Overview, Tokens, Cost, Models, Tool Calls, Projects, and Sessions.'
         }
       </Callout>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/overview.png" alt={zh ? 'AIUsage 概览页截图' : 'AIUsage overview page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '概览页包含统计卡片、Token 明细、按工具汇总，以及 Top Tool Calls / MCP 标签页。' : 'Overview includes stat cards, token breakdown, by-tool totals, and the Top Tool Calls / MCP tabs.'}</figcaption>
+      </figure>
     </section>
 
     <section id="overview-cards">
@@ -420,9 +437,16 @@
         <h2>{zh ? 'Token 用量' : 'Tokens'}</h2>
       </div>
       <p>{zh
-        ? 'Token 页面以每日图表和明细表格的形式展示 Token 消耗趋势。'
-        : 'The Tokens page visualizes daily token consumption with a bar chart and a detail table.'
+        ? '页面支持两种图表模式：Breakdown 会按输入、输出、缓存读取、缓存写入、思考 Token 分开展示；Total 会将一天内所有 Token 合并成单柱。'
+        : 'The page supports two chart modes: Breakdown splits input, output, cache read, cache write, and thinking tokens; Total combines each day into a single bar.'
       }</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/tokens.png" alt={zh ? 'AIUsage Token 页面截图' : 'AIUsage tokens page screenshot'} loading="lazy" />
+        <figcaption>{zh ? 'Token 页面支持 Breakdown / Total 两种视图，并在表格中列出每天各类 Token。' : 'Tokens page with Breakdown / Total modes and the daily token table.'}</figcaption>
+      </figure>
     </section>
 
     <section id="tokens-chart">
@@ -459,15 +483,22 @@
         <h2>{zh ? '费用' : 'Cost'}</h2>
       </div>
       <p>{zh
-        ? '费用页面展示每日费用走势及按 AI 助手、模型的费用分布。'
-        : 'The Cost page shows daily spending trends and a breakdown by AI assistant and model.'
+        ? '费用页面展示总费用卡片、每日费用柱状图，以及按工具和按模型的前 10 名费用排行。'
+        : 'The Cost page shows a total cost card, a daily cost bar chart, and top-10 cost breakdowns by tool and by model.'
       }</p>
       <Callout type="warn">
         {zh
-          ? '费用为估算值，基于「定价」页面中配置的每百万 Token 单价计算。如发现费用偏差，请在「定价」页面检查并修正价格。'
-          : 'Costs are estimates calculated using per-million-token prices from the Pricing page. If costs look wrong, review and update prices there.'
+          ? '费用为估算值，基于「定价」页面中的每百万 Token 价格计算。若你修改了定价，请手动执行重新计算费用。'
+          : 'Costs are estimates based on the per-million-token pricing table. If you change pricing, run the cost recalculation step manually.'
         }
       </Callout>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/cost.png" alt={zh ? 'AIUsage 费用页面截图' : 'AIUsage cost page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '费用页显示总费用、每日费用走势，以及按工具 / 模型的费用排行。' : 'Cost page showing total cost, daily trend, and ranked breakdowns by tool and model.'}</figcaption>
+      </figure>
     </section>
 
     <section id="cost-daily">
@@ -489,14 +520,21 @@
         <span class="sec-idx">06</span>
         <h2>{zh ? '模型' : 'Models'}</h2>
       </div>
-      <p>{zh ? '模型页面展示各 AI 模型的使用量排名，帮助了解哪些模型被频繁调用。' : 'The Models page ranks AI model usage to show which models are used most.'}</p>
+      <p>{zh ? '模型页面按总 Token 使用量排序，展示模型 ID、提供商、调用次数、总 Token，以及占比进度条。' : 'The Models page ranks models by total token usage and shows model ID, provider, call count, total tokens, and share bars.'}</p>
       <ul>
         <li><strong>{zh ? '模型' : 'Model'}</strong> — {zh ? '模型 ID（如 claude-sonnet-4-6）' : 'Model ID (e.g. claude-sonnet-4-6)'}</li>
         <li><strong>{zh ? '提供商' : 'Provider'}</strong> — {zh ? '服务提供商（Anthropic、OpenAI 等）' : 'Service provider (Anthropic, OpenAI, etc.)'}</li>
         <li><strong>{zh ? '调用次数' : 'Calls'}</strong> — {zh ? '该模型被调用的次数' : 'Number of times invoked'}</li>
         <li><strong>{zh ? 'Token' : 'Tokens'}</strong> — {zh ? '该模型消耗的 Token 总量' : 'Total tokens consumed'}</li>
-        <li><strong>{zh ? '占比' : 'Share'}</strong> — {zh ? '在所有 Token 中的占比（含进度条）' : 'Percentage of total tokens (with progress bar)'}</li>
+        <li><strong>{zh ? '占比' : 'Share'}</strong> — {zh ? '在当前筛选结果中的占比（含进度条）' : 'Percentage within the current filtered dataset (with progress bar)'}</li>
       </ul>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/models.png" alt={zh ? 'AIUsage 模型页面截图' : 'AIUsage models page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '模型页用表格和进度条展示各模型的调用量与 Token 占比。' : 'Models page uses a table and share bars to compare model usage.'}</figcaption>
+      </figure>
     </section>
 
     <!-- ══════ Tool Calls ══════ -->
@@ -506,9 +544,16 @@
         <h2>{zh ? '工具调用' : 'Tool Calls'}</h2>
       </div>
       <p>{zh
-        ? '工具调用页面展示 AI 助手在会话中调用各工具的频次排名。工具调用是 AI 助手执行的具体操作，例如 Bash（运行命令）、Read（读取文件）、Edit（修改文件）等。'
-        : 'The Tool Calls page ranks how frequently each tool was invoked. Tool calls are specific actions — e.g. Bash (run commands), Read (read files), Edit (modify files).'
+        ? '工具调用页面展示会话内工具调用频次排行，可切换查看全部、builtin、mcp、skill 三种类型。Qoder 和 Cursor 当前不会产出工具调用数据，因此切换到这两类工具时页面会显示提示。'
+        : 'The Tool Calls page ranks tool usage within sessions and supports All, builtin, mcp, and skill tabs. Qoder and Cursor currently do not emit tool-call data, so the page shows a notice when filtered to those tools.'
       }</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/tool-calls.png" alt={zh ? 'AIUsage 工具调用页面截图' : 'AIUsage tool calls page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '工具调用页支持类型切换，并用排行条展示调用占比。' : 'Tool Calls page with type tabs and ranked percentage bars.'}</figcaption>
+      </figure>
     </section>
 
     <!-- ══════ Projects ══════ -->
@@ -518,9 +563,16 @@
         <h2>{zh ? '项目' : 'Projects'}</h2>
       </div>
       <p>{zh
-        ? '项目页面按项目目录展示 Token 用量和费用排名，帮助了解哪些代码库消耗了最多资源。项目名称来自 AI 工具日志中记录的工作目录路径。'
-        : 'The Projects page ranks token usage and cost by project directory. Project names come from the working directory path recorded in AI tool logs.'
+        ? '项目页面按项目目录汇总 Token 和费用，并显示项目名、完整路径、占比条、Token 总量、费用与百分比。适合快速找出最耗资源的仓库。'
+        : 'The Projects page aggregates usage by project directory and shows project name, full path, share bar, total tokens, cost, and percentage so you can spot the most expensive repos quickly.'
       }</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/projects.png" alt={zh ? 'AIUsage 项目页面截图' : 'AIUsage projects page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '项目页按目录聚合，适合定位最耗 Token / 费用的代码仓库。' : 'Projects page grouped by directory to identify the most expensive repos.'}</figcaption>
+      </figure>
     </section>
 
     <!-- ══════ Sessions ══════ -->
@@ -530,9 +582,23 @@
         <h2>{zh ? '会话' : 'Sessions'}</h2>
       </div>
       <p>{zh
-        ? '会话页面展示每一条会话记录的详细日志，每页显示 50 条，支持翻页。包含时间、工具、模型、输入/输出 Token、费用等列。'
-        : 'The Sessions page shows a detailed log of every recorded session, paginated at 50 per page. Columns include time, tool, model, input/output tokens, and cost.'
+        ? '会话页面按分页展示会话列表（每页 50 条），点击任意一行可进入详情页。列表列包含时间、工具、模型、持续时长、工具调用次数、输入 / 输出 Token 与费用。'
+        : 'The Sessions page lists sessions 50 per page. Click any row to open the detail view. Columns include time, tool, model, duration, tool-call count, input/output tokens, and cost.'
       }</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/sessions.png" alt={zh ? 'AIUsage 会话列表页截图' : 'AIUsage sessions list page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '会话列表支持分页，并可点击进入单个会话详情。' : 'Session list with pagination and clickable rows for detail view.'}</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/session-detail.png" alt={zh ? 'AIUsage 会话详情页截图' : 'AIUsage session detail page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '会话详情页按时间线展示 API records、tool calls 和记录间隔。' : 'Session detail page showing the timeline of API records, tool calls, and gaps between records.'}</figcaption>
+      </figure>
     </section>
 
     <!-- ══════ Quotas ══════ -->
@@ -542,16 +608,23 @@
         <h2>{zh ? '配额监控' : 'Quotas'}</h2>
       </div>
       <p>{zh
-        ? '配额页面实时监控 Claude Code、Codex 等工具的速率限制配额。自动从本地凭证中读取配额信息。'
-        : 'The Quotas page monitors rate limit quotas for Claude Code, Codex, and more. Quota info is read automatically from local credentials.'
+        ? '配额页面当前主要覆盖 Claude Code 和 Codex。页面会把有凭证的工具显示为卡片，没有本地凭证的工具则放到下方的 inactive 列表中。'
+        : 'The Quotas page currently focuses on tools with local quota credentials, mainly Claude Code and Codex. Tools with credentials appear as cards, while tools without credentials are listed in an inactive section below.'
       }</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/quotas.png" alt={zh ? 'AIUsage 配额页面截图' : 'AIUsage quotas page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '配额页用卡片显示各层级利用率、颜色状态和重置倒计时。' : 'Quota cards show utilization, color state, and reset countdowns.'}</figcaption>
+      </figure>
     </section>
 
     <section id="quotas-cards">
       <h3>{zh ? '配额卡片' : 'Quota Cards'}</h3>
       <p>{zh
-        ? '每个已配置凭证的工具显示一张卡片，包含工具名称、最后更新时间、配额状态。未配置凭证的工具会显示在底部的非活跃列表中。'
-        : 'Each tool with configured credentials shows a card with tool name, last update time, and quota status. Tools without credentials appear in an inactive list at the bottom.'
+        ? '每个已配置凭证的工具会显示最后更新时间，以及当前查询状态：正常显示 tiers、凭证过期、解析失败、查询失败、或暂无 tiers。未配置凭证的工具会显示在底部 inactive 列表中。'
+        : 'Each configured tool shows the last query time and one of several states: normal tier display, expired credentials, parse error, query failure, or no tiers. Tools without credentials appear in the inactive list at the bottom.'
       }</p>
     </section>
 
@@ -570,15 +643,22 @@
         <h2>{zh ? '定价' : 'Pricing'}</h2>
       </div>
       <p>{zh
-        ? '定价页面用于管理各模型的每百万 Token 单价，用于计算整个仪表盘的费用估算。每个模型显示一张卡片，包含模型名、输入/输出费率、缓存费率、状态标签（默认/自定义/前缀匹配/无定价）。'
-        : 'The Pricing page manages per-million-token rates for each model. Each model card shows: name, input/output rates, cache rates, and status badge (Default/Custom/Prefix match/No pricing).'
+        ? '定价页面按模型显示卡片，可直接编辑 input / output / cache read / cache write 的每百万 Token 单价。状态标签可能是 Default、Override、自定义前缀匹配，或 No pricing；部分模型还会显示 CNY 标签。'
+        : 'The Pricing page shows one card per model and lets you edit per-million-token rates for input, output, cache read, and cache write. Status badges may indicate Default, Override, prefix match, or No pricing, and some models also carry a CNY badge.'
       }</p>
       <Callout type="warn">
         {zh
-          ? '修改价格后点击「重新计算费用」会不可逆地更新数据库中所有历史会话的费用字段。'
-          : 'After changing prices, clicking "Recalculate Costs" irreversibly updates the cost field for all sessions in the database.'
+          ? '点击「重新计算费用」会批量更新数据库中历史记录的费用字段，请在确认定价无误后再执行。'
+          : 'Clicking Recalculate Costs updates historical cost fields in the database, so only run it after you confirm the pricing table is correct.'
         }
       </Callout>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/pricing.png" alt={zh ? 'AIUsage 定价页面截图' : 'AIUsage pricing page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '定价页支持逐模型编辑费率，并通过标签区分默认价、自定义价和无定价模型。' : 'Pricing page with editable per-model rates and badges for default, override, and missing pricing.'}</figcaption>
+      </figure>
     </section>
 
     <!-- ══════ Settings ══════ -->
@@ -587,7 +667,14 @@
         <span class="sec-idx">12</span>
         <h2>{zh ? '设置' : 'Settings'}</h2>
       </div>
-      <p>{zh ? '设置页面按模块分区，每个区域独立保存。' : 'The Settings page is divided into sections, each saved independently.'}</p>
+      <p>{zh ? '设置页按模块分区，当前包含 General、Data Sources、Sync、Data、Currency 五个区域，每个区域独立保存。' : 'The Settings page is split into independent sections: General, Data Sources, Sync, Data, and Currency. Each section saves separately.'}</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/settings.png" alt={zh ? 'AIUsage 设置页面截图' : 'AIUsage settings page screenshot'} loading="lazy" />
+        <figcaption>{zh ? '设置页包含通用配置、日志路径、同步凭证、数据保留和货币显示设置。' : 'Settings page with general config, source paths, sync credentials, data retention, and currency display settings.'}</figcaption>
+      </figure>
     </section>
 
     <section id="settings-general">
@@ -597,8 +684,8 @@
         rows={[
           [zh ? '设备别名' : 'Device Alias', zh ? '可选的当前设备名称，留空则使用主机名' : 'Optional device name, defaults to hostname'],
           [zh ? '每周起始日' : 'Week Starts On', zh ? '「本周」时间范围的起始天（周日或周一 ISO）' : 'Starting day for "This Week" range (Sunday or Monday ISO)'],
-          [zh ? '仪表盘轮询间隔' : 'Dashboard Poll Interval', zh ? '首页自动刷新的间隔（毫秒，默认 30000）' : 'Auto-refresh interval in ms (default: 30000)'],
-          [zh ? '自动解析间隔' : 'Auto-Parse Interval', zh ? '后台自动触发解析的间隔（毫秒）。设为 0 则禁用' : 'Background parse interval in ms. Set 0 to disable'],
+          [zh ? '仪表盘轮询间隔' : 'Dashboard Poll Interval', zh ? '首页自动刷新的间隔（毫秒）' : 'Auto-refresh interval for the home dashboard in milliseconds'],
+          [zh ? '自动解析间隔' : 'Auto-Parse Interval', zh ? '后台自动触发解析的间隔（毫秒），设为 0 或留空可关闭' : 'Background parse interval in milliseconds; use 0 or empty to disable'],
         ]}
       />
     </section>
@@ -620,8 +707,8 @@
     <section id="settings-data">
       <h3>{zh ? '数据管理' : 'Data Management'}</h3>
       <p><strong>{zh ? '本地数据保留天数' : 'Local Data Retention (days)'}</strong> — {zh
-        ? '超过此天数的旧数据将被清理。设为 0 或留空则永久保留。'
-        : 'Data older than this will be cleaned up. Set to 0 or leave empty to keep forever.'
+        ? '用于配置后续清理策略。设为 0 或留空则表示永久保留；设置页面本身不会立即删除数据。'
+        : 'Controls future cleanup policy. Set to 0 or leave empty to keep data forever; changing this setting does not immediately delete records.'
       }</p>
     </section>
 
@@ -632,8 +719,8 @@
         <h2>{zh ? '多设备同步' : 'Sync'}</h2>
       </div>
       <p>{zh
-        ? '同步功能将本设备的数据推送到远程存储，并从远程拉取其他设备的数据，实现多台设备之间的用量统计共享。'
-        : 'Sync pushes this device\'s data to remote storage and pulls other devices\' data, sharing usage stats across machines.'
+        ? '同步功能会把本机数据上传到远端，再拉取其他设备的数据并合并。你可以通过侧边栏 Sync 按钮手动触发，也可以先用 init 命令或设置页完成后端配置。'
+        : 'Sync uploads this device’s data, pulls data from other devices, and merges the results. You can trigger it from the sidebar Sync button after configuring the backend via init or the Settings page.'
       }</p>
       <ul>
         <li><strong>GitHub</strong> — {zh ? '推送到 GitHub 仓库' : 'Push to a GitHub repository'}</li>
@@ -670,17 +757,17 @@
         <h2>{zh ? '桌面小组件' : 'Widget'}</h2>
       </div>
       <p>{zh
-        ? 'AIUsage Widget 是一个 Electron 系统托盘应用，在系统托盘中显示 Token 用量摘要，无需打开浏览器即可快速查看。'
-        : 'AIUsage Widget is an Electron system tray app that shows token usage summaries in your system tray — no browser needed.'
+        ? 'Widget 是独立发布的 Electron 托盘应用。CLI 中的 aiusage widget 命令会尝试启动已安装的 aiusage-widget；如果尚未安装，会提示先安装对应包。'
+        : 'Widget is a separately published Electron tray app. The aiusage widget CLI command tries to launch an installed aiusage-widget binary; if it is missing, the CLI asks you to install the package first.'
       }</p>
-      <CodeBlock lang="Terminal" copyText={'npm install -g @juliantanx/aiusage-widget\naiusage-widget'}>
+      <CodeBlock lang="Terminal" copyText={'npm install -g @juliantanx/aiusage-widget\naiusage widget'}>
         <span slot="lines"><span>1</span><span>2</span></span>
         <span class="tk-kw">npm</span> install -g <span class="tk-str">@juliantanx/aiusage-widget</span>
-<span class="tk-kw">aiusage-widget</span>
+<span class="tk-kw">aiusage</span> widget
       </CodeBlock>
       <p>{zh
-        ? 'Widget 读取与 CLI 相同的本地数据库，因此需要先运行 aiusage parse 解析数据。'
-        : 'Widget reads the same local database as the CLI, so you need to run aiusage parse first.'
+        ? 'Widget 与 CLI 共用同一个本地数据库，因此通常需要先运行 aiusage parse 导入数据。'
+        : 'The widget reads the same local database as the CLI, so you typically need to run aiusage parse first.'
       }</p>
     </section>
 
@@ -691,8 +778,8 @@
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
-        ? '所有 CLI 命令均通过 aiusage <command> 调用。不带子命令时等同于 aiusage summary。'
-        : 'All CLI commands are invoked as aiusage <command>. Running without a subcommand is equivalent to aiusage summary.'
+        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、pm2-setup 和 pm2-start。'
+        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, pm2-setup, and pm2-start.'
       }</p>
     </section>
 
@@ -719,9 +806,14 @@
 
     <section id="cli-summary">
       <h3><code>summary</code> — {zh ? '终端摘要' : 'Terminal Summary'}</h3>
+      <p>{zh ? '默认命令。输出总 Token、总费用、记录数；当存在数据时还会显示按工具汇总，默认入口还会附带 Top Tool Calls。' : 'This is the default command. It prints total tokens, total cost, and record count; when data exists it also shows a by-tool summary, and the root command additionally prints Top Tool Calls.'}</p>
       <DocsTable
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
+          ['<code>--week</code>', zh ? '查看本周数据' : 'Show this week'],
+          ['<code>--month</code>', zh ? '查看本月数据' : 'Show this month'],
+          ['<code>--from &lt;date&gt;</code>', zh ? '开始日期（YYYY-MM-DD）' : 'Start date (YYYY-MM-DD)'],
+          ['<code>--to &lt;date&gt;</code>', zh ? '结束日期（YYYY-MM-DD）' : 'End date (YYYY-MM-DD)'],
           ['<code>--device &lt;id&gt;</code>', zh ? '按设备实例 ID 筛选' : 'Filter by device instance ID'],
           ['<code>--tool &lt;tool&gt;</code>', zh ? '按工具类型筛选' : 'Filter by tool type'],
         ]}
@@ -730,10 +822,14 @@
 
     <section id="cli-export">
       <h3><code>export</code> — {zh ? '导出数据' : 'Export Data'}</h3>
+      <p>{zh ? '导出命令当前要求显式指定格式，可输出到文件，也可直接打印到 stdout。' : 'The export command currently requires an explicit format and can write either to a file or to stdout.'}</p>
       <DocsTable
         headers={zh ? ['选项', '说明', '必填'] : ['Option', 'Description', 'Required']}
         rows={[
           ['<code>--format &lt;f&gt;</code>', 'csv, json, ndjson', zh ? '是' : 'Yes'],
+          ['<code>--range &lt;range&gt;</code>', zh ? '时间范围（day | week | month）' : 'Time range (day | week | month)', zh ? '否' : 'No'],
+          ['<code>--from &lt;date&gt;</code>', zh ? '开始日期（YYYY-MM-DD）' : 'Start date (YYYY-MM-DD)', zh ? '否' : 'No'],
+          ['<code>--to &lt;date&gt;</code>', zh ? '结束日期（YYYY-MM-DD）' : 'End date (YYYY-MM-DD)', zh ? '否' : 'No'],
           ['<code>-o, --output &lt;f&gt;</code>', zh ? '输出文件路径（默认 stdout）' : 'Output file path (default: stdout)', zh ? '否' : 'No'],
         ]}
       />
@@ -745,6 +841,10 @@
         headers={zh ? ['选项', '说明', '默认'] : ['Option', 'Description', 'Default']}
         rows={[
           ['<code>--before &lt;dur&gt;</code>', zh ? '删除此时间之前的数据（如 30d、180d）' : 'Delete data older than this (e.g. 30d, 180d)', '<code>180d</code>'],
+          ['<code>--remote</code>', zh ? '同时清理远端同步数据' : 'Also clean remote synced data', '-'],
+          ['<code>--all-devices</code>', zh ? '配合 --remote 清理所有设备' : 'Clean all devices together with --remote', '-'],
+          ['<code>--yes</code>', zh ? '跳过确认' : 'Skip confirmation', '-'],
+          ['<code>--approve-delete</code>', zh ? '批准删除权限升级' : 'Approve delete permission upgrade', '-'],
         ]}
       />
     </section>
@@ -768,10 +868,13 @@
       <DocsTable
         headers={zh ? ['命令', '说明'] : ['Command', 'Description']}
         rows={[
-          ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、记录数、数据库大小及同步状态' : 'Show version, device name, DB path, schema version, record count, DB size, and sync status'],
-          ['<code>sync</code>', zh ? '与远程后端双向同步数据' : 'Push and pull data with remote backend'],
+          ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、对象数量、记录数、数据库大小及同步状态' : 'Show version, device name, DB path, schema version, object counts, record count, DB size, and sync status'],
+          ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步' : 'Push, pull, and merge data with the remote backend'],
           ['<code>recalc</code>', zh ? '按最新定价重新计算费用' : 'Recalculate costs with latest pricing'],
-          ['<code>init</code>', zh ? '配置同步后端（--backend, --repo, --token, --bucket, --endpoint 等）' : 'Configure sync backend (--backend, --repo, --token, --bucket, --endpoint, etc.)'],
+          ['<code>init</code>', zh ? '初始化同步后端（支持 GitHub / S3）' : 'Initialize sync backend (GitHub or S3)'],
+          ['<code>widget</code>', zh ? '启动桌面托盘 Widget' : 'Launch the desktop tray widget'],
+          ['<code>pm2-setup</code>', zh ? '生成 PM2 ecosystem.config.cjs' : 'Generate PM2 ecosystem.config.cjs'],
+          ['<code>pm2-start</code>', zh ? '生成配置并启动 PM2 后台服务' : 'Generate config and start PM2 background services'],
         ]}
       />
     </section>
@@ -1022,6 +1125,31 @@
     border-radius: 4px;
     padding: 0.1em 0.4em;
     color: var(--accent);
+  }
+
+  .doc-shot {
+    margin: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .doc-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--raised);
+  }
+
+  .doc-shot figcaption {
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--raised);
   }
 
   /* ── Back to top ─────────────────────────────────────────── */

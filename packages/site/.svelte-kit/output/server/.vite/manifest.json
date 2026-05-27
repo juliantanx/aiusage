@@ -89,7 +89,7 @@
       "_lang.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.Coun3Zo_.css"
+      "_app/immutable/assets/_layout.OMJU7Xic.css"
     ]
   },
   "src/routes/+page.svelte": {
@@ -102,7 +102,7 @@
       "_lang.js"
     ],
     "css": [
-      "_app/immutable/assets/_page.WzPoY0u1.css"
+      "_app/immutable/assets/_page.DTVcsy4I.css"
     ]
   },
   "src/routes/docs/+page.svelte": {
@@ -115,7 +115,7 @@
       "_lang.js"
     ],
     "css": [
-      "_app/immutable/assets/_page.BaSbHkQn.css"
+      "_app/immutable/assets/_page.DSRxH44H.css"
     ]
   }
 }

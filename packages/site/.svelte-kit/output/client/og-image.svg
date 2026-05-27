@@ -13,8 +13,15 @@
   <!-- Accent bar top -->
   <rect width="1200" height="4" fill="url(#accent)"/>
   <!-- Brand mark -->
-  <text x="80" y="120" font-family="system-ui, sans-serif" font-size="48" fill="#0d9488">⌘</text>
-  <text x="140" y="120" font-family="'SF Mono', 'JetBrains Mono', monospace" font-size="40" font-weight="600" fill="#1a1a1a">AIUsage</text>
+  <g transform="translate(80, 72)">
+    <rect width="48" height="48" rx="10.5" fill="#0d9488"/>
+    <rect x="7.5" y="28.5" width="9" height="12" rx="2.25" fill="white"/>
+    <rect x="19.5" y="19.5" width="9" height="21" rx="2.25" fill="white"/>
+    <rect x="31.5" y="10.5" width="9" height="30" rx="2.25" fill="white"/>
+  </g>
+  <text x="140" y="112" font-family="'SF Mono', 'JetBrains Mono', monospace" font-size="38" font-weight="600">
+    <tspan fill="#0d9488" font-weight="700">AI</tspan><tspan fill="#1a1a1a">Usage</tspan>
+  </text>
   <!-- Tagline -->
   <text x="80" y="200" font-family="system-ui, sans-serif" font-size="52" font-weight="700" fill="#1a1a1a">AI Coding Usage</text>
   <text x="80" y="270" font-family="system-ui, sans-serif" font-size="52" font-weight="700" fill="#1a1a1a">Analytics Platform</text>
