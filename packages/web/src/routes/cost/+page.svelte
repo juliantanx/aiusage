@@ -127,7 +127,7 @@
   }
   .hero-label {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -172,7 +172,7 @@
   }
   .label {
     font-family: var(--mono);
-    font-size: 0.6rem;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     margin-top: 6px;
   }
@@ -199,7 +199,7 @@
     to { opacity: 1; }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 800px) {
     .grid-2 { grid-template-columns: 1fr; }
   }
 </style>

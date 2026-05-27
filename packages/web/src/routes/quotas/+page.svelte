@@ -287,7 +287,7 @@
 
   .query-time {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     color: var(--text-muted);
     white-space: nowrap;
   }
@@ -320,7 +320,7 @@
 
   .tier-reset {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     color: var(--text-muted);
   }
 
@@ -427,7 +427,7 @@
     font-size: 0.75rem;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 800px) {
     .quota-grid {
       grid-template-columns: 1fr;
     }

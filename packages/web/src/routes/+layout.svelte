@@ -428,7 +428,7 @@
 
   .group-label {
     font-family: var(--mono);
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -524,12 +524,12 @@
     line-height: 1;
   }
   .lang-icon {
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
   }
   .ctrl-label {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     letter-spacing: 0.02em;
     flex: 1;
@@ -637,7 +637,7 @@
 
   :global(.section-title) {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -684,7 +684,7 @@
   }
   :global(th) {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -759,6 +759,26 @@
     }
     .page-content {
       padding: 1.25rem 1rem;
+    }
+
+    /* Global mobile font size minimums */
+    :global(.mono),
+    :global(th),
+    :global(td),
+    :global(.section-title),
+    :global(.group-label),
+    :global(.ctrl-label),
+    :global(.ctrl-icon) {
+      font-size: 0.75rem !important;
+    }
+    :global(.hero-label),
+    :global(.token-label),
+    :global(.stat-label) {
+      font-size: 0.6875rem !important;
+    }
+    :global(.legend-item),
+    :global(.tc-rank) {
+      font-size: 0.75rem !important;
     }
   }
 

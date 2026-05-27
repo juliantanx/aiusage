@@ -194,7 +194,7 @@
     color: var(--text-muted);
   }
   .meta-key {
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -290,7 +290,7 @@
     background: var(--raised);
   }
   .tc-index {
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     min-width: 1.5rem;
     color: var(--text-muted);
   }
@@ -300,12 +300,12 @@
     color: var(--text);
   }
   .tc-offset {
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     flex-shrink: 0;
   }
 
   .badge {
-    font-size: 0.6rem;
+    font-size: 0.6875rem;
     font-weight: 600;
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
@@ -337,7 +337,7 @@
   .green { color: var(--green); }
   .blue { color: var(--blue); }
 
-  @media (max-width: 600px) {
+  @media (max-width: 800px) {
     .meta-bar { flex-direction: column; align-items: flex-start; }
     .meta-divider { display: none; }
     .record-header { flex-direction: column; align-items: flex-start; }

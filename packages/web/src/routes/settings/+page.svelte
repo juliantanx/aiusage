@@ -639,7 +639,7 @@
 
   .group-title {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -653,7 +653,7 @@
 
   .platform-badge {
     font-family: var(--mono);
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     font-weight: 600;
     padding: 0.15rem 0.45rem;
     border-radius: 4px;
@@ -673,14 +673,14 @@
 
   .field-label {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-secondary);
   }
   .field-hint {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: -0.1rem;
   }
@@ -797,7 +797,7 @@
 
   .rate-time {
     color: var(--text-muted);
-    font-size: 0.68rem;
+    font-size: 0.6875rem;
     margin-left: 0.25rem;
   }
 </style>

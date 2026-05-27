@@ -192,7 +192,7 @@
   }
   .hero-label {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -224,7 +224,7 @@
   }
   .token-label {
     font-family: var(--mono);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -269,7 +269,7 @@
   }
   .tc-rank {
     font-family: var(--mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     width: 2rem;
     flex-shrink: 0;
@@ -291,7 +291,7 @@
     to { opacity: 1; }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 800px) {
     .hero-stats { grid-template-columns: repeat(2, 1fr); }
     .grid-2 { grid-template-columns: 1fr; }
     .token-breakdown { flex-direction: column; }
@@ -317,7 +317,7 @@
     color: var(--text-muted);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     font-family: var(--mono);
     font-weight: 500;
     transition: color 0.12s, background 0.12s;
