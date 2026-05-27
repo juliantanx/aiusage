@@ -12,9 +12,9 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "rebuild:sqlite": "node -e \"const path=require('path'),{execSync}=require('child_process'),dir=path.dirname(require.resolve('better-sqlite3/package.json',{paths:['packages/cli/node_modules','node_modules']}));execSync('npm run install',{cwd:dir,stdio:'inherit'})\"",
-    "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:stop": "pm2 stop ecosystem.config.cjs",
-    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:start": "node packages/cli/dist/index.js pm2-start",
+    "pm2:stop": "pm2 stop ~/.aiusage/ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ~/.aiusage/ecosystem.config.cjs",
     "pm2:logs": "pm2 logs",
     "pm2:status": "pm2 list",
     "pm2:save": "pm2 save"
