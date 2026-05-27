@@ -145,7 +145,12 @@
     <div class="sidebar-inner">
 
       <a href="/" class="brand">
-        <span class="brand-logo">⌘</span>
+        <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
         {#if !collapsed}
           <span class="brand-name">AIUsage</span>
         {/if}
@@ -230,7 +235,12 @@
         <span></span><span></span><span></span>
       </button>
       <a href="/" class="brand brand-mobile">
-        <span class="brand-logo">⌘</span>
+        <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
         <span class="brand-name">AIUsage</span>
       </a>
       <div class="mobile-controls">
@@ -395,11 +405,11 @@
     white-space: nowrap;
   }
   .brand-logo {
-    font-size: 1.1rem;
+    display: block;
     color: var(--accent);
     flex-shrink: 0;
     width: 20px;
-    text-align: center;
+    height: 20px;
   }
   .brand-name {
     font-family: var(--mono);

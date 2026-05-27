@@ -1,17 +1,18 @@
 const TRAY_ICON_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <rect x="1" y="1" width="14" height="14" rx="4" fill="#111827"/>
-  <path d="M8.8 2.5 4.7 8.2h2.9L7 13.5l4.3-5.9H8.4l.4-5.1Z" fill="#f8fafc"/>
+  <rect x="1" y="9" width="4" height="6" rx="1" fill="#111827"/>
+  <rect x="6" y="5" width="4" height="10" rx="1" fill="#111827"/>
+  <rect x="11" y="2" width="4" height="13" rx="1" fill="#111827"/>
 </svg>
 `.trim()
 
 // Pre-rendered 32x32 PNG of the same icon — Windows tray doesn't support SVG
 const TRAY_ICON_PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAyUlEQVR4nMWXMQ6DMAxFzRcX6NYu' +
-  'XTtw/6N06NqFbhyhVYYsQUkT+zt+ExLI7zsCJ4gEs7RuXq6PL0NyfF5Vz+Ip7gmCWfJabcyS1xxg' +
-  'yPf3Ux0CWqlWXoIy0SyyE5HdmwIw5OoApfx23+YGYIKopVcF2MnyoQAe8sTKKFIL1/NywiJo0ftl' +
-  'rJZioYOoxchcgJAZHUqQYMAsphnJ0MpY+wEkGDCKmHfDo3Fu95JnJyQY5AvNKli7T5yk3gfUslH8e' +
-  '8BTngj/OQ3nB+9vTnl87+2CAAAAAElFTkSuQmCC'
+  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAAoUlE' +
+  'QVRYhe2UMQ6DMAxFnyMuwFapdOxpuEfOVE7Su7DC0I0jpBuKEEVuFLcDfmu+kyfLDjhnR6wubi/' +
+  '3nhQGhOvmaIYUl9f4BAhWAhAeO48DdCDDmrIToDs4u/1CQIULNN8WaKdbS0EHdNNtKKCbbkuBqr' +
+  'iAC6z/QO391pJ1oO5+FwjU3e8Sgb/gAi7gArnAfJCbrHKZQIofiiYRol3u7LwB6zstOIKDR/wAA' +
+  'AAASUVORK5CYII='
 
 export function shouldShowWindowOnLaunch(isPackaged: boolean): boolean {
   return !isPackaged

@@ -346,21 +346,48 @@
 <!-- ═══════ QUICK START ═══════ -->
 <section class="quickstart-section reveal">
   <div class="section-inner">
-    <div class="section-header">
-      <h2>{zh ? '快速开始' : 'Quick Start'}</h2>
-    </div>
-    <div class="terminal">
-      <div class="term-bar">
-        <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
-        <span class="term-title">Terminal</span>
+    <div class="qs-grid">
+      <div class="qs-steps">
+        <h2>{zh ? '快速开始' : 'Quick Start'}</h2>
+        <p class="qs-intro">{zh ? '三个命令，五分钟内完成部署。' : 'Three commands. Up and running in five minutes.'}</p>
+        <div class="qs-step">
+          <div class="qs-num">01</div>
+          <div class="qs-detail">
+            <strong>{zh ? '全局安装 CLI' : 'Install the CLI'}</strong>
+            <p>{zh ? '通过 npm 或 pnpm 全局安装，无后台进程。' : 'Install globally via npm or pnpm. No background daemon.'}</p>
+          </div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">02</div>
+          <div class="qs-detail">
+            <strong>{zh ? '解析 AI 工具日志' : 'Parse AI tool logs'}</strong>
+            <p>{zh ? '自动发现本地日志文件，解析写入 SQLite 数据库。' : 'Auto-discovers local log files and writes to SQLite.'}</p>
+          </div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">03</div>
+          <div class="qs-detail">
+            <strong>{zh ? '打开仪表盘' : 'Open the dashboard'}</strong>
+            <p>{zh ? '启动本地 Web 服务，浏览器访问即可查看所有数据。' : 'Start a local web server and open it in your browser.'}</p>
+          </div>
+        </div>
+        <a href="/docs#getting-started" class="qs-docs-link">{zh ? '阅读完整文档 →' : 'Read the full docs →'}</a>
       </div>
-      <div class="term-body">
-        <div class="tl"><span class="tp">$</span><span class="tc">npm install -g @juliantanx/aiusage</span></div>
-        <div class="to">+ @juliantanx/aiusage@1.3.1</div>
-        <div class="tl"><span class="tp">$</span><span class="tc">aiusage parse</span></div>
-        <div class="to">{zh ? '✓ 已解析 3 个工具的 1,247 条会话记录' : '✓ Parsed 1,247 sessions from 3 tools'}</div>
-        <div class="tl"><span class="tp">$</span><span class="tc">aiusage serve</span></div>
-        <div class="to">{zh ? '✓ 仪表盘已启动: http://localhost:3847' : '✓ Dashboard running: http://localhost:3847'}</div>
+      <div class="qs-terminal">
+        <div class="terminal">
+          <div class="term-bar">
+            <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
+            <span class="term-title">Terminal</span>
+          </div>
+          <div class="term-body">
+            <div class="tl"><span class="tp">$</span><span class="tc">npm install -g @juliantanx/aiusage</span></div>
+            <div class="to">+ @juliantanx/aiusage@1.3.1</div>
+            <div class="tl"><span class="tp">$</span><span class="tc">aiusage parse</span></div>
+            <div class="to">{zh ? '✓ 已解析 3 个工具的 1,247 条会话记录' : '✓ Parsed 1,247 sessions from 3 tools'}</div>
+            <div class="tl"><span class="tp">$</span><span class="tc">aiusage serve</span></div>
+            <div class="to">{zh ? '✓ 仪表盘已启动: http://localhost:3847' : '✓ Dashboard running: http://localhost:3847'}</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -377,7 +404,6 @@
           : 'Start AIUsage with one command. Official Docker image includes CLI and web dashboard with volume-mounted data persistence.'}</p>
         <div class="docker-links">
           <a href="https://hub.docker.com/r/juliantanx/aiusage" class="btn-ghost" target="_blank" rel="noopener">Docker Hub</a>
-          <a href="https://github.com/juliantanx/aiusage/pkgs/container/aiusage" class="btn-ghost" target="_blank" rel="noopener">GHCR</a>
         </div>
       </div>
       <div class="docker-code">
@@ -407,12 +433,30 @@
       <h2>{zh ? 'CLI 命令一览' : 'CLI Commands at a Glance'}</h2>
     </div>
     <div class="cli-grid">
-      <div class="cli-item"><code>aiusage parse</code><p>{zh ? '解析所有 AI 工具的日志文件' : 'Parse log files from all AI tools'}</p></div>
-      <div class="cli-item"><code>aiusage serve</code><p>{zh ? '启动本地 Web 仪表盘' : 'Start the local web dashboard'}</p></div>
-      <div class="cli-item"><code>aiusage summary</code><p>{zh ? '在终端查看用量摘要' : 'View usage summary in terminal'}</p></div>
-      <div class="cli-item"><code>aiusage export</code><p>{zh ? '导出为 CSV / JSON / NDJSON' : 'Export as CSV / JSON / NDJSON'}</p></div>
-      <div class="cli-item"><code>aiusage sync</code><p>{zh ? '与远程后端双向同步数据' : 'Push and pull data with remote backend'}</p></div>
-      <div class="cli-item"><code>aiusage status</code><p>{zh ? '查看版本、数据库状态等信息' : 'View version, DB status, and more'}</p></div>
+      <a href="/docs#cli-parse" class="cli-item">
+        <div><code>aiusage parse</code><p>{zh ? '解析所有 AI 工具的日志文件' : 'Parse log files from all AI tools'}</p></div>
+        <span class="cli-arrow">→</span>
+      </a>
+      <a href="/docs#cli-serve" class="cli-item">
+        <div><code>aiusage serve</code><p>{zh ? '启动本地 Web 仪表盘' : 'Start the local web dashboard'}</p></div>
+        <span class="cli-arrow">→</span>
+      </a>
+      <a href="/docs#cli-summary" class="cli-item">
+        <div><code>aiusage summary</code><p>{zh ? '在终端查看用量摘要' : 'View usage summary in terminal'}</p></div>
+        <span class="cli-arrow">→</span>
+      </a>
+      <a href="/docs#cli-export" class="cli-item">
+        <div><code>aiusage export</code><p>{zh ? '导出为 CSV / JSON / NDJSON' : 'Export as CSV / JSON / NDJSON'}</p></div>
+        <span class="cli-arrow">→</span>
+      </a>
+      <a href="/docs#sync" class="cli-item">
+        <div><code>aiusage sync</code><p>{zh ? '与远程后端双向同步数据' : 'Push and pull data with remote backend'}</p></div>
+        <span class="cli-arrow">→</span>
+      </a>
+      <a href="/docs#cli-other" class="cli-item">
+        <div><code>aiusage status</code><p>{zh ? '查看版本、数据库状态等信息' : 'View version, DB status, and more'}</p></div>
+        <span class="cli-arrow">→</span>
+      </a>
     </div>
   </div>
 </section>
@@ -472,8 +516,8 @@
   .reveal.js-ready.revealed { opacity: 1; transform: translateY(0); }
   .section-inner { width: var(--content-width); margin: 0 auto; }
   .section-label {
-    font-family: var(--mono); font-size: 0.75rem; font-weight: 550;
-    text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 1.25rem;
+    font-size: 1.75rem; font-weight: 700; letter-spacing: -0.025em;
+    color: var(--text); margin-bottom: 1.25rem; line-height: 1.2;
   }
   .section-header { text-align: center; margin-bottom: 2rem; }
   .section-header h2 {
@@ -577,7 +621,7 @@
 
   /* ── Tools strip ─────────────────────────────────────────────────────────── */
   .tools-section { padding: 2.5rem 0; background: var(--bg-warm); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }
-  .tools-label { font-family: var(--mono); font-size: 0.8125rem; font-weight: 550; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 1.25rem; text-align: center; }
+  .tools-label { font-family: var(--mono); font-size: 0.875rem; font-weight: 550; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 1.25rem; text-align: center; }
   .tools-strip { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.75rem; }
   .tool-chip {
     display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.125rem;
@@ -586,7 +630,7 @@
   }
   .tool-chip:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 2px 8px oklch(0.52 0.14 165 / 0.08); }
   .tool-icon { font-size: 1rem; }
-  .tool-name { font-family: var(--mono); font-size: 0.8125rem; font-weight: 600; color: var(--text); }
+  .tool-name { font-family: var(--mono); font-size: 0.875rem; font-weight: 600; color: var(--text); }
 
   /* ── Features ────────────────────────────────────────────────────────────── */
   .features-section { padding: 3rem 0; }
@@ -597,8 +641,8 @@
   }
   .feature-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 16px oklch(0.52 0.14 165 / 0.08); }
   .feature-icon { font-size: 1.375rem; margin-bottom: 0.75rem; line-height: 1; }
-  .feature-card h3 { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 0.5rem; }
-  .feature-card p { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; }
+  .feature-card h3 { font-size: 1.0625rem; font-weight: 600; color: var(--text); margin-bottom: 0.5rem; }
+  .feature-card p { font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.6; }
 
   /* ── How it works ────────────────────────────────────────────────────────── */
   .how-section { padding: 4rem 0; background: var(--bg-warm); border-top: 1px solid var(--border-subtle); }
@@ -630,9 +674,23 @@
   .why-point strong { font-size: 1rem; font-weight: 600; color: var(--text); display: block; margin-bottom: 0.25rem; }
   .why-point p { font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.6; }
 
-  /* ── Quick start terminal ────────────────────────────────────────────────── */
+  /* ── Quick start ─────────────────────────────────────────────────────────── */
   .quickstart-section { padding: 4rem 0; background: var(--bg-warm); border-top: 1px solid var(--border-subtle); }
-  .terminal { border-radius: 12px; overflow: hidden; border: 1px solid oklch(0.23 0.015 85); box-shadow: var(--shadow-lg); max-width: 720px; margin: 0 auto; }
+  .qs-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 4rem; align-items: center; }
+  .qs-steps h2 { font-size: clamp(1.5rem, 2.8vw, 2rem); font-weight: 700; letter-spacing: -0.025em; color: var(--text); margin-bottom: 0.5rem; }
+  .qs-intro { font-size: 0.9375rem; color: var(--text-muted); margin-bottom: 2.25rem; line-height: 1.55; }
+  .qs-step { display: flex; gap: 1.25rem; align-items: flex-start; margin-bottom: 1.75rem; }
+  .qs-num {
+    font-family: var(--mono); font-size: 1.75rem; font-weight: 700;
+    color: oklch(0.52 0.14 165 / 0.15); line-height: 1; flex-shrink: 0; width: 2.75rem;
+    transition: color 0.2s;
+  }
+  .qs-step:hover .qs-num { color: oklch(0.52 0.14 165 / 0.35); }
+  .qs-detail strong { font-size: 0.9375rem; font-weight: 600; color: var(--text); display: block; margin-bottom: 0.3rem; }
+  .qs-detail p { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; }
+  .qs-docs-link { font-size: 0.875rem; font-weight: 600; color: var(--accent); text-decoration: none; display: inline-block; margin-top: 0.25rem; transition: color 0.15s; }
+  .qs-docs-link:hover { color: var(--accent-hover); }
+  .terminal { border-radius: 12px; overflow: hidden; border: 1px solid oklch(0.23 0.015 85); box-shadow: var(--shadow-lg); }
   .term-bar {
     display: flex; align-items: center; gap: 0.375rem; padding: 0.75rem 1rem;
     background: oklch(0.19 0.013 85); border-bottom: 1px solid oklch(0.23 0.015 85);
@@ -660,10 +718,13 @@
   .cli-item {
     background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 8px;
     padding: 1.25rem; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; text-decoration: none;
   }
   .cli-item:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 2px 8px oklch(0.52 0.14 165 / 0.06); }
   .cli-item code { font-family: var(--mono); font-size: 0.9375rem; font-weight: 600; color: var(--accent); display: block; margin-bottom: 0.375rem; }
-  .cli-item p { font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; }
+  .cli-item p { font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; margin: 0; }
+  .cli-arrow { font-size: 0.9375rem; color: var(--border-medium); flex-shrink: 0; transition: color 0.15s, transform 0.15s; }
+  .cli-item:hover .cli-arrow { color: var(--accent); transform: translateX(3px); }
 
   /* ── Contribute ──────────────────────────────────────────────────────────── */
   .contribute-section { padding: 3rem 0; }
@@ -701,5 +762,6 @@
     .contribute-grid { grid-template-columns: 1fr; }
     .contribute-stats { justify-content: flex-start; }
     .cli-grid { grid-template-columns: 1fr; }
+    .qs-grid { grid-template-columns: 1fr; gap: 2rem; }
   }
 </style>
