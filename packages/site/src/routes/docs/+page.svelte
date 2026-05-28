@@ -273,10 +273,13 @@
     <section id="install">
       <h3>{zh ? '安装' : 'Installation'}</h3>
       <CodeBlock lang="Terminal" copyText="npm install -g @juliantanx/aiusage">
-        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
+        <span slot="lines"><span>1</span></span>
         <span class="tk-kw">npm</span> install -g <span class="tk-str">@juliantanx/aiusage</span>
-<span class="tk-cmt"># or with pnpm</span>
-<span class="tk-kw">pnpm</span> add -g <span class="tk-str">@juliantanx/aiusage</span>
+      </CodeBlock>
+      <p>{zh ? '或使用 pnpm：' : 'Or with pnpm:'}</p>
+      <CodeBlock lang="Terminal" copyText="pnpm add -g @juliantanx/aiusage">
+        <span slot="lines"><span>1</span></span>
+        <span class="tk-kw">pnpm</span> add -g <span class="tk-str">@juliantanx/aiusage</span>
       </CodeBlock>
     </section>
 
@@ -760,10 +763,13 @@
         ? 'Widget 是独立发布的 Electron 托盘应用。CLI 中的 aiusage widget 命令会尝试启动已安装的 aiusage-widget；如果尚未安装，会提示先安装对应包。'
         : 'Widget is a separately published Electron tray app. The aiusage widget CLI command tries to launch an installed aiusage-widget binary; if it is missing, the CLI asks you to install the package first.'
       }</p>
-      <CodeBlock lang="Terminal" copyText={'npm install -g @juliantanx/aiusage-widget\naiusage widget'}>
-        <span slot="lines"><span>1</span><span>2</span></span>
+      <CodeBlock lang="Terminal" copyText="npm install -g @juliantanx/aiusage-widget">
+        <span slot="lines"><span>1</span></span>
         <span class="tk-kw">npm</span> install -g <span class="tk-str">@juliantanx/aiusage-widget</span>
-<span class="tk-kw">aiusage</span> widget
+      </CodeBlock>
+      <CodeBlock lang="Terminal" copyText="aiusage widget">
+        <span slot="lines"><span>1</span></span>
+        <span class="tk-kw">aiusage</span> widget
       </CodeBlock>
       <p>{zh
         ? 'Widget 与 CLI 共用同一个本地数据库，因此通常需要先运行 aiusage parse 导入数据。'
