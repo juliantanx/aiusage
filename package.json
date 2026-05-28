@@ -6,6 +6,7 @@
     "build": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter @juliantanx/aiusage build && pnpm --filter @juliantanx/aiusage-widget build",
     "dev": "pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnpm --filter @juliantanx/aiusage dev",
     "dev:widget": "pnpm --filter @aiusage/core build && pnpm --filter @juliantanx/aiusage-widget dev",
+    "start:widget": "pnpm --filter @juliantanx/aiusage-widget build && node packages/widget/bin/launcher.js",
     "dev:site": "pnpm --filter @aiusage/site dev",
     "build:site": "pnpm --filter @aiusage/site build",
     "docker:site": "docker build -f packages/site/Dockerfile -t aiusage-site .",
