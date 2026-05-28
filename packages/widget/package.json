@@ -36,9 +36,9 @@
   },
   "scripts": {
     "rebuild": "pnpm run rebuild:electron",
-    "rebuild:electron": "node -e \"const {execSync}=require('child_process'); const electronVersion=require('electron/package.json').version; const cmd='npm rebuild better-sqlite3 --runtime=electron --target=' + electronVersion + ' --dist-url=https://electronjs.org/headers'; execSync(cmd, {stdio:'inherit'})\"",
+    "rebuild:electron": "node -e \"const {rebuild}=require('@electron/rebuild');const v=require('electron/package.json').version;rebuild({buildPath:process.cwd(),electronVersion:v,onlyModules:['better-sqlite3'],force:true}).then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})\"",
     "rebuild:node": "npm rebuild better-sqlite3",
-    "dev": "pnpm run rebuild:electron && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"pnpm exec wait-on dist/main.js && pnpm exec electron .\"",
+    "dev": "pnpm run rebuild:electron && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"node -e \\\"require('wait-on')({resources:['dist/main.js']},()=>{const c=require('child_process').spawn(require('electron'),['.'],{stdio:'inherit'});c.on('exit',code=>process.exit(code||0))})\\\"\"",
     "build": "rm -rf dist/renderer && vite build && tsc -p tsconfig.json",
     "pack": "pnpm build && electron-builder",
     "test": "pnpm run rebuild:node && vitest run"
@@ -47,11 +47,12 @@
     "better-sqlite3": "^12.0.0"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
+    "@electron/rebuild": "^3.6.1",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
     "@types/better-sqlite3": "*",
     "@types/node": "*",
     "concurrently": "^8.0.0",
+    "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "svelte": "^4.0.0",
     "typescript": "^5.0.0",

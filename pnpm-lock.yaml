@@ -111,6 +111,9 @@ importers:
         specifier: ^12.0.0
         version: 12.10.0
     devDependencies:
+      '@electron/rebuild':
+        specifier: ^3.6.1
+        version: 3.6.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^3.0.0
         version: 3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@25.7.0))

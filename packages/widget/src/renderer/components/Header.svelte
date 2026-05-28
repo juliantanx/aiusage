@@ -4,7 +4,15 @@
 </script>
 
 <div class="header">
-  <span class="logo">⚡ aiusage</span>
+  <span class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 64 64" style="display:block;border-radius:4px">
+      <rect width="64" height="64" rx="14" fill="#0d9488"/>
+      <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+      <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+      <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+    </svg>
+    aiusage
+  </span>
   <div class="actions">
     <button class="icon-btn" title="Refresh" on:click={onRefresh}>↻</button>
     <button class="icon-btn" title="Close" on:click={onClose}>✕</button>
@@ -21,6 +29,9 @@
     -webkit-app-region: drag;
   }
   .logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);

@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 import { queryWidgetData } from './data'
 import {
-  getTrayIconDataUrl,
+  getTrayIconNativeImage,
   shouldHideWindowOnBlur,
   shouldHideWindowOnClose,
   shouldShowWindowOnLaunch,
@@ -53,14 +53,10 @@ app.on('before-quit', () => {
 })
 
 function createTray(): void {
-  const icon = nativeImage.createFromDataURL(getTrayIconDataUrl())
+  const { buffer, scaleFactor } = getTrayIconNativeImage()
+  const icon = nativeImage.createFromBuffer(buffer, scaleFactor ? { scaleFactor } : undefined)
   tray = new Tray(icon)
   tray.setToolTip('aiusage Widget')
-
-  // On macOS, SVG icons silently fail — use a text label as the visible entry
-  if (process.platform === 'darwin') {
-    tray.setTitle('⚡')
-  }
 
   tray.on('click', () => toggleWindow())
   tray.on('right-click', () => {
@@ -182,7 +178,8 @@ async function isDashboardReachable(port: number): Promise<boolean> {
       resolve(res.statusCode !== undefined && res.statusCode < 500)
     })
     req.on('error', () => resolve(false))
-    req.setTimeout(1000, () => { req.destroy(); resolve(false) })
+    // 200ms is plenty for localhost; 1000ms caused each poll to block for 1s
+    req.setTimeout(200, () => { req.destroy(); resolve(false) })
   })
 }
 
@@ -196,23 +193,23 @@ async function launchDashboard(): Promise<{ success: boolean; error?: string }> 
       shell: true,
     })
 
-    let spawnError: string | null = null
+    let failed = false
 
-    child.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'ENOENT') {
-        spawnError = 'aiusage command not found'
-      } else {
-        spawnError = err.message
-      }
+    child.on('error', () => { failed = true })
+
+    // shell:true suppresses ENOENT on the error event — the shell itself spawns fine
+    // but exits immediately (code 127) when the command isn't found. Detect that here.
+    child.on('close', (code) => {
+      if (code !== 0) failed = true
     })
 
     child.unref()
 
-    // Wait up to 5 seconds for the server to be ready
+    // Poll up to 5s (25 × 200ms) for the server to become reachable
     let attempts = 0
     const check = async () => {
-      if (spawnError) {
-        resolve({ success: false, error: spawnError })
+      if (failed) {
+        resolve({ success: false, error: 'aiusage command not found' })
         return
       }
       if (await isDashboardReachable(getDashboardPort())) {
@@ -220,11 +217,11 @@ async function launchDashboard(): Promise<{ success: boolean; error?: string }> 
         return
       }
       attempts++
-      if (attempts >= 10) {
+      if (attempts >= 25) {
         resolve({ success: false, error: 'Server failed to start within 5 seconds' })
         return
       }
-      setTimeout(check, 500)
+      setTimeout(check, 200)
     }
     check()
   })
