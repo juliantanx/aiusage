@@ -159,7 +159,6 @@
           <h4>{zh ? '产品' : 'Product'}</h4>
           <a href="/">{zh ? '首页' : 'Home'}</a>
           <a href="/docs">{zh ? '文档' : 'Documentation'}</a>
-          <a href="/docs#cli">{zh ? 'CLI 参考' : 'CLI Reference'}</a>
         </div>
         <div class="footer-col">
           <h4>{zh ? '资源' : 'Resources'}</h4>
@@ -167,22 +166,25 @@
           <a href="https://www.npmjs.com/package/@juliantanx/aiusage" target="_blank" rel="noopener">npm — CLI</a>
           <a href="https://www.npmjs.com/package/@juliantanx/aiusage-widget" target="_blank" rel="noopener">npm — Widget</a>
           <a href="https://hub.docker.com/r/juliantanx/aiusage" target="_blank" rel="noopener">Docker Hub</a>
+          <a href="https://github.com/juliantanx/aiusage/blob/main/CHANGELOG.md" target="_blank" rel="noopener">{zh ? '更新日志' : 'Changelog'}</a>
+        </div>
+        <div class="footer-col">
+          <h4>{zh ? '联系' : 'Contact'}</h4>
+          <span class="wechat-wrap">
+            <span class="wechat-trigger">{zh ? '微信' : 'WeChat'}</span>
+            <span class="wechat-popup">
+              <img src="/wechat-qr.jpg" alt="WeChat QR" width="160" height="160" />
+              <span class="wechat-tip">{zh ? '扫码添加微信' : 'Scan to add on WeChat'}</span>
+            </span>
+          </span>
+          <a href="https://discord.gg/ggE8cZUA" target="_blank" rel="noopener">Discord</a>
+          <a href="https://t.me/+DWaxtoPB7CY2Yjc1" target="_blank" rel="noopener">Telegram</a>
+          <a href="mailto:hi@jtanx.com">{zh ? '邮件联系' : 'Email'}</a>
         </div>
         <div class="footer-col">
           <h4>{zh ? '社区' : 'Community'}</h4>
           <a href="https://github.com/juliantanx/aiusage/issues" target="_blank" rel="noopener">{zh ? '问题反馈' : 'Issues'}</a>
           <a href="https://github.com/juliantanx/aiusage/pulls" target="_blank" rel="noopener">{zh ? '贡献代码' : 'Pull Requests'}</a>
-          <a href="https://github.com/juliantanx/aiusage/blob/main/CHANGELOG.md" target="_blank" rel="noopener">{zh ? '更新日志' : 'Changelog'}</a>
-        </div>
-        <div class="footer-col">
-          <h4>{zh ? '支持的工具' : 'Supported Tools'}</h4>
-          <span>Claude Code</span>
-          <span>Codex</span>
-          <span>Cursor</span>
-          <span>OpenClaw</span>
-          <span>OpenCode</span>
-          <span>Hermes</span>
-          <span>Qoder</span>
         </div>
       </div>
     </div>
@@ -496,6 +498,61 @@
 
   .footer-sep {
     opacity: 0.4;
+  }
+
+  /* ── WeChat QR popup ────────────────────────────────────────────────────── */
+  .wechat-wrap {
+    position: relative;
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  .wechat-trigger {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .wechat-wrap:hover .wechat-trigger {
+    color: var(--accent);
+  }
+
+  .footer-col .wechat-popup {
+    display: none;
+  }
+
+  .wechat-popup {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-medium);
+    border-radius: 10px;
+    padding: 0.75rem;
+    box-shadow: var(--shadow-lg);
+    z-index: 200;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .footer-col .wechat-wrap:hover .wechat-popup {
+    display: block;
+  }
+
+  .wechat-popup img {
+    display: block;
+    width: 140px;
+    height: 140px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  .wechat-tip {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
   }
 
   /* ── Global typography ──────────────────────────────────────────────────── */
