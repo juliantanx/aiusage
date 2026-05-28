@@ -25,9 +25,9 @@ aiusage serve
 打开 `http://localhost:3847` 即可查看仪表盘。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/766932d6545f335fc0178fd64c06bbf85e8d8119/packages/site/static/screenshots/dashboard-home.png" alt="aiusage 仪表盘首页" width="32%" />
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/766932d6545f335fc0178fd64c06bbf85e8d8119/packages/site/static/screenshots/overview.png" alt="aiusage 概览仪表盘" width="32%" />
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/766932d6545f335fc0178fd64c06bbf85e8d8119/packages/site/static/screenshots/sessions.png" alt="aiusage 会话仪表盘" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage 仪表盘首页" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/overview.png" alt="aiusage 概览仪表盘" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/sessions.png" alt="aiusage 会话仪表盘" width="32%" />
 </p>
 
 > 如果 aiusage 对你有帮助，欢迎 **[给仓库点 Star](https://github.com/juliantanx/aiusage)**，帮助更多开发者发现它。

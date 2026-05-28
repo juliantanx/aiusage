@@ -25,9 +25,9 @@ aiusage serve
 Open `http://localhost:3847` to explore the dashboard.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/766932d6545f335fc0178fd64c06bbf85e8d8119/packages/site/static/screenshots/dashboard-home.png" alt="aiusage dashboard home" width="32%" />
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/766932d6545f335fc0178fd64c06bbf85e8d8119/packages/site/static/screenshots/overview.png" alt="aiusage overview dashboard" width="32%" />
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/766932d6545f335fc0178fd64c06bbf85e8d8119/packages/site/static/screenshots/sessions.png" alt="aiusage sessions dashboard" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage dashboard home" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/overview.png" alt="aiusage overview dashboard" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/sessions.png" alt="aiusage sessions dashboard" width="32%" />
 </p>
 
 > If aiusage is useful, **[star this repo](https://github.com/juliantanx/aiusage)** to help more developers discover it.
