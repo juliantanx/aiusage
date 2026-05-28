@@ -64,7 +64,13 @@
     },
     { id: 'sync', en: 'Sync', zh: '多设备同步', children: [] },
     { id: 'export', en: 'Export', zh: '数据导出', children: [] },
-    { id: 'widget', en: 'Widget', zh: '桌面小组件', children: [] },
+    { id: 'widget', en: 'Widget', zh: '桌面小组件',
+      children: [
+        { id: 'widget-install', en: 'Installation', zh: '安装' },
+        { id: 'widget-panel', en: 'Panel', zh: '面板功能' },
+        { id: 'widget-tray', en: 'Tray Icon', zh: '托盘图标' },
+      ]
+    },
     { id: 'cli', en: 'CLI Reference', zh: 'CLI 命令',
       children: [
         { id: 'cli-parse', en: 'parse', zh: 'parse' },
@@ -769,21 +775,77 @@
         <h2>{zh ? '桌面小组件' : 'Widget'}</h2>
       </div>
       <p>{zh
-        ? 'Widget 是独立发布的 Electron 托盘应用。CLI 中的 aiusage widget 命令会尝试启动已安装的 aiusage-widget；如果尚未安装，会提示先安装对应包。'
-        : 'Widget is a separately published Electron tray app. The aiusage widget CLI command tries to launch an installed aiusage-widget binary; if it is missing, the CLI asks you to install the package first.'
+        ? 'Widget 是一个独立发布的 Electron 系统托盘应用，让你无需打开浏览器，就能随时在菜单栏（macOS）或系统托盘（Windows / Linux）瞥一眼今日 Token 用量。它与 CLI 共用同一个本地数据库，每 60 秒自动刷新一次。'
+        : 'Widget is a separately published Electron tray app that lets you check your token usage at a glance from the menu bar (macOS) or system tray (Windows / Linux) without opening a browser. It reads the same local database as the CLI and auto-refreshes every 60 seconds.'
       }</p>
+    </section>
+
+    <section id="widget-install">
+      <h3>{zh ? '安装' : 'Installation'}</h3>
+      <p>{zh ? '作为独立 npm 包安装：' : 'Install as a standalone npm package:'}</p>
       <CodeBlock lang="Terminal" copyText="npm install -g @juliantanx/aiusage-widget">
         <span slot="lines"><span>1</span></span>
         <span class="tk-kw">npm</span> install -g <span class="tk-str">@juliantanx/aiusage-widget</span>
       </CodeBlock>
+      <p>{zh ? '安装后，可以直接启动：' : 'Once installed, launch it directly:'}</p>
+      <CodeBlock lang="Terminal" copyText="aiusage-widget">
+        <span slot="lines"><span>1</span></span>
+        <span class="tk-kw">aiusage-widget</span>
+      </CodeBlock>
+      <p>{zh ? '或通过 aiusage CLI 启动（如未安装会提示先安装）：' : 'Or launch via the aiusage CLI (prompts to install if missing):'}</p>
       <CodeBlock lang="Terminal" copyText="aiusage widget">
         <span slot="lines"><span>1</span></span>
         <span class="tk-kw">aiusage</span> widget
       </CodeBlock>
+      <Callout type="info">
+        {zh
+          ? 'Widget 会以后台方式运行——启动后关闭终端不会退出应用。再次运行 aiusage-widget 时，如检测到已有进程在运行，将不会重复启动。'
+          : 'The widget runs detached from the terminal — closing the terminal after launch will not quit the app. If a widget process is already running when you launch again, it will not start a second instance.'
+        }
+      </Callout>
+    </section>
+
+    <section id="widget-panel">
+      <h3>{zh ? '面板功能' : 'Panel'}</h3>
       <p>{zh
-        ? 'Widget 与 CLI 共用同一个本地数据库，因此通常需要先运行 aiusage parse 导入数据。'
-        : 'The widget reads the same local database as the CLI, so you typically need to run aiusage parse first.'
+        ? '点击托盘图标展开悬浮面板，再次点击或点击面板右上角的 ✕ 可关闭。面板显示以下三项统计：'
+        : 'Click the tray icon to open the floating panel; click again or press ✕ to close. The panel shows three stats:'
       }</p>
+      <ul>
+        <li><strong>TODAY</strong> — {zh ? '今日总 Token 数，附带输入（↑）/ 输出（↓）明细' : 'Total tokens today, with input (↑) and output (↓) breakdown'}</li>
+        <li><strong>THIS MONTH</strong> — {zh ? '本月累计 Token 数' : 'Cumulative token count for the current month'}</li>
+        <li><strong>TOP MODEL</strong> — {zh ? '本月使用最多的模型及其占比' : 'Most-used model this month and its share percentage'}</li>
+      </ul>
+      <p>{zh
+        ? '面板底部的「Open Full Dashboard →」按钮会在浏览器中打开 aiusage 仪表盘（如服务未运行会自动尝试启动）。右上角的 ↻ 按钮可立即手动刷新数据。'
+        : 'The "Open Full Dashboard →" button opens the aiusage dashboard in your browser, starting the server automatically if it is not already running. The ↻ button triggers an immediate manual refresh.'
+      }</p>
+    </section>
+
+    <section>
+      <figure class="doc-shot">
+        <img src="/screenshots/widget.png" alt={zh ? 'aiusage Widget 面板截图' : 'aiusage Widget panel screenshot'} loading="lazy" />
+        <figcaption>{zh ? 'Widget 悬浮面板：今日 / 本月 Token、Top Model，以及打开完整仪表盘的快捷入口。' : 'Widget panel showing today and month tokens, top model, and a shortcut to the full dashboard.'}</figcaption>
+      </figure>
+    </section>
+
+    <section id="widget-tray">
+      <h3>{zh ? '托盘图标' : 'Tray Icon'}</h3>
+      <p>{zh
+        ? '左键单击托盘图标可切换面板的显示 / 隐藏；右键单击会弹出上下文菜单：'
+        : 'Left-click the tray icon to toggle the panel; right-click for the context menu:'
+      }</p>
+      <ul>
+        <li><strong>{zh ? 'Show Panel' : 'Show Panel'}</strong> — {zh ? '显示面板' : 'Show the floating panel'}</li>
+        <li><strong>{zh ? 'Refresh' : 'Refresh'}</strong> — {zh ? '立即从数据库拉取最新数据' : 'Pull latest data from the database immediately'}</li>
+        <li><strong>{zh ? 'Quit' : 'Quit'}</strong> — {zh ? '完全退出 Widget' : 'Exit the widget completely'}</li>
+      </ul>
+      <Callout type="tip">
+        {zh
+          ? '关闭面板（点击 ✕ 或点击面板外部）只会隐藏面板，Widget 进程依然在后台运行。若要彻底退出，请右键托盘图标并选择 Quit。'
+          : 'Closing the panel (✕ or clicking outside) only hides it — the widget process keeps running in the background. To quit completely, right-click the tray icon and choose Quit.'
+        }
+      </Callout>
     </section>
 
     <!-- ══════ CLI Reference ══════ -->
