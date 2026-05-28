@@ -1,14 +1,14 @@
 # aiusage — AI Coding Assistant Usage Tracker
 
-**Open-source CLI and dashboard to track token usage, cost, and sessions across Claude Code, Codex, OpenCode, Hermes, Qoder, and more.** Local-first, privacy-respecting, with an optional web dashboard and multi-machine sync.
+**Website: [aiusage.jtanx.com](https://aiusage.jtanx.com)**
+
+Track token usage, cost, and sessions across **7 AI coding tools** — local-first, no accounts required.
 
 [![npm version](https://img.shields.io/npm/v/@juliantanx/aiusage)](https://www.npmjs.com/package/@juliantanx/aiusage)
 [![CI](https://github.com/juliantanx/aiusage/actions/workflows/test.yml/badge.svg)](https://github.com/juliantanx/aiusage/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/Website-aiusage.jtanx.com-blue.svg)](https://aiusage.jtanx.com)
-
-**aiusage** gives you one local-first place to understand how your AI coding tools are being used: tokens, cost, model mix, tool activity, projects, sessions, and multi-machine sync when you need it. Supports Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.
 
 English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
@@ -24,7 +24,9 @@ aiusage serve
 
 Open `http://localhost:3847` to explore the dashboard.
 
-If aiusage is useful, consider starring the repo to help more developers discover it.
+![aiusage dashboard demo](https://cdn.jsdelivr.net/gh/juliantanx/aiusage/docs/assets/readme/demo.gif)
+
+> If aiusage is useful, **[star this repo](https://github.com/juliantanx/aiusage)** to help more developers discover it.
 
 `aiusage` does not run a built-in background parser. If you want automatic imports, schedule `aiusage parse` with cron or Task Scheduler.
 
@@ -80,54 +82,24 @@ pnpm rebuild:sqlite
 
 ## Why aiusage
 
-AI coding assistant usage is scattered by default: different tools, different local logs, different machines, and no shared view of tokens or cost.
+Your AI coding tools each log usage separately — different formats, different machines, no shared view. aiusage pulls it all into one local dashboard with no accounts, no telemetry, and no cloud required.
 
-aiusage brings that data into one local-first dashboard so you can:
-
-- Track token usage, cost, model mix, and tool-call activity in one place.
-- Aggregate usage across Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.
-- Understand usage over time through overview, token, cost, model, session, and project views.
-- Sync across multiple machines with GitHub, S3, or R2 when shared visibility matters.
-- Keep your data local by default, with optional sync only when you choose it.
-
-## Who is this for?
-
-aiusage is built for:
-
-- Developers using Claude Code, Codex, or other AI coding assistants every day.
-- People who want visibility into token usage and spend over time.
-- Multi-tool users who want one dashboard instead of multiple disconnected logs.
-- Multi-machine workflows that need optional aggregation and sync.
+- **One dashboard** for tokens, cost, model mix, and tool-call activity
+- **Multi-machine sync** via GitHub, S3, or R2 — entirely optional
+- **Your data stays local** by default
 
 ## Supported tools
 
-aiusage currently supports:
+| Tool | Status |
+|------|--------|
+| Claude Code | ✅ |
+| Codex | ✅ |
+| OpenCode | ✅ |
+| Cursor | ✅ |
+| Hermes | ✅ |
+| Qoder | ✅ |
+| OpenClaw | ✅ |
 
-- Claude Code
-- Codex
-- OpenClaw
-- OpenCode
-- Hermes
-- Qoder
-- Cursor
-
-## Screenshots
-
-![Homepage dashboard](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/home.png)
-
-![Overview page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/overview.png)
-
-![Token usage page](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/token.png)
-
-## Common use cases
-
-Use aiusage to:
-
-- Track token and cost trends across AI coding assistants.
-- Compare model usage and activity over time.
-- Inspect tool-call volume and session-level behavior.
-- Aggregate usage across multiple machines into one view.
-- Run a local or Docker-hosted dashboard for ongoing visibility.
 
 ## CLI Reference
 

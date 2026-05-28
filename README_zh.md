@@ -1,14 +1,14 @@
 # aiusage — AI 编程助手用量追踪工具
 
-**开源 CLI 和 Web 仪表盘，追踪 Claude Code、Codex、OpenCode、Hermes、Qoder 等工具的 token 用量、费用和会话。** 本地优先，隐私安全，支持 Web 仪表盘和多设备同步。
+**官网：[aiusage.jtanx.com](https://aiusage.jtanx.com)**
+
+追踪 **7 款 AI 编程工具**的 token 用量、费用和会话 — 本地优先，无需注册账号。
 
 [![npm version](https://img.shields.io/npm/v/@juliantanx/aiusage)](https://www.npmjs.com/package/@juliantanx/aiusage)
 [![CI](https://github.com/juliantanx/aiusage/actions/workflows/test.yml/badge.svg)](https://github.com/juliantanx/aiusage/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
 [![Website](https://img.shields.io/badge/Website-aiusage.jtanx.com-blue.svg)](https://aiusage.jtanx.com)
-
-**aiusage** 为你提供一个本地优先的统一视图，用来理解 AI 编程工具的使用情况：token、成本、模型分布、工具活跃度、项目、会话，以及按需启用的多设备同步。支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes 和 Qoder。
 
 [English](https://github.com/juliantanx/aiusage/blob/main/README.md) | 中文
 
@@ -24,7 +24,9 @@ aiusage serve
 
 打开 `http://localhost:3847` 即可查看仪表盘。
 
-如果 aiusage 对你有帮助，欢迎给仓库点一个 Star，帮助更多开发者发现它。
+![aiusage 仪表盘演示](https://cdn.jsdelivr.net/gh/juliantanx/aiusage/docs/assets/readme/demo.gif)
+
+> 如果 aiusage 对你有帮助，欢迎 **[给仓库点 Star](https://github.com/juliantanx/aiusage)**，帮助更多开发者发现它。
 
 `aiusage` 不会内建后台解析任务。如果你需要自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`。
 
@@ -80,54 +82,24 @@ pnpm rebuild:sqlite
 
 ## 为什么使用 aiusage
 
-默认情况下，AI 编程助手的使用数据是分散的：不同工具、不同本地日志、不同机器，而且很难统一查看 token 和成本。
+每款 AI 编程工具各自记录日志，格式不同、机器不同，没有统一视图。aiusage 把这些数据汇总到一个本地仪表盘，无需账号、无遥测、无需上云。
 
-aiusage 把这些数据汇总到一个本地优先的仪表盘中，让你可以：
-
-- 在一个地方查看 token 用量、成本、模型分布和工具调用活跃度。
-- 汇总 Claude Code、Codex、OpenClaw、OpenCode、Hermes 和 Qoder 的使用数据。
-- 通过概览、token、成本、模型、会话和项目视图理解长期使用趋势。
-- 在需要共享视图时，通过 GitHub、S3 或 R2 在多台设备之间同步。
-- 默认保持数据本地，仅在你明确配置时才启用同步。
-
-## 适合谁使用？
-
-aiusage 适合：
-
-- 每天都在使用 Claude Code、Codex 或其他 AI 编程助手的开发者。
-- 希望长期跟踪 token 用量和成本变化的人。
-- 同时使用多种 AI 编程工具、希望统一查看数据的用户。
-- 需要跨多台机器汇总使用情况的个人或团队。
+- **一个仪表盘** 查看 token 用量、费用、模型分布和工具调用活跃度
+- **多机同步** 通过 GitHub、S3 或 R2 — 完全可选
+- **数据默认本地** 不上传、不追踪
 
 ## 已支持的工具
 
-aiusage 当前支持：
+| 工具 | 状态 |
+|------|------|
+| Claude Code | ✅ |
+| Codex | ✅ |
+| OpenCode | ✅ |
+| Cursor | ✅ |
+| Hermes | ✅ |
+| Qoder | ✅ |
+| OpenClaw | ✅ |
 
-- Claude Code
-- Codex
-- OpenClaw
-- OpenCode
-- Hermes
-- Qoder
-- Cursor
-
-## 截图
-
-![首页仪表盘](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/home.png)
-
-![概览页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/overview.png)
-
-![Token 用量页面](https://cdn.jsdelivr.net/gh/juliantanx/aiusage@0ae8299/docs/assets/readme/token.png)
-
-## 常见使用场景
-
-你可以用 aiusage 来：
-
-- 跟踪不同 AI 编程助手的 token 与成本趋势。
-- 比较模型使用情况和长期活跃度。
-- 查看工具调用频率与会话级行为。
-- 汇总多台设备上的使用数据。
-- 通过本地部署或 Docker 持续运行可视化仪表盘。
 
 ## CLI 命令参考
 
