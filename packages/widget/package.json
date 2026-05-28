@@ -37,9 +37,10 @@
   "scripts": {
     "rebuild": "pnpm run rebuild:electron",
     "rebuild:electron": "node -e \"const {rebuild}=require('@electron/rebuild');const v=require('electron/package.json').version;rebuild({buildPath:process.cwd(),electronVersion:v,onlyModules:['better-sqlite3'],force:true}).then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})\"",
+    "prepare:native": "node bin/prepare-native.js",
     "rebuild:node": "npm rebuild better-sqlite3",
-    "dev": "pnpm run rebuild:electron && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"node -e \\\"require('wait-on')({resources:['dist/main.js']},()=>{const c=require('child_process').spawn(require('electron'),['.'],{stdio:'inherit'});c.on('exit',code=>process.exit(code||0))})\\\"\"",
-    "build": "rm -rf dist/renderer && vite build && tsc -p tsconfig.json",
+    "dev": "pnpm run prepare:native && concurrently --names \"vite,tsc,electron\" --kill-others --success command-electron \"vite build --watch\" \"tsc -p tsconfig.json --watch\" \"node -e \\\"require('wait-on')({resources:['dist/main.js']},()=>{const c=require('child_process').spawn(require('electron'),['.'],{stdio:'inherit'});c.on('exit',(code,signal)=>process.exit(code ?? (signal ? 1 : 0)))})\\\"\"",
+    "build": "rm -rf dist/renderer && vite build && tsc -p tsconfig.json && pnpm run prepare:native",
     "pack": "pnpm build && electron-builder",
     "test": "pnpm run rebuild:node && vitest run"
   },

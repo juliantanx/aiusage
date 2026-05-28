@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getTrayIconDataUrl,
+  getTrayIconNativeImage,
+  getWidgetNativeBindingPath,
+  getWindowPosition,
   shouldHideWindowOnBlur,
   shouldHideWindowOnClose,
   shouldShowWindowOnLaunch,
@@ -22,14 +24,31 @@ describe('widget UI helpers', () => {
     expect(shouldHideWindowOnClose(true)).toBe(true)
   })
 
-  it('provides a visible tray icon asset', () => {
-    const dataUrl = getTrayIconDataUrl()
+  it('keeps a tray-positioned window within the visible display bounds', () => {
+    expect(getWindowPosition({
+      platform: 'darwin',
+      trayBounds: { x: 0, y: 956, width: 32, height: 0 },
+      windowBounds: { x: 575, y: 328, width: 320, height: 300 },
+      displayBounds: { x: 0, y: 0, width: 1470, height: 956 },
+    })).toEqual({ x: 0, y: 656 })
+  })
 
-    if (process.platform === 'win32') {
-      expect(dataUrl.startsWith('data:image/png;base64,')).toBe(true)
-    } else {
-      expect(dataUrl.startsWith('data:image/svg+xml;base64,')).toBe(true)
-    }
-    expect(dataUrl.length).toBeGreaterThan(30)
+  it('keeps an oversized window anchored inside the display origin', () => {
+    expect(getWindowPosition({
+      platform: 'darwin',
+      trayBounds: { x: 0, y: 200, width: 20, height: 0 },
+      windowBounds: { x: 0, y: 0, width: 320, height: 300 },
+      displayBounds: { x: 0, y: 0, width: 200, height: 200 },
+    })).toEqual({ x: 0, y: 0 })
+  })
+
+  it('resolves the widget-specific native sqlite binding path', () => {
+    expect(getWidgetNativeBindingPath('/app/dist')).toBe('/app/dist/native/better_sqlite3.node')
+  })
+
+  it('provides a visible tray icon asset', () => {
+    const { buffer } = getTrayIconNativeImage()
+
+    expect(buffer.length).toBeGreaterThan(30)
   })
 })

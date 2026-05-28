@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog, screen } from 'electron'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -6,6 +6,8 @@ import { createRequire } from 'node:module'
 import { queryWidgetData } from './data'
 import {
   getTrayIconNativeImage,
+  getWidgetNativeBindingPath,
+  getWindowPosition,
   shouldHideWindowOnBlur,
   shouldHideWindowOnClose,
   shouldShowWindowOnLaunch,
@@ -32,7 +34,10 @@ if (process.platform === 'darwin' && app.dock) {
 
 app.whenReady().then(() => {
   if (existsSync(DB_PATH)) {
-    db = new Database(DB_PATH, { readonly: true })
+    db = new Database(DB_PATH, {
+      readonly: true,
+      nativeBinding: getWidgetNativeBindingPath(__dirname),
+    })
   }
 
   createTray()
@@ -101,10 +106,13 @@ function showWindow(): void {
   // Position near tray icon
   const trayBounds = tray!.getBounds()
   const winBounds = win.getBounds()
-  const x = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2)
-  const y = process.platform === 'darwin'
-    ? trayBounds.y + trayBounds.height + 4
-    : trayBounds.y - winBounds.height - 4
+  const displayBounds = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y }).workArea
+  const { x, y } = getWindowPosition({
+    platform: process.platform,
+    trayBounds,
+    windowBounds: winBounds,
+    displayBounds,
+  })
 
   win.setPosition(x, y, false)
   win.show()

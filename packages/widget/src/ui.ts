@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+
 // macOS: 32x32 PNG rendered at @2x — displayed as 16x16 logical on Retina via scaleFactor:2
 const TRAY_ICON_PNG_MAC_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAsklEQVR4nO2XQQ7EIAhFuQBX8HQe' +
@@ -30,6 +32,42 @@ export function shouldHideWindowOnBlur(isPackaged: boolean): boolean {
 
 export function shouldHideWindowOnClose(_: boolean): boolean {
   return true
+}
+
+export interface Bounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export function getWindowPosition({
+  platform,
+  trayBounds,
+  windowBounds,
+  displayBounds,
+}: {
+  platform: NodeJS.Platform
+  trayBounds: Bounds
+  windowBounds: Bounds
+  displayBounds: Bounds
+}): { x: number; y: number } {
+  const preferredX = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2)
+  const preferredY = platform === 'darwin'
+    ? trayBounds.y + trayBounds.height + 4
+    : trayBounds.y - windowBounds.height - 4
+
+  const maxX = Math.max(displayBounds.x, displayBounds.x + displayBounds.width - windowBounds.width)
+  const maxY = Math.max(displayBounds.y, displayBounds.y + displayBounds.height - windowBounds.height)
+
+  return {
+    x: Math.min(Math.max(preferredX, displayBounds.x), maxX),
+    y: Math.min(Math.max(preferredY, displayBounds.y), maxY),
+  }
+}
+
+export function getWidgetNativeBindingPath(baseDir: string): string {
+  return join(baseDir, 'native', 'better_sqlite3.node')
 }
 
 export function getTrayIconNativeImage(): { buffer: Buffer; scaleFactor?: number } {
