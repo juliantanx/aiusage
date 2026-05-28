@@ -179,6 +179,7 @@
           </span>
           <a href="https://discord.gg/ggE8cZUA" target="_blank" rel="noopener">Discord</a>
           <a href="https://t.me/+DWaxtoPB7CY2Yjc1" target="_blank" rel="noopener">Telegram</a>
+          <a href="https://www.facebook.com/juliantanx" target="_blank" rel="noopener">Facebook</a>
           <a href="mailto:hi@jtanx.com">{zh ? '邮件联系' : 'Email'}</a>
         </div>
         <div class="footer-col">
