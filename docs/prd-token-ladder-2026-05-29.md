@@ -1393,3 +1393,104 @@ pnpm --filter @aiusage/site dev
 7. 实现封禁、设备撤销、审计与风控。
 8. 完成测试、部署脚本和生产环境配置。
 9. 更新所有相关文档（README、CLI 文档、部署文档、项目指引、API 文档、管理员手册）。
+
+---
+
+## 16. 实施状态
+
+**最后更新：** 2026-05-29
+
+### 已完成
+
+#### M1：站点后端化与数据库基础 ✓
+- [x] SvelteKit Node adapter 改造
+- [x] PostgreSQL 连接与迁移体系
+- [x] 用户、身份、session 基础表
+- [x] Docker 镜像运行 Node server
+
+#### M2：认证系统 ✓
+- [x] 用户名/密码注册登录
+- [x] GitHub OAuth
+- [x] Linux Do OAuth/OIDC
+- [x] 账号合并与手动绑定
+
+#### M3：CLI 设备授权与签名上传 ✓
+- [x] CLI leaderboard 命令（login, upload, status, logout）
+- [x] 设备授权流程
+- [x] HMAC 签名上传 API
+- [x] nonce、timestamp、idempotency 校验
+
+#### M4：排行榜页面与聚合 ✓
+- [x] 上传 payload 聚合入库
+- [x] 日榜、周榜、月榜、年榜、总榜
+- [x] 登录后排行榜页面
+- [x] 同用户去重与多设备合并
+
+#### M5：治理与安全 ✓
+- [x] 用户封禁
+- [x] 设备撤销
+- [x] 上传审计
+- [x] 异常检测
+- [x] 数据保留和清理任务
+- [x] 管理员基础页面和上传审计页面
+- [x] CSRF 防护（浏览器表单提交）
+- [x] 安全响应头（HSTS, CSP, X-Content-Type-Options, X-Frame-Options）
+
+### 待完成
+
+#### M6：文档与上线
+- [ ] 更新 `packages/site` README
+- [ ] 更新 CLI 文档
+- [ ] 更新根项目 README 和部署文档
+- [ ] 更新 `CLAUDE.md` / `MEMORY.md`
+- [ ] 更新 API 文档或 OpenAPI spec
+- [ ] 编写管理员操作手册
+
+#### 测试
+- [ ] 单元测试
+- [ ] 集成测试
+- [ ] E2E 测试
+
+### 实现细节
+
+#### CLI 命令
+```bash
+# 设备授权
+aiusage leaderboard login
+
+# 上传数据
+aiusage leaderboard upload
+
+# 查看状态
+aiusage leaderboard status
+
+# 退出登录
+aiusage leaderboard logout
+```
+
+#### 环境变量
+```env
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+SESSION_SECRET=your-session-secret-min-32-chars
+DEVICE_SECRET_ENCRYPTION_KEY=64-char-hex-encoded-key
+IP_HASH_SECRET=your-ip-hash-secret-min-32-chars
+PUBLIC_SITE_URL=https://aiusage.jtanx.com
+ADMIN_EMAILS=admin@example.com,owner@example.com
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+LINUX_DO_CLIENT_ID=your-linux-do-client-id
+LINUX_DO_CLIENT_SECRET=your-linux-do-client-secret
+LINUX_DO_AUTHORIZATION_URL=https://connect.linux.do/oauth2/authorize
+LINUX_DO_TOKEN_URL=https://connect.linux.do/oauth2/token
+LINUX_DO_USERINFO_URL=https://connect.linux.do/api/userinfo
+```
+
+#### 安全特性
+- HMAC-SHA256 请求签名
+- AES-256-GCM 设备密钥加密
+- Nonce 防重放
+- Timestamp 时间窗校验
+- Idempotency key 防重复处理
+- CSRF 防护（浏览器表单）
+- 安全响应头（HSTS, CSP, X-Content-Type-Options, X-Frame-Options）
+- 会话安全（HttpOnly, Secure, SameSite=Lax cookies）

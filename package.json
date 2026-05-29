@@ -9,6 +9,7 @@
     "start:widget": "pnpm --filter @juliantanx/aiusage-widget build && node packages/widget/bin/launcher.js",
     "dev:site": "pnpm --filter @aiusage/site dev",
     "build:site": "pnpm --filter @aiusage/site build",
+    "db:migrate": "pnpm --filter @aiusage/site db:migrate",
     "docker:site": "docker build -f packages/site/Dockerfile -t aiusage-site .",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",

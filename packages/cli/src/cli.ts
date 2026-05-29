@@ -13,6 +13,10 @@ import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
 import { ProgressReporter } from './progress.js'
 import { launchWidget } from './commands/widget.js'
+import { runLeaderboardLogin } from './commands/leaderboard-login.js'
+import { runLeaderboardUpload } from './commands/leaderboard-upload.js'
+import { runLeaderboardStatus } from './commands/leaderboard-status.js'
+import { runLeaderboardLogout } from './commands/leaderboard-logout.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
@@ -282,6 +286,39 @@ program
   .description('Start the system tray widget')
   .action(async () => {
     await launchWidget()
+  })
+
+// leaderboard command group
+const leaderboard = program
+  .command('leaderboard')
+  .description('Token leaderboard commands')
+
+leaderboard
+  .command('login')
+  .description('Authorize this device to upload token usage data')
+  .action(async () => {
+    await runLeaderboardLogin()
+  })
+
+leaderboard
+  .command('upload')
+  .description('Upload token usage data to the leaderboard')
+  .action(async () => {
+    await runLeaderboardUpload()
+  })
+
+leaderboard
+  .command('status')
+  .description('Show leaderboard upload status')
+  .action(async () => {
+    await runLeaderboardStatus()
+  })
+
+leaderboard
+  .command('logout')
+  .description('Remove local leaderboard credentials')
+  .action(async () => {
+    await runLeaderboardLogout()
   })
 
 // PM2 ecosystem config

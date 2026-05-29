@@ -27,7 +27,7 @@ COPY packages/site/ packages/site/
 
 RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/site build
 
-FROM nginx:alpine
+FROM node:20-slim
 
 LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.description="Official website and documentation for AIUsage — track AI coding assistant usage, token consumption, costs, and tool calls across Claude Code, Codex, Cursor, and more" \
@@ -36,30 +36,17 @@ LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="juliantanx"
 
-COPY --from=builder /app/packages/site/build /usr/share/nginx/html
+WORKDIR /app
 
-COPY <<'EOF' /etc/nginx/conf.d/default.conf
-server {
-    listen 80;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
+COPY --from=builder /app/packages/site/build ./build
+COPY --from=builder /app/packages/site/package.json ./
 
-    location / {
-        try_files $uri $uri/index.html $uri.html /404.html;
-    }
+ENV NODE_ENV=production
+ENV PORT=3000
 
-    location ~* \.(css|js|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|ico|webp)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
+EXPOSE 3000
 
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
-    gzip_min_length 256;
-}
-EOF
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => { if (!r.ok) throw new Error('unhealthy') }).catch(() => process.exit(1))"
 
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "build"]
