@@ -4,6 +4,24 @@
 
   $: zh = $lang === 'zh'
 
+  // GitHub repo stats — fetched live; if the request fails the card still
+  // renders, just without a number (no flaky shields.io dependency).
+  let ghStats = { stars: null, forks: null, issues: null }
+  const fmtCount = (n) =>
+    n == null ? '' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n)
+
+  onMount(async () => {
+    try {
+      const res = await fetch('https://api.github.com/repos/juliantanx/aiusage')
+      if (res.ok) {
+        const d = await res.json()
+        ghStats = { stars: d.stargazers_count, forks: d.forks_count, issues: d.open_issues_count }
+      }
+    } catch {
+      /* leave nulls — card shows label only */
+    }
+  })
+
   onMount(() => {
     const els = document.querySelectorAll('.reveal')
     // Mark as JS-ready so CSS can hide them for animation
@@ -476,21 +494,18 @@
         </div>
       </div>
       <div class="contribute-stats">
-        <div class="stat-card">
-          <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener">
-            <img src="https://img.shields.io/github/stars/juliantanx/aiusage?style=social" alt="GitHub stars" loading="lazy" onerror="this.style.display='none'" />
-          </a>
-        </div>
-        <div class="stat-card">
-          <a href="https://github.com/juliantanx/aiusage/fork" target="_blank" rel="noopener">
-            <img src="https://img.shields.io/github/forks/juliantanx/aiusage?style=social" alt="GitHub forks" loading="lazy" onerror="this.style.display='none'" />
-          </a>
-        </div>
-        <div class="stat-card">
-          <a href="https://github.com/juliantanx/aiusage/issues" target="_blank" rel="noopener">
-            <img src="https://img.shields.io/github/issues/juliantanx/aiusage?style=social" alt="GitHub issues" loading="lazy" onerror="this.style.display='none'" />
-          </a>
-        </div>
+        <a class="stat-card" href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener" aria-label="GitHub stars">
+          <span class="stat-value">{fmtCount(ghStats.stars)}</span>
+          <span class="stat-label">Stars</span>
+        </a>
+        <a class="stat-card" href="https://github.com/juliantanx/aiusage/fork" target="_blank" rel="noopener" aria-label="GitHub forks">
+          <span class="stat-value">{fmtCount(ghStats.forks)}</span>
+          <span class="stat-label">Forks</span>
+        </a>
+        <a class="stat-card" href="https://github.com/juliantanx/aiusage/issues" target="_blank" rel="noopener" aria-label="GitHub issues">
+          <span class="stat-value">{fmtCount(ghStats.issues)}</span>
+          <span class="stat-label">Issues</span>
+        </a>
       </div>
     </div>
   </div>
@@ -731,9 +746,19 @@
   .contribute-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 3rem; align-items: center; }
   .contribute-desc { font-size: 1rem; color: var(--text-secondary); line-height: 1.65; margin-bottom: 1.5rem; }
   .contribute-links { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-  .contribute-stats { display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap; }
-  .stat-card a { display: block; }
-  .stat-card img { height: 28px; display: block; }
+  .contribute-stats { display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; }
+  .stat-card {
+    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    min-width: 84px; padding: 0.875rem 1rem;
+    background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 8px;
+    text-decoration: none; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  }
+  .stat-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 2px 8px oklch(0.52 0.14 165 / 0.06); }
+  .stat-value {
+    font-family: var(--mono); font-size: 1.5rem; font-weight: 700; line-height: 1.1;
+    color: var(--accent); min-height: 1.65rem;
+  }
+  .stat-label { font-size: 0.8125rem; color: var(--text-muted); }
 
   /* ── CTA ─────────────────────────────────────────────────────────────────── */
   .cta-section {
