@@ -1,10 +1,11 @@
 import postgres from 'postgres'
+import { env } from '$env/dynamic/private'
 
 let _sql: ReturnType<typeof postgres> | null = null
 
 function getSql(): ReturnType<typeof postgres> {
   if (!_sql) {
-    const databaseUrl = process.env.DATABASE_URL
+    const databaseUrl = env.DATABASE_URL || process.env.DATABASE_URL
     if (!databaseUrl) {
       throw new Error('DATABASE_URL environment variable is required')
     }

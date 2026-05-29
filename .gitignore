@@ -8,3 +8,4 @@ packages/site/build/
 /.worktrees/
 aiusage-data/
 .svelte-kit/
+.env
