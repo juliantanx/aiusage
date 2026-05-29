@@ -16,15 +16,21 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
+# Copy workspace root files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+
+# Copy package.json files for each workspace package
 COPY packages/core/package.json packages/core/
 COPY packages/site/package.json packages/site/
 
+# Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Copy source code
 COPY packages/core/ packages/core/
 COPY packages/site/ packages/site/
 
+# Build
 RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/site build
 
 FROM node:20-slim
