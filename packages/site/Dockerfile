@@ -12,7 +12,8 @@ LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.authors="Julian <juliantanx@users.noreply.github.com>"
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin pnpm to v9 (compatible with Node 20)
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /app
 
@@ -33,6 +34,14 @@ COPY packages/site/ packages/site/
 # Build
 RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/site build
 
+# Prepare production directory: copy build output and create a standalone package
+# that uses npm to resolve dependencies (avoids pnpm workspace complexity)
+RUN mkdir -p /deploy && \
+    cp -r /app/packages/site/build /deploy/build && \
+    cat /app/packages/site/package.json | \
+      node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); delete pkg.devDependencies; delete pkg.scripts; pkg.type='module'; fs.writeFileSync('/deploy/package.json',JSON.stringify(pkg,null,2))" && \
+    cd /deploy && npm install --omit=dev 2>&1 || true
+
 FROM node:20-slim
 
 LABEL org.opencontainers.image.title="aiusage-site" \
@@ -44,8 +53,9 @@ LABEL org.opencontainers.image.title="aiusage-site" \
 
 WORKDIR /app
 
-COPY --from=builder /app/packages/site/build ./build
-COPY --from=builder /app/packages/site/package.json ./
+COPY --from=builder /deploy/build ./build
+COPY --from=builder /deploy/package.json ./
+COPY --from=builder /deploy/node_modules ./node_modules
 
 ENV NODE_ENV=production
 ENV PORT=3000
