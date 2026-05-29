@@ -331,10 +331,20 @@
         : 'aiusage serve runs in the foreground. To keep it running in the background, use PM2:'}</p>
       <CodeBlock lang="Terminal" copyText={'npm install -g pm2\naiusage pm2-start\npm2 startup'}>
         <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
-        <span class="tk-kw">npm</span> install -g pm2
-<span class="tk-kw">aiusage</span> pm2-start
-<span class="tk-kw">pm2</span> startup
+        {@html zh
+          ? `<span class="tk-kw">npm</span> install -g pm2  <span class="tk-cmt"># 全局安装 PM2</span>
+<span class="tk-kw">aiusage</span> pm2-start  <span class="tk-cmt"># 现在启动后台服务并保存进程列表</span>
+<span class="tk-kw">pm2</span> startup  <span class="tk-cmt"># 注册开机自启</span>`
+          : `<span class="tk-kw">npm</span> install -g pm2  <span class="tk-cmt"># Install PM2 globally</span>
+<span class="tk-kw">aiusage</span> pm2-start  <span class="tk-cmt"># Start the service now and save the process list</span>
+<span class="tk-kw">pm2</span> startup  <span class="tk-cmt"># Register auto-start on boot</span>`}
       </CodeBlock>
+      <Callout type="info">
+        {zh
+          ? '前两条命令会立即把服务跑起来；pm2 startup 则负责开机自启，二者缺一不可。pm2 startup 会打印一条 sudo env PATH=… pm2 startup … 命令，需要复制并执行它才能真正生效。'
+          : 'The first two commands start the service right away; pm2 startup handles auto-start on reboot — you need both. Note that pm2 startup prints a sudo env PATH=… pm2 startup … command that you must copy and run for it to take effect.'
+        }
+      </Callout>
     </section>
 
     <section id="docker">
