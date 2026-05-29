@@ -120,7 +120,9 @@
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: 'AIUsage',
-    url: 'https://aiusage.jtanx.com',
+    alternateName: 'AIUsage — AI Coding Usage Analytics',
+    url: 'https://aiusage.jtanx.com/',
+    inLanguage: zh ? 'zh-CN' : 'en',
     description: zh
       ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。'
       : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more.',

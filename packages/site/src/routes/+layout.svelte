@@ -64,11 +64,25 @@
       '@type': 'Organization',
       name: 'AIUsage'
     },
-    softwareVersion: '1.3.2',
+    softwareVersion: '1.3.4',
     downloadUrl: 'https://www.npmjs.com/package/@juliantanx/aiusage',
     featureList: zh
       ? 'Token用量追踪,费用估算与分析,模型使用排名,工具调用分析,项目维度统计,配额监控,多设备同步,数据导出'
       : 'Token Usage Tracking,Cost Estimation,Model Usage Ranking,Tool Call Analytics,Project-Level Stats,Quota Monitoring,Multi-Device Sync,Data Export'
+  })}</script>`}
+
+  <!-- Organization: gives Google an explicit site entity + logo signal -->
+  {@html `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'AIUsage',
+    url: 'https://aiusage.jtanx.com/',
+    logo: 'https://aiusage.jtanx.com/web-app-manifest-512x512.png',
+    sameAs: [
+      'https://github.com/juliantanx/aiusage',
+      'https://www.npmjs.com/package/@juliantanx/aiusage',
+      'https://hub.docker.com/r/juliantanx/aiusage'
+    ]
   })}</script>`}
 </svelte:head>
 
