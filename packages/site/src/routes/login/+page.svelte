@@ -1,7 +1,9 @@
 <script>
   import { goto, invalidateAll } from '$app/navigation'
   import { page } from '$app/stores'
+  import { lang } from '$lib/lang'
 
+  $: zh = $lang === 'zh'
   $: oauth = $page.data.oauth || {}
 
   let login = ''
@@ -31,10 +33,12 @@
         await invalidateAll()
         goto('/leaderboard')
       } else {
-        error = data.error === 'user_banned' ? 'Your account has been banned.' : data.error || 'Login failed'
+        error = data.error === 'user_banned'
+          ? (zh ? '你的账号已被封禁。' : 'Your account has been banned.')
+          : data.error || (zh ? '登录失败' : 'Login failed')
       }
     } catch {
-      error = 'Network error'
+      error = zh ? '网络错误' : 'Network error'
     } finally {
       loading = false
     }
@@ -42,13 +46,13 @@
 </script>
 
 <svelte:head>
-  <title>Login — AIUsage</title>
+  <title>{zh ? '登录' : 'Login'} — AIUsage</title>
 </svelte:head>
 
 <div class="auth-page">
   <div class="auth-card">
-    <h1>Sign In</h1>
-    <p class="auth-subtitle">Sign in to view the Token Leaderboard</p>
+    <h1>{zh ? '登录' : 'Sign In'}</h1>
+    <p class="auth-subtitle">{zh ? '登录以查看 Token 排行榜' : 'Sign in to view the Token Leaderboard'}</p>
 
     {#if error}
       <div class="error-msg">{error}</div>
@@ -56,39 +60,39 @@
 
     <form on:submit|preventDefault={handleLogin}>
       <div class="field">
-        <label for="login">Username or Email</label>
+        <label for="login">{zh ? '用户名或邮箱' : 'Username or Email'}</label>
         <input id="login" type="text" bind:value={login} required autocomplete="username" />
       </div>
       <div class="field">
-        <label for="password">Password</label>
+        <label for="password">{zh ? '密码' : 'Password'}</label>
         <input id="password" type="password" bind:value={password} required autocomplete="current-password" />
       </div>
       <button type="submit" class="btn-primary" disabled={loading}>
-        {loading ? 'Signing in...' : 'Sign In'}
+        {loading ? (zh ? '登录中...' : 'Signing in...') : (zh ? '登录' : 'Sign In')}
       </button>
     </form>
 
     {#if oauth.github || oauth.linuxDo}
-      <div class="auth-divider"><span>or</span></div>
+      <div class="auth-divider"><span>{zh ? '或' : 'or'}</span></div>
 
       <div class="oauth-buttons">
         {#if oauth.github}
           <a href="/api/oauth/github/start" on:click|preventDefault={() => window.location.href = `/api/oauth/github/start?_=${Date.now()}`} class="btn-oauth">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            Continue with GitHub
+            {zh ? '使用 GitHub 登录' : 'Continue with GitHub'}
           </a>
         {/if}
         {#if oauth.linuxDo}
           <a href="/api/oauth/linux-do/start" class="btn-oauth">
             <svg width="18" height="18" viewBox="0 0 120 120"><clipPath id="ld"><circle cx="60" cy="60" r="47"/></clipPath><circle fill="#f0f0f0" cx="60" cy="60" r="50"/><rect fill="#1c1c1e" clip-path="url(#ld)" x="10" y="10" width="100" height="30"/><rect fill="#f0f0f0" clip-path="url(#ld)" x="10" y="40" width="100" height="40"/><rect fill="#ffb003" clip-path="url(#ld)" x="10" y="80" width="100" height="30"/></svg>
-            Continue with LINUX DO
+            {zh ? '使用 LINUX DO 登录' : 'Continue with LINUX DO'}
           </a>
         {/if}
       </div>
     {/if}
 
     <p class="auth-footer">
-      Don't have an account? <a href="/register">Register</a>
+      {zh ? '没有账号？' : "Don't have an account?"} <a href="/register">{zh ? '注册' : 'Register'}</a>
     </p>
   </div>
 </div>

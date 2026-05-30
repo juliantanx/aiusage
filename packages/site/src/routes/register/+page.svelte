@@ -1,7 +1,9 @@
 <script>
   import { goto, invalidateAll } from '$app/navigation'
   import { page } from '$app/stores'
+  import { lang } from '$lib/lang'
 
+  $: zh = $lang === 'zh'
   $: oauth = $page.data.oauth || {}
 
   let username = ''
@@ -19,7 +21,7 @@
   async function handleRegister() {
     error = ''
     if (password !== confirmPassword) {
-      error = 'Passwords do not match'
+      error = zh ? '两次输入的密码不一致' : 'Passwords do not match'
       return
     }
     loading = true
@@ -37,10 +39,10 @@
         await invalidateAll()
         goto('/leaderboard')
       } else {
-        error = data.error || 'Registration failed'
+        error = data.error || (zh ? '注册失败' : 'Registration failed')
       }
     } catch {
-      error = 'Network error'
+      error = zh ? '网络错误' : 'Network error'
     } finally {
       loading = false
     }
@@ -48,13 +50,13 @@
 </script>
 
 <svelte:head>
-  <title>Register — AIUsage</title>
+  <title>{zh ? '注册' : 'Register'} — AIUsage</title>
 </svelte:head>
 
 <div class="auth-page">
   <div class="auth-card">
-    <h1>Create Account</h1>
-    <p class="auth-subtitle">Register to join the Token Leaderboard</p>
+    <h1>{zh ? '创建账号' : 'Create Account'}</h1>
+    <p class="auth-subtitle">{zh ? '注册以加入 Token 排行榜' : 'Register to join the Token Leaderboard'}</p>
 
     {#if error}
       <div class="error-msg">{error}</div>
@@ -62,47 +64,47 @@
 
     <form on:submit|preventDefault={handleRegister}>
       <div class="field">
-        <label for="username">Username</label>
+        <label for="username">{zh ? '用户名' : 'Username'}</label>
         <input id="username" type="text" bind:value={username} required minlength="3" maxlength="32" autocomplete="username" />
       </div>
       <div class="field">
-        <label for="email">Email</label>
+        <label for="email">{zh ? '邮箱' : 'Email'}</label>
         <input id="email" type="email" bind:value={email} required autocomplete="email" />
       </div>
       <div class="field">
-        <label for="password">Password</label>
+        <label for="password">{zh ? '密码' : 'Password'}</label>
         <input id="password" type="password" bind:value={password} required minlength="8" autocomplete="new-password" />
       </div>
       <div class="field">
-        <label for="confirm">Confirm Password</label>
+        <label for="confirm">{zh ? '确认密码' : 'Confirm Password'}</label>
         <input id="confirm" type="password" bind:value={confirmPassword} required minlength="8" autocomplete="new-password" />
       </div>
       <button type="submit" class="btn-primary" disabled={loading}>
-        {loading ? 'Creating account...' : 'Create Account'}
+        {loading ? (zh ? '创建中...' : 'Creating account...') : (zh ? '创建账号' : 'Create Account')}
       </button>
     </form>
 
     {#if oauth.github || oauth.linuxDo}
-      <div class="auth-divider"><span>or</span></div>
+      <div class="auth-divider"><span>{zh ? '或' : 'or'}</span></div>
 
       <div class="oauth-buttons">
         {#if oauth.github}
           <a href="/api/oauth/github/start" on:click|preventDefault={() => window.location.href = `/api/oauth/github/start?_=${Date.now()}`} class="btn-oauth">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            Continue with GitHub
+            {zh ? '使用 GitHub 注册' : 'Continue with GitHub'}
           </a>
         {/if}
         {#if oauth.linuxDo}
           <a href="/api/oauth/linux-do/start" class="btn-oauth">
             <svg width="18" height="18" viewBox="0 0 120 120"><clipPath id="ld"><circle cx="60" cy="60" r="47"/></clipPath><circle fill="#f0f0f0" cx="60" cy="60" r="50"/><rect fill="#1c1c1e" clip-path="url(#ld)" x="10" y="10" width="100" height="30"/><rect fill="#f0f0f0" clip-path="url(#ld)" x="10" y="40" width="100" height="40"/><rect fill="#ffb003" clip-path="url(#ld)" x="10" y="80" width="100" height="30"/></svg>
-            Continue with LINUX DO
+            {zh ? '使用 LINUX DO 注册' : 'Continue with LINUX DO'}
           </a>
         {/if}
       </div>
     {/if}
 
     <p class="auth-footer">
-      Already have an account? <a href="/login">Sign in</a>
+      {zh ? '已有账号？' : 'Already have an account?'} <a href="/login">{zh ? '登录' : 'Sign in'}</a>
     </p>
   </div>
 </div>

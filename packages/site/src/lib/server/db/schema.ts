@@ -183,5 +183,21 @@ const migrations = [
       await tx`CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id)`
       await tx`CREATE INDEX IF NOT EXISTS idx_device_auth_requests_user_code ON device_auth_requests(user_code)`
     }
+  },
+  {
+    version: 2,
+    name: 'username_change_tracking',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at TIMESTAMPTZ`
+
+      await tx`CREATE TABLE IF NOT EXISTS reserved_usernames (
+        username TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reserved_until TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE INDEX IF NOT EXISTS idx_reserved_usernames_until ON reserved_usernames(reserved_until)`
+    }
   }
 ]
