@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { fetchGitHubProfile, findOrCreateOAuthUser, bindOAuthIdentity } from '$lib/server/oauth/providers.js'
 import { createSession, getSessionUser } from '$lib/server/auth/session.js'
+import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get('code')
@@ -13,8 +14,8 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   }
   cookies.delete('oauth_state', { path: '/' })
 
-  const clientId = process.env.GITHUB_CLIENT_ID
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET
+  const clientId = env.GITHUB_CLIENT_ID
+  const clientSecret = env.GITHUB_CLIENT_SECRET
   if (!clientId || !clientSecret) return new Response('GitHub OAuth not configured', { status: 500 })
 
   const tokenRes = await fetch('https://github.com/login/oauth/access_token', {

@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { nanoid } from 'nanoid'
 import { sha256, generateUserCode } from '$lib/server/crypto/hmac.js'
+import { env } from '$env/dynamic/private'
 
 export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json()
@@ -14,7 +15,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
   const id = nanoid()
   const userCode = generateUserCode()
-  const siteUrl = process.env.PUBLIC_SITE_URL || 'http://localhost:5173'
+  const siteUrl = env.SITE_URL || 'http://localhost:5173'
   const verificationUrl = `${siteUrl}/cli/authorize?code=${userCode}`
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
 

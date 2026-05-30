@@ -1,10 +1,12 @@
 import { createHmac, createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto'
+import { env } from '$env/dynamic/private'
 
-const DEVICE_SECRET_ENCRYPTION_KEY = process.env.DEVICE_SECRET_ENCRYPTION_KEY
-const IP_HASH_SECRET = process.env.IP_HASH_SECRET || 'default-ip-hash-secret'
+function getEncryptionKey(): string | undefined {
+  return env.DEVICE_SECRET_ENCRYPTION_KEY
+}
 
-if (!DEVICE_SECRET_ENCRYPTION_KEY) {
-  console.warn('DEVICE_SECRET_ENCRYPTION_KEY not set - device encryption will fail')
+function getIpHashSecret(): string {
+  return env.IP_HASH_SECRET || 'default-ip-hash-secret'
 }
 
 export function computeHmac(data: string, secret: string): string {
@@ -27,12 +29,13 @@ export function sha256(data: string): string {
 }
 
 export function hashIp(ip: string): string {
-  return computeHmac(ip, IP_HASH_SECRET)
+  return computeHmac(ip, getIpHashSecret())
 }
 
 export function encryptDeviceSecret(secret: string): string {
-  if (!DEVICE_SECRET_ENCRYPTION_KEY) throw new Error('DEVICE_SECRET_ENCRYPTION_KEY not set')
-  const key = Buffer.from(DEVICE_SECRET_ENCRYPTION_KEY, 'hex')
+  const encKey = getEncryptionKey()
+  if (!encKey) throw new Error('DEVICE_SECRET_ENCRYPTION_KEY not set')
+  const key = Buffer.from(encKey, 'hex')
   const iv = randomBytes(12)
   const cipher = createCipheriv('aes-256-gcm', key, iv)
   const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()])
@@ -41,8 +44,9 @@ export function encryptDeviceSecret(secret: string): string {
 }
 
 export function decryptDeviceSecret(encrypted: string): string {
-  if (!DEVICE_SECRET_ENCRYPTION_KEY) throw new Error('DEVICE_SECRET_ENCRYPTION_KEY not set')
-  const key = Buffer.from(DEVICE_SECRET_ENCRYPTION_KEY, 'hex')
+  const encKey = getEncryptionKey()
+  if (!encKey) throw new Error('DEVICE_SECRET_ENCRYPTION_KEY not set')
+  const key = Buffer.from(encKey, 'hex')
   const [ivB64, encB64, tagB64] = encrypted.split(':')
   const iv = Buffer.from(ivB64, 'base64')
   const enc = Buffer.from(encB64, 'base64')

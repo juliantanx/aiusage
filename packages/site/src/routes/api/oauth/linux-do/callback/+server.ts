@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { fetchLinuxDoProfile, findOrCreateOAuthUser, bindOAuthIdentity } from '$lib/server/oauth/providers.js'
 import { createSession, getSessionCookie, getSessionUser } from '$lib/server/auth/session.js'
+import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get('code')
@@ -13,12 +14,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   }
   cookies.delete('oauth_state', { path: '/' })
 
-  const clientId = process.env.LINUX_DO_CLIENT_ID
-  const clientSecret = process.env.LINUX_DO_CLIENT_SECRET
-  const tokenUrl = process.env.LINUX_DO_TOKEN_URL
+  const clientId = env.LINUX_DO_CLIENT_ID
+  const clientSecret = env.LINUX_DO_CLIENT_SECRET
+  const tokenUrl = env.LINUX_DO_TOKEN_URL
   if (!clientId || !clientSecret || !tokenUrl) return new Response('Linux Do OAuth not configured', { status: 500 })
 
-  const siteUrl = process.env.PUBLIC_SITE_URL || 'http://localhost:5173'
+  const siteUrl = env.SITE_URL || 'http://localhost:5173'
   const redirectUri = `${siteUrl}/api/oauth/linux-do/callback`
 
   const tokenRes = await fetch(tokenUrl, {

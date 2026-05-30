@@ -1,6 +1,7 @@
 import { sql } from '../db/pool.js'
 import { nanoid } from 'nanoid'
 import type { SessionUser } from '../auth/session.js'
+import { env } from '$env/dynamic/private'
 
 export interface OAuthProfile {
   provider: string
@@ -78,7 +79,7 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<Sess
 }
 
 export async function maybeGrantAdmin(userId: string, email: string): Promise<void> {
-  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
+  const adminEmails = (env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean)
   if (adminEmails.includes(email)) {
     await sql`UPDATE users SET role = 'admin' WHERE id = ${userId} AND role = 'user'`
   }
@@ -141,7 +142,7 @@ export async function fetchGitHubProfile(accessToken: string): Promise<OAuthProf
 }
 
 export async function fetchLinuxDoProfile(accessToken: string): Promise<OAuthProfile> {
-  const userInfoUrl = process.env.LINUX_DO_USERINFO_URL || 'https://connect.linux.do/api/userinfo'
+  const userInfoUrl = env.LINUX_DO_USERINFO_URL || 'https://connect.linux.do/api/userinfo'
   const res = await fetch(userInfoUrl, {
     headers: { Authorization: `Bearer ${accessToken}` }
   })

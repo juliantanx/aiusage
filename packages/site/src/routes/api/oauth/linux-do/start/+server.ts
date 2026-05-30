@@ -1,10 +1,11 @@
 import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { nanoid } from 'nanoid'
+import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async ({ cookies }) => {
-  const clientId = process.env.LINUX_DO_CLIENT_ID
-  const authUrl = process.env.LINUX_DO_AUTHORIZATION_URL
+  const clientId = env.LINUX_DO_CLIENT_ID
+  const authUrl = env.LINUX_DO_AUTHORIZATION_URL
   if (!clientId || !authUrl) return new Response('Linux Do OAuth not configured', { status: 500 })
 
   const state = nanoid(32)
@@ -16,7 +17,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
     maxAge: 600
   })
 
-  const siteUrl = process.env.PUBLIC_SITE_URL || 'http://localhost:5173'
+  const siteUrl = env.SITE_URL || 'http://localhost:5173'
   const redirectUri = `${siteUrl}/api/oauth/linux-do/callback`
   const url = `${authUrl}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid+profile+email&state=${state}`
 

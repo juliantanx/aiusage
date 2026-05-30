@@ -71,7 +71,7 @@ export function validateCsrfToken(request: Request): boolean {
 export function setCsrfCookie(response: Response, token: string): Response {
   response.headers.set(
     'Set-Cookie',
-    `${CSRF_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`
+    `${CSRF_COOKIE_NAME}=${token}; Path=/; SameSite=Lax; Max-Age=3600`
   )
   return response
 }

@@ -30,8 +30,8 @@ export async function queryLeaderboard(
   if (cursor) {
     const [cursorTokens, cursorUserId] = decodeCursor(cursor)
     entries = await sql`
-      SELECT user_id, display_name, avatar_url, total_tokens::text, updated_at::text,
-        ROW_NUMBER() OVER (ORDER BY total_tokens DESC, updated_at ASC, user_id ASC) as rn
+      SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
+        ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
       FROM leaderboard_entries le
       JOIN users u ON u.id = le.user_id
       WHERE le.period_type = ${periodType}::period_type
@@ -45,8 +45,8 @@ export async function queryLeaderboard(
     `
   } else {
     entries = await sql`
-      SELECT user_id, display_name, avatar_url, total_tokens::text, updated_at::text,
-        ROW_NUMBER() OVER (ORDER BY total_tokens DESC, updated_at ASC, user_id ASC) as rn
+      SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
+        ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
       FROM leaderboard_entries le
       JOIN users u ON u.id = le.user_id
       WHERE le.period_type = ${periodType}::period_type

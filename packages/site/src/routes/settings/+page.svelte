@@ -5,6 +5,13 @@
   let devices = []
   let uploads = []
   let loading = true
+  let me = null
+  let currentPassword = ''
+  let newPassword = ''
+  let confirmPassword = ''
+  let pwMsg = ''
+  let pwError = ''
+  let pwSaving = false
 
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
@@ -12,10 +19,14 @@
   }
 
   onMount(async () => {
-    const [devRes, uploadRes] = await Promise.all([
+    const [meRes, devRes, uploadRes] = await Promise.all([
+      fetch('/api/me'),
       fetch('/api/me/devices'),
       fetch('/api/me/leaderboard/uploads')
     ])
+    if (meRes.ok) {
+      me = await meRes.json()
+    }
     if (devRes.ok) {
       const data = await devRes.json()
       devices = data.devices
@@ -26,6 +37,43 @@
     }
     loading = false
   })
+
+  async function handlePasswordSave() {
+    pwMsg = ''
+    pwError = ''
+    if (newPassword !== confirmPassword) {
+      pwError = 'Passwords do not match'
+      return
+    }
+    pwSaving = true
+    try {
+      const res = await fetch('/api/me/password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': getCsrfToken()
+        },
+        body: JSON.stringify({
+          current_password: me?.has_password ? currentPassword : undefined,
+          new_password: newPassword
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        pwMsg = 'Password updated successfully'
+        currentPassword = ''
+        newPassword = ''
+        confirmPassword = ''
+        if (me) me = { ...me, has_password: true }
+      } else {
+        pwError = data.error || 'Failed to update password'
+      }
+    } catch {
+      pwError = 'Network error'
+    } finally {
+      pwSaving = false
+    }
+  }
 
   async function revokeDevice(id) {
     if (!confirm('Revoke this device? This cannot be undone.')) return
@@ -53,6 +101,44 @@
 
     {#if $page.url.searchParams.get('bound')}
       <div class="success-msg">Successfully linked {$page.url.searchParams.get('bound')} account!</div>
+    {/if}
+
+    {#if me}
+      <section class="settings-section">
+        <h2>{me.has_password ? 'Change Password' : 'Set Password'}</h2>
+        <p class="section-desc">
+          {me.has_password
+            ? 'Update your account password.'
+            : 'Set a password so you can also sign in with your username or email.'}
+        </p>
+
+        {#if pwMsg}
+          <div class="success-msg">{pwMsg}</div>
+        {/if}
+        {#if pwError}
+          <div class="error-msg">{pwError}</div>
+        {/if}
+
+        <form class="pw-form" on:submit|preventDefault={handlePasswordSave}>
+          {#if me.has_password}
+            <div class="field">
+              <label for="current-pw">Current Password</label>
+              <input id="current-pw" type="password" bind:value={currentPassword} required autocomplete="current-password" />
+            </div>
+          {/if}
+          <div class="field">
+            <label for="new-pw">New Password</label>
+            <input id="new-pw" type="password" bind:value={newPassword} required minlength="8" autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label for="confirm-pw">Confirm Password</label>
+            <input id="confirm-pw" type="password" bind:value={confirmPassword} required minlength="8" autocomplete="new-password" />
+          </div>
+          <button type="submit" class="btn-primary" disabled={pwSaving}>
+            {pwSaving ? 'Saving...' : me.has_password ? 'Update Password' : 'Set Password'}
+          </button>
+        </form>
+      </section>
     {/if}
 
     <section class="settings-section">
@@ -145,4 +231,14 @@
   .status-flagged { background: var(--amber-dim); color: var(--amber); }
   .status-rejected { background: var(--rose-dim); color: var(--rose); }
   .upload-reason { font-size: 0.75rem; color: var(--text-muted); }
+
+  .error-msg { background: oklch(0.55 0.22 25 / 0.08); color: var(--rose); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+  .pw-form { max-width: 400px; }
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.375rem; color: var(--text-secondary); }
+  .field input { width: 100%; padding: 0.5rem 0.75rem; font-size: 0.875rem; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.15s; }
+  .field input:focus { border-color: var(--accent); }
+  .btn-primary { padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; color: oklch(0.99 0.002 85); background: var(--accent); border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
