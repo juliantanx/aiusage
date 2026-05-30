@@ -142,7 +142,7 @@ export async function fetchGitHubProfile(accessToken: string): Promise<OAuthProf
 }
 
 export async function fetchLinuxDoProfile(accessToken: string): Promise<OAuthProfile> {
-  const userInfoUrl = env.LINUX_DO_USERINFO_URL || 'https://connect.linux.do/api/userinfo'
+  const userInfoUrl = env.LINUX_DO_USERINFO_URL || 'https://connect.linux.do/api/user'
   const res = await fetch(userInfoUrl, {
     headers: { Authorization: `Bearer ${accessToken}` }
   })

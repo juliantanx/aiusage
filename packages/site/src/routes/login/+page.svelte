@@ -73,14 +73,15 @@
 
       <div class="oauth-buttons">
         {#if oauth.github}
-          <a href="/api/oauth/github/start" on:click|preventDefault={() => window.location.href = `/api/oauth/github/start?_=${Date.now()}`} class="btn-oauth github">
+          <a href="/api/oauth/github/start" on:click|preventDefault={() => window.location.href = `/api/oauth/github/start?_=${Date.now()}`} class="btn-oauth">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
             Continue with GitHub
           </a>
         {/if}
         {#if oauth.linuxDo}
-          <a href="/api/oauth/linux-do/start" class="btn-oauth linuxdo">
-            Linux Do
+          <a href="/api/oauth/linux-do/start" class="btn-oauth">
+            <svg width="18" height="18" viewBox="0 0 120 120"><clipPath id="ld"><circle cx="60" cy="60" r="47"/></clipPath><circle fill="#f0f0f0" cx="60" cy="60" r="50"/><rect fill="#1c1c1e" clip-path="url(#ld)" x="10" y="10" width="100" height="30"/><rect fill="#f0f0f0" clip-path="url(#ld)" x="10" y="40" width="100" height="40"/><rect fill="#ffb003" clip-path="url(#ld)" x="10" y="80" width="100" height="30"/></svg>
+            Continue with LINUX DO
           </a>
         {/if}
       </div>
@@ -108,8 +109,8 @@
   .auth-divider { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0; color: var(--text-muted); font-size: 0.8125rem; }
   .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
   .oauth-buttons { display: flex; flex-direction: column; gap: 0.75rem; }
-  .btn-oauth { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--border-medium); border-radius: 8px; text-decoration: none; color: var(--text); transition: border-color 0.15s, background 0.15s; }
-  .btn-oauth:hover { border-color: var(--text-muted); background: var(--hover); }
+  .btn-oauth { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.625rem; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--border-medium); border-radius: 8px; text-decoration: none; color: var(--text); background: var(--bg); transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+  .btn-oauth:hover { background: var(--surface-hover, oklch(0.92 0.005 250)); }
   .auth-footer { text-align: center; font-size: 0.875rem; color: var(--text-muted); margin-top: 1.5rem; }
   .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
 </style>

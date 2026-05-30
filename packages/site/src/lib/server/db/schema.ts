@@ -25,15 +25,15 @@ const migrations = [
     version: 1,
     name: 'initial_schema',
     up: async (tx: ReturnType<typeof sql>) => {
-      await tx`CREATE TYPE user_role AS ENUM ('user', 'admin')`
-      await tx`CREATE TYPE user_status AS ENUM ('active', 'banned', 'deleted')`
-      await tx`CREATE TYPE period_type AS ENUM ('daily', 'weekly', 'monthly', 'yearly', 'all_time')`
-      await tx`CREATE TYPE device_status AS ENUM ('active', 'revoked')`
-      await tx`CREATE TYPE upload_status AS ENUM ('accepted', 'rejected', 'flagged')`
-      await tx`CREATE TYPE snapshot_review_status AS ENUM ('pending', 'approved', 'rejected', 'hidden')`
-      await tx`CREATE TYPE leaderboard_visibility AS ENUM ('public', 'hidden', 'flagged')`
+      await tx`DO $$ BEGIN CREATE TYPE user_role AS ENUM ('user', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
+      await tx`DO $$ BEGIN CREATE TYPE user_status AS ENUM ('active', 'banned', 'deleted'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
+      await tx`DO $$ BEGIN CREATE TYPE period_type AS ENUM ('daily', 'weekly', 'monthly', 'yearly', 'all_time'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
+      await tx`DO $$ BEGIN CREATE TYPE device_status AS ENUM ('active', 'revoked'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
+      await tx`DO $$ BEGIN CREATE TYPE upload_status AS ENUM ('accepted', 'rejected', 'flagged'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
+      await tx`DO $$ BEGIN CREATE TYPE snapshot_review_status AS ENUM ('pending', 'approved', 'rejected', 'hidden'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
+      await tx`DO $$ BEGIN CREATE TYPE leaderboard_visibility AS ENUM ('public', 'hidden', 'flagged'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
 
-      await tx`CREATE TABLE users (
+      await tx`CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
@@ -51,7 +51,7 @@ const migrations = [
         ban_reason TEXT
       )`
 
-      await tx`CREATE TABLE user_identities (
+      await tx`CREATE TABLE IF NOT EXISTS user_identities (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         provider TEXT NOT NULL,
@@ -64,7 +64,7 @@ const migrations = [
         UNIQUE(provider, provider_user_id)
       )`
 
-      await tx`CREATE TABLE user_devices (
+      await tx`CREATE TABLE IF NOT EXISTS user_devices (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
@@ -76,14 +76,14 @@ const migrations = [
         revoked_at TIMESTAMPTZ
       )`
 
-      await tx`CREATE TABLE sessions (
+      await tx`CREATE TABLE IF NOT EXISTS sessions (
         sid TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         data JSONB DEFAULT '{}',
         expires_at TIMESTAMPTZ NOT NULL
       )`
 
-      await tx`CREATE TABLE device_auth_requests (
+      await tx`CREATE TABLE IF NOT EXISTS device_auth_requests (
         id TEXT PRIMARY KEY,
         device_challenge TEXT NOT NULL,
         user_code TEXT NOT NULL,
@@ -98,14 +98,14 @@ const migrations = [
         approved_at TIMESTAMPTZ
       )`
 
-      await tx`CREATE TABLE upload_nonces (
+      await tx`CREATE TABLE IF NOT EXISTS upload_nonces (
         device_id TEXT NOT NULL,
         nonce TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         PRIMARY KEY(device_id, nonce)
       )`
 
-      await tx`CREATE TABLE upload_requests (
+      await tx`CREATE TABLE IF NOT EXISTS upload_requests (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id),
         device_id TEXT NOT NULL REFERENCES user_devices(id),
@@ -122,7 +122,7 @@ const migrations = [
         UNIQUE(device_id, idempotency_key)
       )`
 
-      await tx`CREATE TABLE upload_snapshots (
+      await tx`CREATE TABLE IF NOT EXISTS upload_snapshots (
         id TEXT PRIMARY KEY,
         upload_request_id TEXT NOT NULL REFERENCES upload_requests(id) ON DELETE CASCADE,
         user_id TEXT NOT NULL REFERENCES users(id),
@@ -144,7 +144,7 @@ const migrations = [
         UNIQUE(upload_request_id, period_type, period_start)
       )`
 
-      await tx`CREATE TABLE leaderboard_entries (
+      await tx`CREATE TABLE IF NOT EXISTS leaderboard_entries (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id),
         period_type period_type NOT NULL,
@@ -158,7 +158,7 @@ const migrations = [
         UNIQUE(user_id, period_type, period_start)
       )`
 
-      await tx`CREATE TABLE admin_audit_logs (
+      await tx`CREATE TABLE IF NOT EXISTS admin_audit_logs (
         id TEXT PRIMARY KEY,
         admin_user_id TEXT NOT NULL REFERENCES users(id),
         action TEXT NOT NULL,
@@ -170,18 +170,18 @@ const migrations = [
       )`
 
       // Indexes
-      await tx`CREATE INDEX idx_leaderboard_query ON leaderboard_entries(period_type, period_start, visibility, total_tokens DESC)`
-      await tx`CREATE INDEX idx_leaderboard_user ON leaderboard_entries(user_id, period_type, period_start)`
-      await tx`CREATE INDEX idx_upload_requests_device_key ON upload_requests(device_id, idempotency_key)`
-      await tx`CREATE INDEX idx_upload_snapshots_req ON upload_snapshots(upload_request_id, period_type, period_start)`
-      await tx`CREATE INDEX idx_upload_snapshots_user ON upload_snapshots(user_id, period_type, period_start)`
-      await tx`CREATE INDEX idx_upload_snapshots_status ON upload_snapshots(status, created_at)`
-      await tx`CREATE INDEX idx_upload_requests_created ON upload_requests(created_at)`
-      await tx`CREATE INDEX idx_upload_nonces_created ON upload_nonces(created_at)`
-      await tx`CREATE INDEX idx_user_devices_user ON user_devices(user_id, status)`
-      await tx`CREATE INDEX idx_sessions_expires ON sessions(expires_at)`
-      await tx`CREATE INDEX idx_user_identities_user ON user_identities(user_id)`
-      await tx`CREATE INDEX idx_device_auth_requests_user_code ON device_auth_requests(user_code)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_query ON leaderboard_entries(period_type, period_start, visibility, total_tokens DESC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_user ON leaderboard_entries(user_id, period_type, period_start)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_upload_requests_device_key ON upload_requests(device_id, idempotency_key)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_upload_snapshots_req ON upload_snapshots(upload_request_id, period_type, period_start)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_upload_snapshots_user ON upload_snapshots(user_id, period_type, period_start)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_upload_snapshots_status ON upload_snapshots(status, created_at)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_upload_requests_created ON upload_requests(created_at)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_upload_nonces_created ON upload_nonces(created_at)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id, status)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_device_auth_requests_user_code ON device_auth_requests(user_code)`
     }
   }
 ]

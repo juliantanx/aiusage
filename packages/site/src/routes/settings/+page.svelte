@@ -6,6 +6,15 @@
   let uploads = []
   let loading = true
   let me = null
+  let editUsername = ''
+  let editDisplayName = ''
+  let avatarUploading = false
+  let avatarPreviewSrc = ''
+  let fileInput
+  let profileMsg = ''
+  let profileError = ''
+  let profileSaving = false
+
   let currentPassword = ''
   let newPassword = ''
   let confirmPassword = ''
@@ -26,6 +35,9 @@
     ])
     if (meRes.ok) {
       me = await meRes.json()
+      editUsername = me.username || ''
+      editDisplayName = me.display_name || ''
+      avatarPreviewSrc = me.avatar_url || ''
     }
     if (devRes.ok) {
       const data = await devRes.json()
@@ -37,6 +49,99 @@
     }
     loading = false
   })
+
+  function triggerFileSelect() {
+    fileInput?.click()
+  }
+
+  async function handleAvatarSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      profileError = 'File too large (max 5MB)'
+      return
+    }
+
+    // Show local preview immediately
+    avatarPreviewSrc = URL.createObjectURL(file)
+    avatarUploading = true
+    profileError = ''
+
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+      const res = await fetch('/api/me/avatar', {
+        method: 'POST',
+        headers: { 'x-csrf-token': getCsrfToken() },
+        body: formData
+      })
+      const data = await res.json()
+      if (res.ok) {
+        avatarPreviewSrc = data.avatar_url
+        me = { ...me, avatar_url: data.avatar_url }
+        profileMsg = 'Avatar updated'
+      } else {
+        avatarPreviewSrc = me?.avatar_url || ''
+        profileError = data.error || 'Failed to upload avatar'
+      }
+    } catch {
+      avatarPreviewSrc = me?.avatar_url || ''
+      profileError = 'Network error'
+    } finally {
+      avatarUploading = false
+      if (fileInput) fileInput.value = ''
+    }
+  }
+
+  async function handleAvatarRemove() {
+    avatarUploading = true
+    profileError = ''
+    try {
+      const res = await fetch('/api/me/avatar', {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': getCsrfToken() }
+      })
+      if (res.ok) {
+        avatarPreviewSrc = ''
+        me = { ...me, avatar_url: null }
+        profileMsg = 'Avatar removed'
+      }
+    } catch {
+      profileError = 'Network error'
+    } finally {
+      avatarUploading = false
+    }
+  }
+
+  async function handleProfileSave() {
+    profileMsg = ''
+    profileError = ''
+    profileSaving = true
+    try {
+      const res = await fetch('/api/me/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': getCsrfToken()
+        },
+        body: JSON.stringify({
+          username: editUsername,
+          display_name: editDisplayName
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        profileMsg = 'Profile updated'
+        me = { ...me, username: data.username, display_name: data.display_name }
+      } else {
+        profileError = data.error || 'Failed to update profile'
+      }
+    } catch {
+      profileError = 'Network error'
+    } finally {
+      profileSaving = false
+    }
+  }
 
   async function handlePasswordSave() {
     pwMsg = ''
@@ -104,6 +209,62 @@
     {/if}
 
     {#if me}
+      <section class="settings-section">
+        <h2>Profile</h2>
+        <p class="section-desc">Update your public profile information.</p>
+
+        {#if profileMsg}
+          <div class="success-msg">{profileMsg}</div>
+        {/if}
+        {#if profileError}
+          <div class="error-msg">{profileError}</div>
+        {/if}
+
+        <div class="profile-avatar-section">
+          <div class="avatar-preview" class:uploading={avatarUploading}>
+            {#if avatarPreviewSrc}
+              <img src={avatarPreviewSrc} alt="Avatar" />
+            {:else}
+              <span class="avatar-placeholder">{(editDisplayName || editUsername || '?')[0].toUpperCase()}</span>
+            {/if}
+            {#if avatarUploading}
+              <div class="avatar-spinner"></div>
+            {/if}
+          </div>
+          <div class="avatar-actions">
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" bind:this={fileInput} on:change={handleAvatarSelect} hidden />
+            <button type="button" class="btn-secondary" on:click={triggerFileSelect} disabled={avatarUploading}>
+              {avatarPreviewSrc ? 'Change' : 'Upload'}
+            </button>
+            {#if avatarPreviewSrc}
+              <button type="button" class="btn-text-danger" on:click={handleAvatarRemove} disabled={avatarUploading}>
+                Remove
+              </button>
+            {/if}
+            <span class="avatar-hint">JPEG, PNG, WebP, or GIF. Max 5MB.</span>
+          </div>
+        </div>
+
+        <form class="profile-form" on:submit|preventDefault={handleProfileSave}>
+          <div class="field">
+            <label for="edit-username">Username</label>
+            <input id="edit-username" type="text" bind:value={editUsername} required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" />
+          </div>
+          <div class="field">
+            <label for="edit-display-name">Display Name</label>
+            <input id="edit-display-name" type="text" bind:value={editDisplayName} required minlength="1" maxlength="64" />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" value={me.email} disabled />
+            <span class="field-hint">Email cannot be changed yet.</span>
+          </div>
+          <button type="submit" class="btn-primary" disabled={profileSaving}>
+            {profileSaving ? 'Saving...' : 'Save Profile'}
+          </button>
+        </form>
+      </section>
+
       <section class="settings-section">
         <h2>{me.has_password ? 'Change Password' : 'Set Password'}</h2>
         <p class="section-desc">
@@ -233,6 +394,25 @@
   .upload-reason { font-size: 0.75rem; color: var(--text-muted); }
 
   .error-msg { background: oklch(0.55 0.22 25 / 0.08); color: var(--rose); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+  .profile-form { max-width: 400px; }
+  .profile-avatar-section { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+  .avatar-preview { position: relative; width: 72px; height: 72px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center; }
+  .avatar-preview.uploading { opacity: 0.5; }
+  .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .avatar-placeholder { font-size: 1.5rem; font-weight: 700; color: var(--text-muted); }
+  .avatar-spinner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .avatar-spinner::after { content: ''; width: 24px; height: 24px; border: 2px solid var(--text-muted); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .avatar-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .avatar-hint { display: block; width: 100%; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+  .btn-secondary { padding: 0.375rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border-medium); border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+  .btn-secondary:hover { background: var(--hover); }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-text-danger { padding: 0.375rem 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--rose); background: none; border: none; cursor: pointer; }
+  .btn-text-danger:hover { text-decoration: underline; }
+  .btn-text-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+  .field-hint { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+  .field input:disabled { opacity: 0.5; cursor: not-allowed; }
   .pw-form { max-width: 400px; }
   .field { margin-bottom: 1rem; }
   .field label { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.375rem; color: var(--text-secondary); }
