@@ -104,6 +104,7 @@ pnpm rebuild:sqlite
 | Qoder | ✅ |
 | OpenClaw | ✅ |
 | KiloCode | ✅ |
+| Copilot | ✅ |
 
 
 ## CLI 命令参考
@@ -118,7 +119,7 @@ pnpm rebuild:sqlite
 
 | 选项 | 说明 |
 |------|------|
-| `--tool <tool>` | 只解析指定工具：`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor` |
+| `--tool <tool>` | 只解析指定工具：`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor`、`copilot` |
 | `--progress` | 在 stderr 显示实时进度条（仅 TTY 环境，管道/CI 下自动静默） |
 
 ```bash
@@ -147,7 +148,7 @@ aiusage serve -p 8080     # 使用 8080 端口启动
 | 选项 | 说明 |
 |------|------|
 | `--device <id>` | 按设备实例 ID 筛选 |
-| `--tool <tool>` | 按工具类型筛选（`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor`） |
+| `--tool <tool>` | 按工具类型筛选（`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor`、`copilot`） |
 
 ```bash
 aiusage summary                        # 全部时间
@@ -486,6 +487,7 @@ docker build -t aiusage .
 | Qoder（会话日志） | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/`，以及 WSL 挂载的 Windows 用户目录 | `%USERPROFILE%\.qoder\logs\sessions\` |
 | Qoder（SQLite） | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | `~/.local/share/Qoder/SharedClientCache/cache/db/local.db` | `%LOCALAPPDATA%\Qoder\SharedClientCache\cache\db\local.db` |
 | Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | `~/.config/Cursor/User/globalStorage/state.vscdb` | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
+| Copilot | `~/.copilot/otel/` | `~/.copilot/otel/` | `%USERPROFILE%\.copilot\otel\` |
 
 发现行为：
 
@@ -497,6 +499,7 @@ docker build -t aiusage .
 - **Qoder（会话日志）** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
 - **Qoder（SQLite）** — 直接读取 `local.db` SQLite 数据库（`SharedClientCache/cache/db/local.db`），从 `chat_message` 表导入助手消息，并关联 `chat_record` 获取模型信息。这是 macOS 上的主要数据来源，与会话日志目录并行尝试。
 - **Cursor** — 直接读取 Cursor 的 `state.vscdb` SQLite 数据库，导入 composer 会话的 token 用量数据。
+- **Copilot** — 扫描 `~/.copilot/otel/` 下由 Copilot CLI 和 VS Code Copilot Chat 扩展导出的 OTEL JSONL 文件，同时检查 `$COPILOT_OTEL_FILE_EXPORTER_PATH` 环境变量。需要在 shell profile 中设置以下环境变量来启用 OTEL 导出：`COPILOT_OTEL_ENABLED=true`、`COPILOT_OTEL_EXPORTER_TYPE=file`、`COPILOT_OTEL_FILE_EXPORTER_PATH=~/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl`。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 
@@ -516,7 +519,8 @@ Qoder 桌面端还会在 `Program Files` 下写入安装文件，在 `AppData/Ro
     "hermes": "/自定义路径/.hermes/state.db",
     "qoder": "/自定义路径/.qoder/logs/sessions",
     "qoder-db": "/自定义路径/local.db",
-    "cursor": "/自定义路径/state.vscdb"
+    "cursor": "/自定义路径/state.vscdb",
+    "copilot": "/自定义路径/.copilot/otel"
   }
 }
 ```

@@ -366,6 +366,134 @@ async function callCodexQuotaApi(accessToken: string, accountId: string | null):
   }
 }
 
+// ── GitHub Copilot credential reading ────────────────────────────────────────
+
+function readCopilotOauthToken(): string | null {
+  const home = homedir()
+  const candidates = [
+    join(home, '.config', 'github-copilot', 'apps.json'),
+    join(home, '.config', 'github-copilot', 'hosts.json'),
+  ]
+  // Keys are "github.com", "github.com:Iv1.xxx" (app ID), or enterprise hosts.
+  // Prefer the public-host token; fall back to whatever's available.
+  let fallback: string | null = null
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) continue
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+    } catch {
+      continue
+    }
+    if (!parsed || typeof parsed !== 'object') continue
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== 'object') continue
+      const entry = value as Record<string, unknown>
+      const token = typeof entry.oauth_token === 'string' ? entry.oauth_token : ''
+      if (!token) continue
+      const host = String(key).split(':')[0]
+      if (host === 'github.com') return token
+      if (!fallback) fallback = token
+    }
+  }
+  return fallback
+}
+
+// ── GitHub Copilot quota API query ───────────────────────────────────────────
+
+const COPILOT_API_URL = 'https://api.github.com/copilot_internal/user'
+
+function copilotResetIso(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const trimmed = value.trim()
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+  const ts = Date.parse(dateOnly ? `${trimmed}T00:00:00Z` : trimmed)
+  if (!Number.isFinite(ts)) return null
+  return new Date(ts).toISOString()
+}
+
+function buildCopilotTier(
+  name: string,
+  snapshot: Record<string, unknown> | undefined,
+  resetIso: string | null,
+): QuotaTier | null {
+  if (!snapshot || typeof snapshot !== 'object') return null
+  const entitlement = Number(snapshot.entitlement)
+  const remaining = Number(snapshot.remaining)
+  const percentRemaining = Number(snapshot.percent_remaining)
+
+  const allZero =
+    (!entitlement || entitlement <= 0) &&
+    (!remaining || remaining <= 0) &&
+    (!percentRemaining || percentRemaining <= 0)
+  if (allZero) return null
+
+  let utilization: number
+  if (Number.isFinite(percentRemaining)) {
+    utilization = 100 - percentRemaining
+  } else if (Number.isFinite(entitlement) && entitlement > 0 && Number.isFinite(remaining)) {
+    utilization = ((entitlement - remaining) / entitlement) * 100
+  } else {
+    return null
+  }
+
+  return { name, utilization, resetsAt: resetIso }
+}
+
+async function callCopilotQuotaApi(token: string): Promise<QuotaResult> {
+  let resp: Response
+  try {
+    resp = await fetch(COPILOT_API_URL, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/json',
+        'Editor-Version': 'vscode/1.96.2',
+        'Editor-Plugin-Version': 'copilot-chat/0.26.7',
+        'User-Agent': 'GitHubCopilotChat/0.26.7',
+        'X-Github-Api-Version': '2025-04-01',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+  } catch (e) {
+    return apiError('copilot', `Network error: ${e}`)
+  }
+
+  if (resp.status === 401 || resp.status === 403) {
+    return expiredError('copilot', `GitHub Copilot token rejected (HTTP ${resp.status}). Re-authenticate via Copilot extension.`)
+  }
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '')
+    return apiError('copilot', `GitHub Copilot API error (HTTP ${resp.status}): ${body}`)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await resp.json()
+  } catch (e) {
+    return apiError('copilot', `Failed to parse API response: ${e}`)
+  }
+
+  const resetIso = copilotResetIso(body.quota_reset_date)
+  const snapshots = (body.quota_snapshots ?? {}) as Record<string, Record<string, unknown>>
+
+  const tiers: QuotaTier[] = []
+  const premiumTier = buildCopilotTier('premium_interactions', snapshots.premium_interactions, resetIso)
+  if (premiumTier) tiers.push(premiumTier)
+  const chatTier = buildCopilotTier('chat', snapshots.chat, resetIso)
+  if (chatTier) tiers.push(chatTier)
+
+  return {
+    tool: 'copilot',
+    credentialStatus: 'valid',
+    credentialMessage: null,
+    success: true,
+    tiers,
+    error: null,
+    queriedAt: nowMs(),
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /** Query Claude Code official subscription quota */
@@ -405,11 +533,19 @@ export async function queryCodexQuota(): Promise<QuotaResult> {
   return callCodexQuotaApi(cred.token!, cred.accountId)
 }
 
+/** Query GitHub Copilot official subscription quota */
+export async function queryCopilotQuota(): Promise<QuotaResult> {
+  const token = readCopilotOauthToken()
+  if (!token) return notFound('copilot')
+  return callCopilotQuotaApi(token)
+}
+
 /** Query all supported tools in parallel */
 export async function queryAllQuotas(): Promise<QuotaResult[]> {
-  const [claude, codex] = await Promise.all([
+  const [claude, codex, copilot] = await Promise.all([
     queryClaudeCodeQuota(),
     queryCodexQuota(),
+    queryCopilotQuota(),
   ])
-  return [claude, codex]
+  return [claude, codex, copilot]
 }

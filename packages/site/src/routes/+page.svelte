@@ -52,6 +52,7 @@
     { name: 'Hermes',      icon: '◐', color: 'var(--amber)' },
     { name: 'Qoder',       icon: '▣', color: 'var(--rose)' },
     { name: 'Cursor',      icon: '⌖', color: 'var(--blue)' },
+    { name: 'Copilot',     icon: '⬡', color: 'var(--green)' },
   ]
 
   const features = [
@@ -88,8 +89,8 @@
     {
       id: 'quotas', icon: '▣', color: 'var(--rose)',
       zhTitle: '配额监控', enTitle: 'Quota Monitoring',
-      zhDesc: '实时监控 Claude Code、Codex 等工具的速率限制配额。查看使用率百分比和重置倒计时。',
-      enDesc: 'Real-time rate limit quota monitoring for Claude Code, Codex, and more. View utilization and reset countdowns.',
+      zhDesc: '实时监控 Claude Code、Codex、Copilot 等工具的速率限制配额。查看使用率百分比和重置倒计时。',
+      enDesc: 'Real-time rate limit quota monitoring for Claude Code, Codex, Copilot, and more. View utilization and reset countdowns.',
     },
     {
       id: 'sync', icon: '⇅', color: 'var(--green)',
@@ -124,8 +125,8 @@
     url: 'https://aiusage.jtanx.com/',
     inLanguage: zh ? 'zh-CN' : 'en',
     description: zh
-      ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。'
-      : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more.',
+      ? '追踪 Claude Code、Codex、Copilot、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。'
+      : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Copilot, Cursor, and more.',
     potentialAction: {
       '@type': 'SearchAction',
       target: 'https://aiusage.jtanx.com/docs?q={search_term_string}',
@@ -144,8 +145,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 是一个本地优先的 AI 编程工具用量分析平台，支持追踪 Claude Code、Codex、Cursor 等 7 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
-            : 'AIUsage is a local-first AI coding usage analytics platform that tracks token consumption, costs, and usage patterns across 7 AI tools including Claude Code, Codex, and Cursor. Data stays on your machine — no third-party servers.'
+            ? 'AIUsage 是一个本地优先的 AI 编程工具用量分析平台，支持追踪 Claude Code、Codex、Copilot、Cursor 等 8 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
+            : 'AIUsage is a local-first AI coding usage analytics platform that tracks token consumption, costs, and usage patterns across 8 AI tools including Claude Code, Codex, Copilot, and Cursor. Data stays on your machine — no third-party servers.'
         }
       },
       {
@@ -154,8 +155,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 支持 7 种 AI 编程工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor。'
-            : 'AIUsage supports 7 AI coding tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, and Cursor.'
+            ? 'AIUsage 支持 8 种 AI 编程工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot。'
+            : 'AIUsage supports 8 AI coding tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, and Copilot.'
         }
       },
       {
@@ -206,8 +207,8 @@
       </h1>
       <p class="hero-sub">
         {zh
-          ? 'AIUsage 追踪 Claude Code、Codex、Cursor 等 7 种 AI 工具的 Token 用量和费用。数据存储在本地，不经过任何第三方服务器。'
-          : 'AIUsage tracks token consumption and costs across 7 AI coding tools. Data stays on your machine — no third-party servers.'}
+          ? 'AIUsage 追踪 Claude Code、Codex、Copilot、Cursor 等 8 种 AI 工具的 Token 用量和费用。数据存储在本地，不经过任何第三方服务器。'
+          : 'AIUsage tracks token consumption and costs across 8 AI coding tools. Data stays on your machine — no third-party servers.'}
       </p>
       <div class="hero-install">
         <div class="code-block">

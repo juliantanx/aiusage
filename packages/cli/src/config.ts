@@ -42,6 +42,8 @@ export interface SourcesConfig {
   'cursor'?: string
   /** Custom path to Kilo local SQLite db (default: platform-specific) */
   'kilocode-db'?: string
+  /** Custom path to Copilot OTEL dir (default: ~/.copilot/otel) */
+  'copilot'?: string
 }
 
 export interface Config {

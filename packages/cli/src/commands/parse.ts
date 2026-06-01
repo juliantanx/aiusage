@@ -258,6 +258,29 @@ function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolP
     results.push({ tool: 'qoder', paths: qoderPaths })
   }
 
+  // GitHub Copilot: ~/.copilot/otel/*.jsonl (OTEL JSONL files)
+  const copilotDir = sources?.['copilot'] ?? join(home, '.copilot', 'otel')
+  const copilotPaths: string[] = []
+  if (existsSync(copilotDir)) {
+    try {
+      const entries = readdirSync(copilotDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isFile() && extname(entry.name) === '.jsonl') {
+          copilotPaths.push(join(copilotDir, entry.name))
+        }
+      }
+    } catch {}
+  }
+  // Also check COPILOT_OTEL_FILE_EXPORTER_PATH env var
+  const explicitCopilotPath = process.env.COPILOT_OTEL_FILE_EXPORTER_PATH
+  if (typeof explicitCopilotPath === 'string' && explicitCopilotPath.trim() && existsSync(explicitCopilotPath)) {
+    copilotPaths.push(explicitCopilotPath)
+  }
+  const uniqueCopilotPaths = unique(copilotPaths)
+  if (uniqueCopilotPaths.length > 0) {
+    results.push({ tool: 'copilot', paths: uniqueCopilotPaths })
+  }
+
   return results
 }
 
@@ -286,6 +309,11 @@ function extractSessionId(filePath: string, tool: Tool): string {
     if (segmentsIndex > 0) return parts[segmentsIndex - 1]
     const filename = parts[parts.length - 1] ?? ''
     return filename.replace('.jsonl', '') || 'unknown'
+  }
+  if (tool === 'copilot') {
+    // Extract from path like ~/.copilot/otel/copilot-otel-20250601.jsonl
+    const filename = filePath.split('/').pop() ?? ''
+    return filename.replace('.jsonl', '')
   }
   return 'unknown'
 }
@@ -865,5 +893,6 @@ export function getDefaultSourcePaths(): Record<string, string> {
     'qoder-db':    defaultQoderDbPath(),
     'cursor':      defaultCursorDbPath(),
     'kilocode-db': defaultKiloDbPath(),
+    'copilot':     join(home, '.copilot', 'otel'),
   }
 }

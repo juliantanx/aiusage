@@ -263,8 +263,8 @@
       </div>
       <h1 class="hero-title">{zh ? '文档' : 'Documentation'}</h1>
       <p class="hero-sub">{zh
-        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor 等多种 AI 工具的 Token 和费用追踪。'
-        : 'AIUsage is a local-first usage analytics platform for AI coding tools — tracking tokens, costs, sessions and more across Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, and Cursor.'
+        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot 等多种 AI 工具的 Token 和费用追踪。'
+        : 'AIUsage is a local-first usage analytics platform for AI coding tools — tracking tokens, costs, sessions and more across Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, and Copilot.'
       }</p>
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
@@ -396,7 +396,7 @@
         <li><strong>{zh ? '费用 / 会话 / 活跃天数' : 'Cost / Sessions / Active Days'}</strong> — {zh ? '三个摘要统计块' : 'Three summary stat blocks'}</li>
         <li><strong>{zh ? 'Token 构成条' : 'Token composition bar'}</strong> — {zh ? '按比例显示输入、输出、缓存读写分布' : 'Proportional breakdown of input, output, cache read, and cache write'}</li>
         <li><strong>{zh ? '刷新进度条' : 'Refresh progress bar'}</strong> — {zh ? '显示下次自动刷新的倒计时，并可手动立即刷新' : 'Shows countdown to next refresh and allows manual refresh'}</li>
-        <li><strong>{zh ? '配额预警' : 'Quota warnings'}</strong> — {zh ? '当 Claude Code / Codex 配额层级达到 80% 以上时会在首页顶部提示' : 'Shows warning banners when Claude Code or Codex quota tiers reach 80%+'}</li>
+        <li><strong>{zh ? '配额预警' : 'Quota warnings'}</strong> — {zh ? '当 Claude Code / Codex / Copilot 配额层级达到 80% 以上时会在首页顶部提示' : 'Shows warning banners when Claude Code, Codex, or Copilot quota tiers reach 80%+'}</li>
       </ul>
     </section>
 
@@ -637,8 +637,8 @@
         <h2>{zh ? '配额监控' : 'Quotas'}</h2>
       </div>
       <p>{zh
-        ? '配额页面当前主要覆盖 Claude Code 和 Codex。页面会把有凭证的工具显示为卡片，没有本地凭证的工具则放到下方的 inactive 列表中。'
-        : 'The Quotas page currently focuses on tools with local quota credentials, mainly Claude Code and Codex. Tools with credentials appear as cards, while tools without credentials are listed in an inactive section below.'
+        ? '配额页面当前覆盖 Claude Code、Codex 和 GitHub Copilot。页面会把有凭证的工具显示为卡片，没有本地凭证的工具则放到下方的 inactive 列表中。'
+        : 'The Quotas page currently covers Claude Code, Codex, and GitHub Copilot. Tools with credentials appear as cards, while tools without credentials are listed in an inactive section below.'
       }</p>
     </section>
 
@@ -730,7 +730,39 @@
         <li><strong>Hermes</strong> — <code>~/.hermes/state.db</code></li>
         <li><strong>Qoder</strong> — <code>~/.qoder/logs/sessions</code> + {zh ? '平台相关的' : 'platform-specific'} <code>local.db</code></li>
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
+        <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（OTEL JSONL 文件）' : '(OTEL JSONL files)'}</li>
       </ul>
+      <Callout type="info">
+        {zh
+          ? 'GitHub Copilot 不会默认导出用量数据，需要手动启用 OpenTelemetry 文件导出。根据你的操作系统，将以下环境变量添加到对应的配置文件中：'
+          : 'GitHub Copilot does not export usage data by default. You need to enable OpenTelemetry file export by adding the following environment variables to your system:'
+        }
+      </Callout>
+      <p><strong>macOS / Linux</strong> — {zh ? '添加到 shell profile（如 ~/.zshrc 或 ~/.bashrc）：' : 'Add to your shell profile (e.g. ~/.zshrc or ~/.bashrc):'}</p>
+      <CodeBlock lang="Shell" copyText={'export COPILOT_OTEL_ENABLED=true\nexport COPILOT_OTEL_EXPORTER_TYPE=file\nexport COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"'}>
+        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
+        {@html `<span class="tk-kw">export</span> COPILOT_OTEL_ENABLED=<span class="tk-str">true</span>
+<span class="tk-kw">export</span> COPILOT_OTEL_EXPORTER_TYPE=<span class="tk-str">file</span>
+<span class="tk-kw">export</span> COPILOT_OTEL_FILE_EXPORTER_PATH=<span class="tk-str">"$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"</span>`}
+      </CodeBlock>
+      <p><strong>Windows (PowerShell)</strong> — {zh ? '添加到 PowerShell profile（运行 notepad $PROFILE 编辑）：' : 'Add to your PowerShell profile (run notepad $PROFILE to edit):'}</p>
+      <CodeBlock lang="PowerShell" copyText={'$env:COPILOT_OTEL_ENABLED = "true"\n$env:COPILOT_OTEL_EXPORTER_TYPE = "file"\n$env:COPILOT_OTEL_FILE_EXPORTER_PATH = "$env:USERPROFILE\\.copilot\\otel\\copilot-otel-$(Get-Date -Format yyyyMMdd).jsonl"'}>
+        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
+        {@html `<span class="tk-kw">$env:</span>COPILOT_OTEL_ENABLED = <span class="tk-str">"true"</span>
+<span class="tk-kw">$env:</span>COPILOT_OTEL_EXPORTER_TYPE = <span class="tk-str">"file"</span>
+<span class="tk-kw">$env:</span>COPILOT_OTEL_FILE_EXPORTER_PATH = <span class="tk-str">"$env:USERPROFILE\\.copilot\\otel\\copilot-otel-$(Get-Date -Format yyyyMMdd).jsonl"</span>`}
+      </CodeBlock>
+      <p><strong>Windows (CMD)</strong> — {zh ? '通过系统设置添加永久环境变量，或在 CMD 中运行：' : 'Add as permanent system environment variables, or run in CMD:'}</p>
+      <CodeBlock lang="CMD" copyText={'setx COPILOT_OTEL_ENABLED true\nsetx COPILOT_OTEL_EXPORTER_TYPE file\nsetx COPILOT_OTEL_FILE_EXPORTER_PATH "%USERPROFILE%\\.copilot\\otel\\copilot-otel-%date:~0,4%%date:~5,2%%date:~8,2%.jsonl"'}>
+        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
+        {@html `<span class="tk-kw">setx</span> COPILOT_OTEL_ENABLED <span class="tk-str">true</span>
+<span class="tk-kw">setx</span> COPILOT_OTEL_EXPORTER_TYPE <span class="tk-str">file</span>
+<span class="tk-kw">setx</span> COPILOT_OTEL_FILE_EXPORTER_PATH <span class="tk-str">"%USERPROFILE%\\.copilot\\otel\\copilot-otel-%date:~0,4%%date:~5,2%%date:~8,2%.jsonl"</span>`}
+      </CodeBlock>
+      <p>{zh
+        ? '设置后重启终端或 VS Code，Copilot 的 token 用量数据就会自动写入 JSONL 文件，aiusage 在下次 parse 时会自动发现并导入。'
+        : 'After setting these, restart your terminal or VS Code. Copilot token usage will be written to JSONL files automatically, and aiusage will discover and import them on the next parse.'
+      }</p>
     </section>
 
     <section id="settings-data">
@@ -876,7 +908,7 @@
       <DocsTable
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
-          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具' : 'Only parse specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor'],
+          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具' : 'Only parse specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, copilot'],
           ['<code>--progress</code>', zh ? '显示实时进度条（仅 TTY）' : 'Show real-time progress bar (TTY only)'],
         ]}
       />
