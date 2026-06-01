@@ -32,12 +32,13 @@
 
   function startEdit(m) {
     editingModel = m.model
-    editingCurrency = m.currency || 'USD'
+    const from = m.currency || 'USD'
+    editingCurrency = viewCurrency
     editValues = {
-      input: m.price?.input ?? 0,
-      output: m.price?.output ?? 0,
-      cacheRead: m.price?.cacheRead ?? 0,
-      cacheWrite: m.price?.cacheWrite ?? 0,
+      input: convertPrice(m.price?.input ?? 0, from, viewCurrency) ?? 0,
+      output: convertPrice(m.price?.output ?? 0, from, viewCurrency) ?? 0,
+      cacheRead: convertPrice(m.price?.cacheRead ?? 0, from, viewCurrency) ?? 0,
+      cacheWrite: convertPrice(m.price?.cacheWrite ?? 0, from, viewCurrency) ?? 0,
     }
   }
 
