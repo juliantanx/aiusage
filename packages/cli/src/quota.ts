@@ -125,7 +125,11 @@ function readClaudeCredentials(): ClaudeCredResult {
   // Try macOS Keychain first
   const keychainJson = readFromKeychain('Claude Code-credentials')
   if (keychainJson) {
-    return parseClaudeCredJson(keychainJson)
+    const keychainResult = parseClaudeCredJson(keychainJson)
+    if (keychainResult.status === 'valid' || keychainResult.status === 'expired') {
+      return keychainResult
+    }
+    // Keychain data unusable (parse_error / not_found) — fall through to file
   }
 
   // Fall back to ~/.claude/.credentials.json
@@ -191,7 +195,11 @@ function readCodexCredentials(): CodexCredResult {
   // Try macOS Keychain first
   const keychainJson = readFromKeychain('Codex Auth')
   if (keychainJson) {
-    return parseCodexCredJson(keychainJson)
+    const keychainResult = parseCodexCredJson(keychainJson)
+    if (keychainResult.status === 'valid' || keychainResult.status === 'expired') {
+      return keychainResult
+    }
+    // Keychain data unusable (parse_error / not_found) — fall through to file
   }
 
   // Fall back to ~/.codex/auth.json
