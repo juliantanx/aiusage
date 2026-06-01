@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
   import { fetchPricing, updatePricing, deletePricing } from '$lib/api.js'
-  import { recalcStatus } from '$lib/stores.js'
+  import { recalcStatus, displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let models = []
   let loading = true
@@ -11,6 +11,7 @@
   let editingCurrency = null
   let editValues = {}
   let doneTimer = null
+  let viewCurrency = $displayCurrency || 'USD'
 
   onDestroy(() => { if (doneTimer) clearTimeout(doneTimer) })
 
@@ -43,6 +44,17 @@
   function cancelEdit() { editingModel = null; editingCurrency = null; editValues = {} }
 
   function currencySymbol(c) { return c === 'CNY' ? '¥' : '$' }
+
+  function convertPrice(value, fromCurrency) {
+    if (value == null || fromCurrency === viewCurrency) return value
+    // rate is CNY→USD multiplier
+    return fromCurrency === 'CNY' ? value * $exchangeRate : value / $exchangeRate
+  }
+
+  function fmtPrice(value, fromCurrency) {
+    const converted = convertPrice(value, fromCurrency)
+    return converted != null ? `${currencySymbol(viewCurrency)}${fmt(converted)}` : '-'
+  }
 
   function markDone() {
     recalcStatus.set('done')
@@ -92,11 +104,17 @@
 
 <div class="header-row">
   <h1 class="page-title">{$t('pricing.title')}</h1>
-  {#if $recalcStatus === 'updating'}
-    <span class="toast updating">{$t('pricing.costsUpdating')}</span>
-  {:else if $recalcStatus === 'done'}
-    <span class="toast done">{$t('pricing.costsUpdated')}</span>
-  {/if}
+  <div class="header-right">
+    {#if $recalcStatus === 'updating'}
+      <span class="toast updating">{$t('pricing.costsUpdating')}</span>
+    {:else if $recalcStatus === 'done'}
+      <span class="toast done">{$t('pricing.costsUpdated')}</span>
+    {/if}
+    <div class="currency-toggle">
+      <button class="toggle-btn" class:active={viewCurrency === 'USD'} on:click={() => viewCurrency = 'USD'}>USD</button>
+      <button class="toggle-btn" class:active={viewCurrency === 'CNY'} on:click={() => viewCurrency = 'CNY'}>CNY</button>
+    </div>
+  </div>
 </div>
 
 {#if loading}
@@ -147,23 +165,23 @@
           <div class="price-row">
             <div class="price-block primary">
               <span class="price-label">{$t('pricing.input')}</span>
-              <span class="price-val">{m.price ? `${currencySymbol(m.currency)}${fmt(m.price.input)}` : '-'}</span>
+              <span class="price-val">{m.price ? fmtPrice(m.price.input, m.currency) : '-'}</span>
             </div>
             <span class="slash">/</span>
             <div class="price-block primary">
               <span class="price-label">{$t('pricing.output')}</span>
-              <span class="price-val">{m.price ? `${currencySymbol(m.currency)}${fmt(m.price.output)}` : '-'}</span>
+              <span class="price-val">{m.price ? fmtPrice(m.price.output, m.currency) : '-'}</span>
             </div>
           </div>
 
           <div class="price-row secondary">
             <div class="price-block">
               <span class="price-label">{$t('pricing.cacheRead')}</span>
-              <span class="price-val sm">{m.price?.cacheRead != null ? `${currencySymbol(m.currency)}${fmt(m.price.cacheRead)}` : '-'}</span>
+              <span class="price-val sm">{m.price?.cacheRead != null ? fmtPrice(m.price.cacheRead, m.currency) : '-'}</span>
             </div>
             <div class="price-block">
               <span class="price-label">{$t('pricing.cacheWrite')}</span>
-              <span class="price-val sm">{m.price?.cacheWrite != null ? `${currencySymbol(m.currency)}${fmt(m.price.cacheWrite)}` : '-'}</span>
+              <span class="price-val sm">{m.price?.cacheWrite != null ? fmtPrice(m.price.cacheWrite, m.currency) : '-'}</span>
             </div>
           </div>
 
@@ -200,6 +218,11 @@
     font-weight: 700;
     color: var(--text);
   }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
   .toast {
     font-family: var(--mono);
     font-size: 0.75rem;
@@ -207,6 +230,30 @@
   }
   .toast.updating { color: var(--text-muted); }
   .toast.done { color: var(--accent); }
+  .currency-toggle {
+    display: flex;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .toggle-btn {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .toggle-btn.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .toggle-btn:not(.active):hover {
+    color: var(--text);
+  }
 
   .grid {
     display: grid;
