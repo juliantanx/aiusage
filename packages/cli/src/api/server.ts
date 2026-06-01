@@ -10,6 +10,45 @@ import { getDefaultSourcePaths } from '../commands/parse.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 import { queryAllQuotas } from '../quota.js'
 
+function recalcCosts(db: Database.Database): number {
+  const BATCH_SIZE = 1000
+  let updated = 0
+  let lastId = ''
+  const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
+  while (true) {
+    const records = db.prepare(
+      'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
+    ).all(lastId, BATCH_SIZE) as any[]
+    if (records.length === 0) break
+    const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
+    const tx = db.transaction((batch: any[]) => {
+      for (const r of batch) {
+        if (r.cost_source === 'log') continue
+
+        const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
+        const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
+        const provider = model !== r.model ? inferProvider(model) : r.provider
+        const hasPrice = resolvePrice(model) != null
+        const cost = hasPrice ? calculateCost(model, {
+          inputTokens: r.input_tokens,
+          outputTokens: r.output_tokens,
+          cacheReadTokens: r.cache_read_tokens,
+          cacheWriteTokens: r.cache_write_tokens,
+          thinkingTokens: r.thinking_tokens,
+        }, exchangeRate) : 0
+        const costSource = hasPrice ? 'pricing' : 'unknown'
+
+        if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
+        updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)
+        updated++
+      }
+    })
+    tx(records)
+    lastId = records[records.length - 1].id
+  }
+  return updated
+}
+
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = '', weekStart: 0 | 1 = 1): { where: string; params: Record<string, unknown> } {
   const ts = prefix ? `${prefix}.ts` : 'ts'
 
@@ -874,7 +913,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             const cfg = loadConfig() ?? {}
             cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
             saveConfig(cfg)
-            json(res, { ok: true })
+            const recalculated = recalcCosts(db)
+            json(res, { ok: true, recalculated })
           } catch {
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
           }
@@ -893,48 +933,15 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             delete cfg.priceOverrides[model]
             saveConfig(cfg)
           }
-          json(res, { ok: true })
+          const recalculated = recalcCosts(db)
+          json(res, { ok: true, recalculated })
           return
         }
       }
 
       // ── /api/pricing/recalc ─────────────────────────────────────────
       if (url.pathname === '/api/pricing/recalc' && req.method === 'POST') {
-        const BATCH_SIZE = 1000
-        let updated = 0
-        let lastId = ''
-        const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
-        while (true) {
-          const records = db.prepare(
-            'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
-          ).all(lastId, BATCH_SIZE) as any[]
-          if (records.length === 0) break
-          const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
-          const tx = db.transaction((batch: any[]) => {
-            for (const r of batch) {
-              if (r.cost_source === 'log') continue
-
-              const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
-              const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
-              const provider = model !== r.model ? inferProvider(model) : r.provider
-              const hasPrice = resolvePrice(model) != null
-              const cost = hasPrice ? calculateCost(model, {
-                inputTokens: r.input_tokens,
-                outputTokens: r.output_tokens,
-                cacheReadTokens: r.cache_read_tokens,
-                cacheWriteTokens: r.cache_write_tokens,
-                thinkingTokens: r.thinking_tokens,
-              }, exchangeRate) : 0
-              const costSource = hasPrice ? 'pricing' : 'unknown'
-
-              if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
-              updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)
-              updated++
-            }
-          })
-          tx(records)
-          lastId = records[records.length - 1].id
-        }
+        const updated = recalcCosts(db)
         json(res, { updated })
         return
       }

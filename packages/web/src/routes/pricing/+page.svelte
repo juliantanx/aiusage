@@ -1,7 +1,8 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchPricing, updatePricing, deletePricing, recalcPricing } from '$lib/api.js'
+  import { fetchPricing, updatePricing, deletePricing } from '$lib/api.js'
+  import { recalcStatus } from '$lib/stores.js'
 
   let models = []
   let loading = true
@@ -9,7 +10,9 @@
   let editingModel = null
   let editingCurrency = null
   let editValues = {}
-  let recalcStatus = ''
+  let doneTimer = null
+
+  onDestroy(() => { if (doneTimer) clearTimeout(doneTimer) })
 
   onMount(loadData)
 
@@ -41,29 +44,37 @@
 
   function currencySymbol(c) { return c === 'CNY' ? '¥' : '$' }
 
+  function markDone() {
+    recalcStatus.set('done')
+    doneTimer = setTimeout(() => { recalcStatus.set('idle') }, 3000)
+  }
+
   async function saveEdit(name) {
     try {
-      await updatePricing(name, { ...editValues, currency: editingCurrency })
+      recalcStatus.set('updating')
+      const r = await updatePricing(name, { ...editValues, currency: editingCurrency })
       editingModel = null
       editingCurrency = null
       await loadData()
-    } catch (e) { alert(e.message) }
+      if (r.recalculated) markDone()
+      else recalcStatus.set('idle')
+    } catch (e) {
+      recalcStatus.set('idle')
+      alert(e.message)
+    }
   }
 
   async function resetModel(name) {
     try {
-      await deletePricing(name)
+      recalcStatus.set('updating')
+      const r = await deletePricing(name)
       await loadData()
-    } catch (e) { alert(e.message) }
-  }
-
-  async function handleRecalc() {
-    recalcStatus = '...'
-    try {
-      const r = await recalcPricing()
-      recalcStatus = `${$t('pricing.recalcDone')}: ${r.updated}`
-      setTimeout(() => { recalcStatus = '' }, 3000)
-    } catch (e) { recalcStatus = e.message }
+      if (r.recalculated) markDone()
+      else recalcStatus.set('idle')
+    } catch (e) {
+      recalcStatus.set('idle')
+      alert(e.message)
+    }
   }
 
   function fmt(n) {
@@ -81,10 +92,11 @@
 
 <div class="header-row">
   <h1 class="page-title">{$t('pricing.title')}</h1>
-  <button class="btn" on:click={handleRecalc}>
-    {$t('pricing.recalc')}
-    {#if recalcStatus}<span class="recalc-status">{recalcStatus}</span>{/if}
-  </button>
+  {#if $recalcStatus === 'updating'}
+    <span class="toast updating">{$t('pricing.costsUpdating')}</span>
+  {:else if $recalcStatus === 'done'}
+    <span class="toast done">{$t('pricing.costsUpdated')}</span>
+  {/if}
 </div>
 
 {#if loading}
@@ -188,20 +200,13 @@
     font-weight: 700;
     color: var(--text);
   }
-  .btn {
+  .toast {
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--accent);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--accent);
-    cursor: pointer;
-    transition: background 0.2s;
   }
-  .btn:hover { background: var(--accent-dim); }
-  .recalc-status { margin-left: 0.5rem; color: var(--accent); }
+  .toast.updating { color: var(--text-muted); }
+  .toast.done { color: var(--accent); }
 
   .grid {
     display: grid;
@@ -332,7 +337,7 @@
 
   .edit-fields {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
   }
   .edit-fields label {
