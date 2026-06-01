@@ -45,15 +45,14 @@
 
   function currencySymbol(c) { return c === 'CNY' ? '¥' : '$' }
 
-  function convertPrice(value, fromCurrency) {
-    if (value == null || fromCurrency === viewCurrency) return value
-    // rate is CNY→USD multiplier
+  function convertPrice(value, fromCurrency, toCurrency) {
+    if (value == null || fromCurrency === toCurrency) return value
     return fromCurrency === 'CNY' ? value * $exchangeRate : value / $exchangeRate
   }
 
-  function fmtPrice(value, fromCurrency) {
-    const converted = convertPrice(value, fromCurrency)
-    return converted != null ? `${currencySymbol(viewCurrency)}${fmt(converted)}` : '-'
+  function fmtPrice(value, fromCurrency, toCurrency) {
+    const converted = convertPrice(value, fromCurrency, toCurrency)
+    return converted != null ? `${currencySymbol(toCurrency)}${fmt(converted)}` : '-'
   }
 
   function markDone() {
@@ -165,23 +164,23 @@
           <div class="price-row">
             <div class="price-block primary">
               <span class="price-label">{$t('pricing.input')}</span>
-              <span class="price-val">{m.price ? fmtPrice(m.price.input, m.currency) : '-'}</span>
+              <span class="price-val">{m.price ? fmtPrice(m.price.input, m.currency, viewCurrency) : '-'}</span>
             </div>
             <span class="slash">/</span>
             <div class="price-block primary">
               <span class="price-label">{$t('pricing.output')}</span>
-              <span class="price-val">{m.price ? fmtPrice(m.price.output, m.currency) : '-'}</span>
+              <span class="price-val">{m.price ? fmtPrice(m.price.output, m.currency, viewCurrency) : '-'}</span>
             </div>
           </div>
 
           <div class="price-row secondary">
             <div class="price-block">
               <span class="price-label">{$t('pricing.cacheRead')}</span>
-              <span class="price-val sm">{m.price?.cacheRead != null ? fmtPrice(m.price.cacheRead, m.currency) : '-'}</span>
+              <span class="price-val sm">{m.price?.cacheRead != null ? fmtPrice(m.price.cacheRead, m.currency, viewCurrency) : '-'}</span>
             </div>
             <div class="price-block">
               <span class="price-label">{$t('pricing.cacheWrite')}</span>
-              <span class="price-val sm">{m.price?.cacheWrite != null ? fmtPrice(m.price.cacheWrite, m.currency) : '-'}</span>
+              <span class="price-val sm">{m.price?.cacheWrite != null ? fmtPrice(m.price.cacheWrite, m.currency, viewCurrency) : '-'}</span>
             </div>
           </div>
 
