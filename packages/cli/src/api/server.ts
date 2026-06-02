@@ -198,7 +198,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
     // Validate tool parameter early — same style as range validation
     const toolParam = url.searchParams.get('tool')
-    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor']
+    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor', 'kilocode']
     if (toolParam && !VALID_TOOLS.includes(toolParam)) {
       json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid tool' } }, 400)
       return
@@ -1101,6 +1101,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               qoder: rest.sources?.qoder ?? null,
               'qoder-db': rest.sources?.['qoder-db'] ?? null,
               cursor: rest.sources?.cursor ?? null,
+              'kilocode-db': rest.sources?.['kilocode-db'] ?? null,
             },
             sync: rest.sync ?? null,
             displayCurrency: rest.displayCurrency ?? 'USD',
@@ -1167,7 +1168,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (update.sources && typeof update.sources === 'object') {
               const src = update.sources as Record<string, unknown>
               const s: SourcesConfig = existing.sources ?? {}
-              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db', 'cursor'] as const) {
+              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db', 'cursor', 'kilocode-db'] as const) {
                 if (key in src) {
                   if (!src[key]) delete s[key]
                   else s[key] = String(src[key])

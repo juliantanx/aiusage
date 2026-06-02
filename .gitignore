@@ -6,5 +6,6 @@ packages/site/build/
 .DS_Store
 /.idea/
 /.worktrees/
+/.codegraph/
 aiusage-data/
 .svelte-kit/

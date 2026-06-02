@@ -13,6 +13,7 @@ import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
 import { runParseCursor } from './parse-cursor.js'
+import { runParseKilo } from './parse-kilo.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -174,6 +175,28 @@ export function defaultCursorDbPath(): string {
   // Linux: ~/.config/Cursor/User/globalStorage/state.vscdb
   const xdgConfigHome = process.env.XDG_CONFIG_HOME ?? join(home, '.config')
   return join(xdgConfigHome, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
+}
+
+export function defaultKiloDbPath(): string {
+  const home = homedir()
+  const plat = platform()
+  if (plat === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
+    const candidates = [
+      join(localAppData, 'kilo', 'kilo.db'),
+      join(home, '.local', 'share', 'kilo', 'kilo.db'),
+    ]
+    return candidates.find((path) => existsSync(path)) ?? candidates[0]
+  }
+  if (plat === 'darwin') {
+    const candidates = [
+      join(home, 'Library', 'Application Support', 'kilo', 'kilo.db'),
+      join(home, '.local', 'share', 'kilo', 'kilo.db'),
+    ]
+    return candidates.find((path) => existsSync(path)) ?? candidates[0]
+  }
+  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
+  return join(xdgDataHome, 'kilo', 'kilo.db')
 }
 
 function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
@@ -533,6 +556,53 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
+  // Kilo: SQLite database (new Kilo local storage)
+  const kiloDbPath = config?.sources?.['kilocode-db'] ?? defaultKiloDbPath()
+  if ((!filterTool || filterTool === 'kilocode') && existsSync(kiloDbPath)) {
+    try {
+      const kiloDb = new Database(kiloDbPath, { readonly: true })
+      try {
+        const result = runParseKilo(kiloDb, {
+          dbPath: kiloDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getOpenCodeCursor(),
+          exchangeRate,
+        })
+
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setOpenCodeCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+
+        // 输出KiloCode统计信息
+        if (result.records.length > 0) {
+          const inputTokens = result.records.reduce((sum, r) => sum + r.inputTokens, 0)
+          const outputTokens = result.records.reduce((sum, r) => sum + r.outputTokens, 0)
+          const cacheReadTokens = result.records.reduce((sum, r) => sum + r.cacheReadTokens, 0)
+          const cacheWriteTokens = result.records.reduce((sum, r) => sum + r.cacheWriteTokens, 0)
+          const thinkingTokens = result.records.reduce((sum, r) => sum + r.thinkingTokens, 0)
+          const totalCost = result.records.reduce((sum, r) => sum + r.cost, 0)
+          console.log(`[KiloCode] Parsed ${result.records.length} records`)
+          console.log(`[KiloCode] Input: ${inputTokens.toLocaleString()}, Output: ${outputTokens.toLocaleString()}, CacheRead: ${cacheReadTokens.toLocaleString()}, CacheWrite: ${cacheWriteTokens.toLocaleString()}, Thinking: ${thinkingTokens.toLocaleString()}`)
+          console.log(`[KiloCode] Total Cost: ${totalCost.toFixed(4)} USD`)
+        }
+
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'kilocode', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        kiloDb.close()
+      }
+    } catch (e) {
+      errors.push(`${kiloDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
   if (deviceInstanceId !== 'unknown') {
@@ -794,5 +864,6 @@ export function getDefaultSourcePaths(): Record<string, string> {
     'qoder':       join(home, '.qoder', 'logs', 'sessions'),
     'qoder-db':    defaultQoderDbPath(),
     'cursor':      defaultCursorDbPath(),
+    'kilocode-db': defaultKiloDbPath(),
   }
 }

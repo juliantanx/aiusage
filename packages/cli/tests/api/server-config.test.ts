@@ -56,7 +56,7 @@ describe('GET /api/config', () => {
     expect(data.device).toBeNull()
     expect(data.retentionDays).toBeNull()
     expect(data.credentialKeys).toEqual([])
-    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null, hermes: null, qoder: null, 'qoder-db': null, cursor: null })
+    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null, hermes: null, qoder: null, 'qoder-db': null, cursor: null, 'kilocode-db': null })
     expect(data.sync).toBeNull()
   })
 
@@ -79,6 +79,7 @@ describe('GET /api/config', () => {
     expect(data.sync.repo).toBe('user/repo')
     expect(data.sources['claude-code']).toBe('/custom/path')
     expect(data.sources.codex).toBeNull()
+    expect(data.sources['kilocode-db']).toBeNull()
   })
 })
 

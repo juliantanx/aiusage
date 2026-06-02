@@ -2,7 +2,7 @@
   import { selectedTool, setTool } from '../stores.js'
   import { t } from '../i18n.js'
 
-  const tools = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor']
+  const tools = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor', 'kilocode']
 
   function handleChange(e) {
     setTool(e.target.value)

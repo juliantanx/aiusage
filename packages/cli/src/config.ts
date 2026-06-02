@@ -36,8 +36,12 @@ export interface SourcesConfig {
   'hermes'?: string
   /** Custom path to Qoder .qoder root or session logs dir (default: platform-specific logs/sessions candidates) */
   'qoder'?: string
+  /** Custom path to Qoder local.db file (default: platform-specific) */
+  'qoder-db'?: string
   /** Custom path to Cursor state.vscdb (default: platform-specific globalStorage path) */
   'cursor'?: string
+  /** Custom path to Kilo local SQLite db (default: platform-specific) */
+  'kilocode-db'?: string
 }
 
 export interface Config {

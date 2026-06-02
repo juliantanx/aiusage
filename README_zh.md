@@ -2,7 +2,7 @@
 
 **官网：[aiusage.jtanx.com](https://aiusage.jtanx.com)**
 
-追踪 **7 款 AI 编程工具**的 token 用量、费用和会话 — 本地优先，无需注册账号。
+追踪 **8 款 AI 编程工具**的 token 用量、费用和会话 — 本地优先，无需注册账号。
 
 [![npm version](https://img.shields.io/npm/v/@juliantanx/aiusage)](https://www.npmjs.com/package/@juliantanx/aiusage)
 [![CI](https://github.com/juliantanx/aiusage/actions/workflows/test.yml/badge.svg)](https://github.com/juliantanx/aiusage/actions/workflows/test.yml)
@@ -103,6 +103,7 @@ pnpm rebuild:sqlite
 | Hermes | ✅ |
 | Qoder | ✅ |
 | OpenClaw | ✅ |
+| KiloCode | ✅ |
 
 
 ## CLI 命令参考
