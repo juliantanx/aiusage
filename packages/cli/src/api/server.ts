@@ -511,55 +511,97 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool)
 
-        let total: number
+        let totalTokensAcrossModels: number
         let rows: any[]
 
         if (df.useUnion) {
           const unionSql = `
-            SELECT model, provider, COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            SELECT model, provider,
+                   COUNT(*) AS callCount,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY model, provider
             UNION ALL
-            SELECT model, provider, COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            SELECT model, provider,
+                   COUNT(*) AS callCount,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
             GROUP BY model, provider
           `
           const mergedRows = db.prepare(`
-            SELECT model, provider, SUM(callCount) AS callCount, SUM(totalTokens) AS totalTokens
+            SELECT model, provider,
+                   SUM(callCount) AS callCount,
+                   SUM(inputTokens) AS inputTokens,
+                   SUM(outputTokens) AS outputTokens,
+                   SUM(cacheReadTokens) AS cacheReadTokens,
+                   SUM(cacheWriteTokens) AS cacheWriteTokens,
+                   SUM(thinkingTokens) AS thinkingTokens,
+                   SUM(totalTokens) AS totalTokens,
+                   SUM(totalCost) AS totalCost
             FROM (${unionSql})
             WHERE model != 'unknown'
-            GROUP BY model, provider ORDER BY callCount DESC
+            GROUP BY model, provider ORDER BY totalTokens DESC
           `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
-          total = mergedRows.reduce((s, r) => s + r.callCount, 0) || 1
+          totalTokensAcrossModels = mergedRows.reduce((sum, row) => sum + row.totalTokens, 0)
           rows = mergedRows
         } else if (device && device !== options?.currentDeviceInstanceId) {
           rows = db.prepare(`
             SELECT model, provider,
                    COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM synced_records WHERE 1=1 AND model != 'unknown' ${df.where} ${dr.where} ${tf.where}
-            GROUP BY model, provider ORDER BY callCount DESC
+            GROUP BY model, provider ORDER BY totalTokens DESC
           `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
-          total = rows.reduce((s, r) => s + r.callCount, 0) || 1
+          totalTokensAcrossModels = rows.reduce((sum, row) => sum + row.totalTokens, 0)
         } else {
           rows = db.prepare(`
             SELECT model, provider,
                    COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM records WHERE 1=1 AND model != 'unknown' ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-            GROUP BY model, provider ORDER BY callCount DESC
+            GROUP BY model, provider ORDER BY totalTokens DESC
           `).all({ ...dr.params, ...tf.params }) as any[]
-          total = rows.reduce((s, r) => s + r.callCount, 0) || 1
+          totalTokensAcrossModels = rows.reduce((sum, row) => sum + row.totalTokens, 0)
         }
 
         const models = rows.map(r => ({
           model: r.model,
           provider: r.provider,
           callCount: r.callCount,
+          inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens,
+          cacheReadTokens: r.cacheReadTokens,
+          cacheWriteTokens: r.cacheWriteTokens,
+          thinkingTokens: r.thinkingTokens,
           totalTokens: r.totalTokens,
-          percentage: Math.round((r.callCount / total) * 1000) / 10,
+          totalCost: r.totalCost,
+          percentage: totalTokensAcrossModels > 0
+            ? Math.round((r.totalTokens / totalTokensAcrossModels) * 1000) / 10
+            : 0,
         }))
 
         json(res, { models })
