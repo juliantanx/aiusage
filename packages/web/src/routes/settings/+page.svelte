@@ -3,13 +3,14 @@
   import { t } from '$lib/i18n.js'
   import { fetchConfig, saveConfig, fetchCredential, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
+  import { SOURCE_KEYS, SOURCE_LABELS } from '$lib/constants.js'
 
   let loading = true
   let loadError = null
 
   // Form data — all strings for simplicity, coerced on save
   let general = { device: '', weekStart: 1, dashboardPollInterval: '', parseInterval: '' }
-  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '', 'qoder-db': '', cursor: '', 'kilocode-db': '' }
+  let sources = Object.fromEntries(SOURCE_KEYS.map(k => [k, '']))
   let currentPlatform = ''
   let defaultPaths = {}
   let currentHostname = ''
@@ -430,9 +431,9 @@
         {/if}
       </div>
       <div class="fields">
-        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder (sessions dir)'], ['qoder-db', 'Qoder (local.db)'], ['cursor', 'Cursor'], ['kilocode-db', 'Kilo (kilo.db)']] as [key, label]}
+        {#each SOURCE_KEYS as key}
           <div class="field full">
-            <label class="field-label" for="field-source-{key}">{label}</label>
+            <label class="field-label" for="field-source-{key}">{SOURCE_LABELS[key]}</label>
             <div class="field-hint">{$t('settings.sourcePath')}</div>
             <input id="field-source-{key}" type="text" bind:value={sources[key]} class="field-input mono" placeholder={defaultPaths[key] ?? ''} />
           </div>

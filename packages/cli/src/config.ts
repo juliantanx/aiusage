@@ -23,6 +23,8 @@ export interface SyncConfig {
   credentialRef?: string
 }
 
+export const SOURCE_KEYS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db', 'cursor', 'kilocode-db', 'copilot'] as const
+
 export interface SourcesConfig {
   /** Custom path to Claude Code projects dir (default: ~/.claude/projects) */
   'claude-code'?: string
@@ -42,6 +44,8 @@ export interface SourcesConfig {
   'cursor'?: string
   /** Custom path to Kilo local SQLite db (default: platform-specific) */
   'kilocode-db'?: string
+  /** Custom path to Copilot OTEL dir (default: ~/.copilot/otel) */
+  'copilot'?: string
 }
 
 export interface Config {

@@ -9,3 +9,4 @@ packages/site/build/
 /.codegraph/
 aiusage-data/
 .svelte-kit/
+packages/site/.env

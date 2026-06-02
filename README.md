@@ -104,6 +104,7 @@ Your AI coding tools each log usage separately — different formats, different 
 | Qoder | ✅ |
 | OpenClaw | ✅ |
 | KiloCode | ✅ |
+| Copilot | ✅ |
 
 
 ## CLI Reference
@@ -118,7 +119,7 @@ Import newly appended local session data from discovered source paths.
 
 | Option | Description |
 |--------|-------------|
-| `--tool <tool>` | Only parse a specific tool: `claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder`, `cursor`, `kilocode` |
+| `--tool <tool>` | Only parse a specific tool: `claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder`, `cursor`, `kilocode`, `copilot` |
 | `--progress` | Show real-time progress bar on stderr (TTY only, silent in pipes/CI) |
 
 ```bash
@@ -147,7 +148,7 @@ Print a usage summary in the terminal.
 | Option | Description |
 |--------|-------------|
 | `--device <id>` | Filter by device instance ID |
-| `--tool <tool>` | Filter by tool type (`claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder`, `cursor`) |
+| `--tool <tool>` | Filter by tool type (`claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder`, `cursor`, `copilot`) |
 
 ```bash
 aiusage summary                        # All-time summary
@@ -189,7 +190,7 @@ aiusage clean --before 90d --yes # Delete records older than 90 days, skip confi
 
 ### `aiusage reset`
 
-Delete all parsed records, tool calls, synced data, and the parse watermark. Source log files (`~/.claude`, `~/.codex`, etc.) are **not** affected. Use this to re-import everything from scratch.
+Delete all parsed records, tool calls, synced data, and the parse watermark. Source log files (`~/.claude`, `~/.codex`, `~/.copilot/otel`, etc.) are **not** affected. Use this to re-import everything from scratch, but note that history can only be rebuilt from source data that still exists; if an AI tool has already cleaned its logs or local database rows, totals may decrease after reset.
 
 | Option | Description |
 |--------|-------------|
@@ -281,7 +282,7 @@ For single-machine usage, Quick Start is enough.
 
 ### Multi-Machine Sync
 
-Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.
+Use this to aggregate token usage from multiple machines into one dashboard. Works with Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, and Copilot.
 
 **Architecture:**
 
@@ -306,7 +307,7 @@ Machine C ──┘
 
 **Step 2 — Install and configure on each machine**
 
-On every machine that uses Claude Code, Codex, OpenClaw, OpenCode, Hermes, or Qoder:
+On every machine that uses Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, or Copilot:
 
 ```bash
 # Install aiusage CLI
@@ -487,6 +488,7 @@ docker build -t aiusage .
 | Qoder (SQLite) | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | `~/.local/share/Qoder/SharedClientCache/cache/db/local.db` | `%LOCALAPPDATA%\Qoder\SharedClientCache\cache\db\local.db` |
 | Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | `~/.config/Cursor/User/globalStorage/state.vscdb` | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
 | KiloCode | `~/Library/Application Support/kilo/kilo.db` | `~/.local/share/kilo/kilo.db` | `%LOCALAPPDATA%\kilo\kilo.db` |
+| Copilot | `~/.copilot/otel/` | `~/.copilot/otel/` | `%USERPROFILE%\.copilot\otel\` |
 
 Discovery behavior:
 
@@ -499,6 +501,7 @@ Discovery behavior:
 - **Qoder (SQLite)** — reads the `local.db` SQLite database directly (`SharedClientCache/cache/db/local.db`) and imports assistant messages from the `chat_message` table, joined with `chat_record` for model information. This is the primary source on macOS and is tried alongside the sessions directory.
 - **Cursor** — reads Cursor's `state.vscdb` SQLite database directly and imports composer conversations with token usage data.
 - **KiloCode** — reads the `kilo.db` SQLite database directly and imports assistant messages from the `message` table with token usage data. Supports input, output, cache read/write, and thinking tokens.
+- **Copilot** — scans `~/.copilot/otel/*.jsonl` for OTEL JSONL files exported by Copilot CLI (v1.0.4+). Also checks the `$COPILOT_OTEL_FILE_EXPORTER_PATH` env var. To enable OTEL export, set `COPILOT_OTEL_ENABLED=true`, `COPILOT_OTEL_EXPORTER_TYPE=file`, and `COPILOT_OTEL_FILE_EXPORTER_PATH=~/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl` in your shell profile.
 
 > On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
 
@@ -519,7 +522,8 @@ If you installed a tool to a non-default location, override the paths in the **S
     "qoder": "/custom/path/.qoder/logs/sessions",
     "qoder-db": "/custom/path/local.db",
     "cursor": "/custom/path/state.vscdb",
-    "kilocode-db": "/custom/path/kilo.db"
+    "kilocode-db": "/custom/path/kilo.db",
+    "copilot": "/custom/path/.copilot/otel"
   }
 }
 ```
@@ -582,7 +586,7 @@ No. By default, you run `aiusage parse` manually. You can automate parsing and s
 
 ### Which assistants are supported?
 
-aiusage currently supports Claude Code, Codex, OpenClaw, OpenCode, Hermes, and Qoder.
+aiusage currently supports Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, and Copilot.
 
 ### Can I inspect the raw database myself?
 

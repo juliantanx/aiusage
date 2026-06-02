@@ -258,6 +258,23 @@ function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolP
     results.push({ tool: 'qoder', paths: qoderPaths })
   }
 
+  // GitHub Copilot: OTEL JSONL files from ~/.copilot/otel/*.jsonl
+  // Requires COPILOT_OTEL_ENABLED=true + COPILOT_OTEL_EXPORTER_TYPE=file (Copilot CLI v1.0.4+)
+  const copilotOtelDir = sources?.['copilot'] ?? join(home, '.copilot', 'otel')
+  const copilotPaths: string[] = []
+  if (existsSync(copilotOtelDir)) {
+    copilotPaths.push(...findJsonlFiles(copilotOtelDir))
+  }
+  // Also check $COPILOT_OTEL_FILE_EXPORTER_PATH
+  const envPath = process.env.COPILOT_OTEL_FILE_EXPORTER_PATH
+  if (envPath && existsSync(envPath) && !copilotPaths.includes(envPath)) {
+    copilotPaths.push(envPath)
+  }
+  const uniqueCopilotPaths = unique(copilotPaths)
+  if (uniqueCopilotPaths.length > 0) {
+    results.push({ tool: 'copilot', paths: uniqueCopilotPaths })
+  }
+
   return results
 }
 
@@ -286,6 +303,11 @@ function extractSessionId(filePath: string, tool: Tool): string {
     if (segmentsIndex > 0) return parts[segmentsIndex - 1]
     const filename = parts[parts.length - 1] ?? ''
     return filename.replace('.jsonl', '') || 'unknown'
+  }
+  if (tool === 'copilot') {
+    // OTEL: ~/.copilot/otel/copilot-otel-20250601.jsonl → filename
+    const parts = filePath.split('/')
+    return (parts.pop() ?? '').replace('.jsonl', '')
   }
   return 'unknown'
 }
@@ -394,9 +416,13 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           byteOffset += Buffer.byteLength(line, 'utf-8') + 1
         }
 
-        // Handle finalize (orphan tool calls for Codex)
+        // Handle finalize (orphan tool calls for Codex, deduped fallback records for Copilot OTEL, etc.)
         const orphanResults = aggregator.finalize()
         for (const result of orphanResults) {
+          if (result.record) {
+            insertRecord(db, result.record)
+            parsedCount++
+          }
           for (const tc of result.toolCalls) {
             insertToolCall(db, tc)
             toolCallCount++
@@ -865,5 +891,6 @@ export function getDefaultSourcePaths(): Record<string, string> {
     'qoder-db':    defaultQoderDbPath(),
     'cursor':      defaultCursorDbPath(),
     'kilocode-db': defaultKiloDbPath(),
+    'copilot':     join(home, '.copilot', 'otel'),
   }
 }

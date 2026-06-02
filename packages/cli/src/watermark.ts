@@ -51,6 +51,7 @@ function defaultFileData(): FileWatermarkData {
     'hermes': {},
     'qoder': {},
     'cursor': {},
+    'copilot': {},
   }
 }
 
