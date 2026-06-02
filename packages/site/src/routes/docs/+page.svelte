@@ -730,39 +730,30 @@
         <li><strong>Hermes</strong> — <code>~/.hermes/state.db</code></li>
         <li><strong>Qoder</strong> — <code>~/.qoder/logs/sessions</code> + {zh ? '平台相关的' : 'platform-specific'} <code>local.db</code></li>
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
-        <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（OTEL JSONL 文件）' : '(OTEL JSONL files)'}</li>
+        <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（需配置 OTEL 环境变量）' : '(requires OTEL env vars)'}</li>
       </ul>
       <Callout type="info">
         {zh
-          ? 'GitHub Copilot 不会默认导出用量数据，需要手动启用 OpenTelemetry 文件导出。根据你的操作系统，将以下环境变量添加到对应的配置文件中：'
-          : 'GitHub Copilot does not export usage data by default. You need to enable OpenTelemetry file export by adding the following environment variables to your system:'
+          ? 'Copilot CLI（v1.0.4+）支持通过 OpenTelemetry 导出用量数据。在 shell profile 中添加以下环境变量即可启用：'
+          : 'Copilot CLI (v1.0.4+) supports exporting usage data via OpenTelemetry. Add the following env vars to your shell profile to enable it:'
         }
       </Callout>
-      <p><strong>macOS / Linux</strong> — {zh ? '添加到 shell profile（如 ~/.zshrc 或 ~/.bashrc）：' : 'Add to your shell profile (e.g. ~/.zshrc or ~/.bashrc):'}</p>
-      <CodeBlock lang="Shell" copyText={'export COPILOT_OTEL_ENABLED=true\nexport COPILOT_OTEL_EXPORTER_TYPE=file\nexport COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"'}>
-        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
-        {@html `<span class="tk-kw">export</span> COPILOT_OTEL_ENABLED=<span class="tk-str">true</span>
-<span class="tk-kw">export</span> COPILOT_OTEL_EXPORTER_TYPE=<span class="tk-str">file</span>
-<span class="tk-kw">export</span> COPILOT_OTEL_FILE_EXPORTER_PATH=<span class="tk-str">"$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"</span>`}
-      </CodeBlock>
-      <p><strong>Windows (PowerShell)</strong> — {zh ? '添加到 PowerShell profile（运行 notepad $PROFILE 编辑）：' : 'Add to your PowerShell profile (run notepad $PROFILE to edit):'}</p>
-      <CodeBlock lang="PowerShell" copyText={'$env:COPILOT_OTEL_ENABLED = "true"\n$env:COPILOT_OTEL_EXPORTER_TYPE = "file"\n$env:COPILOT_OTEL_FILE_EXPORTER_PATH = "$env:USERPROFILE\\.copilot\\otel\\copilot-otel-$(Get-Date -Format yyyyMMdd).jsonl"'}>
-        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
-        {@html `<span class="tk-kw">$env:</span>COPILOT_OTEL_ENABLED = <span class="tk-str">"true"</span>
-<span class="tk-kw">$env:</span>COPILOT_OTEL_EXPORTER_TYPE = <span class="tk-str">"file"</span>
-<span class="tk-kw">$env:</span>COPILOT_OTEL_FILE_EXPORTER_PATH = <span class="tk-str">"$env:USERPROFILE\\.copilot\\otel\\copilot-otel-$(Get-Date -Format yyyyMMdd).jsonl"</span>`}
-      </CodeBlock>
-      <p><strong>Windows (CMD)</strong> — {zh ? '通过系统设置添加永久环境变量，或在 CMD 中运行：' : 'Add as permanent system environment variables, or run in CMD:'}</p>
-      <CodeBlock lang="CMD" copyText={'setx COPILOT_OTEL_ENABLED true\nsetx COPILOT_OTEL_EXPORTER_TYPE file\nsetx COPILOT_OTEL_FILE_EXPORTER_PATH "%USERPROFILE%\\.copilot\\otel\\copilot-otel-%date:~0,4%%date:~5,2%%date:~8,2%.jsonl"'}>
-        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
-        {@html `<span class="tk-kw">setx</span> COPILOT_OTEL_ENABLED <span class="tk-str">true</span>
-<span class="tk-kw">setx</span> COPILOT_OTEL_EXPORTER_TYPE <span class="tk-str">file</span>
-<span class="tk-kw">setx</span> COPILOT_OTEL_FILE_EXPORTER_PATH <span class="tk-str">"%USERPROFILE%\\.copilot\\otel\\copilot-otel-%date:~0,4%%date:~5,2%%date:~8,2%.jsonl"</span>`}
-      </CodeBlock>
-      <p>{zh
-        ? '设置后重启终端或 VS Code，Copilot 的 token 用量数据就会自动写入 JSONL 文件，aiusage 在下次 parse 时会自动发现并导入。'
-        : 'After setting these, restart your terminal or VS Code. Copilot token usage will be written to JSONL files automatically, and aiusage will discover and import them on the next parse.'
-      }</p>
+      <CodeBlock lang="bash" code={`export COPILOT_OTEL_ENABLED=true
+export COPILOT_OTEL_EXPORTER_TYPE=file
+mkdir -p "$HOME/.copilot/otel"
+export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"`} />
+      <Callout type="info">
+        {zh
+          ? 'aiusage 从 OTEL JSONL 文件中提取 GenAI Semantic Conventions 标准的 token 用量（input_tokens、output_tokens、cache_read、cache_write、reasoning_tokens）。Copilot 用量统计需要 Copilot CLI v1.0.4 或更高版本，并且 OTEL 文件会写入你配置的本地路径（默认 ~/.copilot/otel）。'
+          : 'aiusage extracts token usage from OTEL JSONL files following GenAI Semantic Conventions (input_tokens, output_tokens, cache_read, cache_write, reasoning_tokens). Copilot usage tracking requires Copilot CLI v1.0.4 or later, and OTEL files are written to your configured local path (default: ~/.copilot/otel).'
+        }
+      </Callout>
+      <Callout type="warning">
+        {zh
+          ? 'aiusage 会持久化已解析的记录和解析水位线，但不会备份各 AI 工具的原始日志。执行 reset 或 clean 删除 aiusage 数据后，历史用量只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，总 token 可能会变少。'
+          : 'aiusage persists parsed records and parse watermarks, but it does not back up raw logs from each AI tool. After reset or clean deletes aiusage data, history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease.'
+        }
+      </Callout>
     </section>
 
     <section id="settings-data">
@@ -972,8 +963,8 @@
     <section id="cli-reset">
       <h3><code>reset</code> — {zh ? '重置所有数据' : 'Reset All Data'}</h3>
       <p>{zh
-        ? '删除所有已解析的记录、工具调用、同步数据和水位线。原始日志文件不受影响。'
-        : 'Delete all parsed records, tool calls, synced data, and the parse watermark. Source log files are not affected.'
+        ? '删除所有已解析的记录、工具调用、同步数据和水位线。原始日志文件不受影响，但历史只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，reset 后总 token 可能会变少。'
+        : 'Delete all parsed records, tool calls, synced data, and the parse watermark. Source log files are not affected, but history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease after reset.'
       }</p>
       <DocsTable
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}

@@ -23,6 +23,8 @@ export interface SyncConfig {
   credentialRef?: string
 }
 
+export const SOURCE_KEYS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db', 'cursor', 'kilocode-db', 'copilot'] as const
+
 export interface SourcesConfig {
   /** Custom path to Claude Code projects dir (default: ~/.claude/projects) */
   'claude-code'?: string

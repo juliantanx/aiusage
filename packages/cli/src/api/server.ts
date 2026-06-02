@@ -2,8 +2,8 @@ import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
-import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, type PriceEntry } from '@aiusage/core'
-import { loadConfig, saveConfig, loadCredential } from '../config.js'
+import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
+import { loadConfig, saveConfig, loadCredential, SOURCE_KEYS } from '../config.js'
 import type { Config, SourcesConfig, SyncConfig } from '../config.js'
 import { extractProject, extractProjectFromCwd } from './project-extraction.js'
 import { getDefaultSourcePaths } from '../commands/parse.js'
@@ -198,8 +198,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
     // Validate tool parameter early — same style as range validation
     const toolParam = url.searchParams.get('tool')
-    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor', 'kilocode']
-    if (toolParam && !VALID_TOOLS.includes(toolParam)) {
+    if (toolParam && !(TOOLS as readonly string[]).includes(toolParam)) {
       json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid tool' } }, 400)
       return
     }
@@ -1092,17 +1091,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             dashboardPollInterval: rest.dashboardPollInterval ?? null,
             parseInterval: rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
-            sources: {
-              'claude-code': rest.sources?.['claude-code'] ?? null,
-              codex: rest.sources?.codex ?? null,
-              openclaw: rest.sources?.openclaw ?? null,
-              opencode: rest.sources?.opencode ?? null,
-              hermes: rest.sources?.hermes ?? null,
-              qoder: rest.sources?.qoder ?? null,
-              'qoder-db': rest.sources?.['qoder-db'] ?? null,
-              cursor: rest.sources?.cursor ?? null,
-              'kilocode-db': rest.sources?.['kilocode-db'] ?? null,
-            },
+            sources: Object.fromEntries(SOURCE_KEYS.map(k => [k, rest.sources?.[k] ?? null])),
             sync: rest.sync ?? null,
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
@@ -1168,7 +1157,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (update.sources && typeof update.sources === 'object') {
               const src = update.sources as Record<string, unknown>
               const s: SourcesConfig = existing.sources ?? {}
-              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db', 'cursor', 'kilocode-db'] as const) {
+              for (const key of SOURCE_KEYS) {
                 if (key in src) {
                   if (!src[key]) delete s[key]
                   else s[key] = String(src[key])

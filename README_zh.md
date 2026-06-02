@@ -190,7 +190,7 @@ aiusage clean --before 90d --yes      # 删除 90 天前的记录，跳过确认
 
 ### `aiusage reset`
 
-删除所有已解析的记录、工具调用、同步数据和 parse 水位线。原始日志文件（`~/.claude`、`~/.codex` 等）**不受影响**。用于从头重新导入所有数据。
+删除所有已解析的记录、工具调用、同步数据和 parse 水位线。原始日志文件（`~/.claude`、`~/.codex`、`~/.copilot/otel` 等）**不受影响**。用于从头重新导入所有数据，但历史只能从仍然存在的原始数据源重建；如果某个 AI 工具已经清理了日志或本地数据库记录，reset 后总量可能会变少。
 
 | 选项 | 说明 |
 |------|------|
@@ -282,7 +282,7 @@ aiusage serve
 
 ### 多机同步
 
-适合把多台机器上的 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder 使用数据聚合到同一个仪表盘中。
+适合把多台机器上的 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot 使用数据聚合到同一个仪表盘中。
 
 **架构：**
 
@@ -307,7 +307,7 @@ aiusage serve
 
 **第二步 — 在每台机器上安装并配置**
 
-在每一台使用 Claude Code、Codex、OpenClaw、OpenCode、Hermes 或 Qoder 的机器上执行：
+在每一台使用 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor 或 Copilot 的机器上执行：
 
 ```bash
 # 安装 aiusage CLI
@@ -499,7 +499,7 @@ docker build -t aiusage .
 - **Qoder（会话日志）** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
 - **Qoder（SQLite）** — 直接读取 `local.db` SQLite 数据库（`SharedClientCache/cache/db/local.db`），从 `chat_message` 表导入助手消息，并关联 `chat_record` 获取模型信息。这是 macOS 上的主要数据来源，与会话日志目录并行尝试。
 - **Cursor** — 直接读取 Cursor 的 `state.vscdb` SQLite 数据库，导入 composer 会话的 token 用量数据。
-- **Copilot** — 扫描 `~/.copilot/otel/` 下由 Copilot CLI 和 VS Code Copilot Chat 扩展导出的 OTEL JSONL 文件，同时检查 `$COPILOT_OTEL_FILE_EXPORTER_PATH` 环境变量。需要在 shell profile 中设置以下环境变量来启用 OTEL 导出：`COPILOT_OTEL_ENABLED=true`、`COPILOT_OTEL_EXPORTER_TYPE=file`、`COPILOT_OTEL_FILE_EXPORTER_PATH=~/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl`。
+- **Copilot** — 扫描 `~/.copilot/otel/*.jsonl` 下由 Copilot CLI（v1.0.4+）导出的 OTEL JSONL 文件，同时检查 `$COPILOT_OTEL_FILE_EXPORTER_PATH` 环境变量。需要在 shell profile 中设置以下环境变量来启用 OTEL 导出：`COPILOT_OTEL_ENABLED=true`、`COPILOT_OTEL_EXPORTER_TYPE=file`、`COPILOT_OTEL_FILE_EXPORTER_PATH=~/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl`。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 
@@ -583,7 +583,7 @@ packages/
 
 ### 目前支持哪些助手？
 
-目前支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes 和 Qoder。
+目前支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor 和 Copilot。
 
 ### 我可以直接查看原始数据库吗？
 

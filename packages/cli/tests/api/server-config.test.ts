@@ -4,16 +4,20 @@ import http from 'node:http'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
 
-vi.mock('../../src/config.js', () => ({
-  loadConfig: vi.fn(() => null),
-  saveConfig: vi.fn(),
-  AIUSAGE_DIR: '/tmp/test-aiusage',
-  CONFIG_PATH: '/tmp/test-aiusage/config.json',
-  buildConsentConfig: vi.fn(() => null),
-  loadCredential: vi.fn(() => null),
-  saveCredential: vi.fn(),
-  SYNC_FIELDS: [],
-}))
+vi.mock('../../src/config.js', async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>
+  return {
+    ...actual,
+    loadConfig: vi.fn(() => null),
+    saveConfig: vi.fn(),
+    AIUSAGE_DIR: '/tmp/test-aiusage',
+    CONFIG_PATH: '/tmp/test-aiusage/config.json',
+    buildConsentConfig: vi.fn(() => null),
+    loadCredential: vi.fn(() => null),
+    saveCredential: vi.fn(),
+    SYNC_FIELDS: [],
+  }
+})
 
 import { createApiServer } from '../../src/api/server.js'
 import { loadConfig, saveConfig, loadCredential } from '../../src/config.js'
@@ -56,7 +60,7 @@ describe('GET /api/config', () => {
     expect(data.device).toBeNull()
     expect(data.retentionDays).toBeNull()
     expect(data.credentialKeys).toEqual([])
-    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null, hermes: null, qoder: null, 'qoder-db': null, cursor: null, 'kilocode-db': null })
+    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null, hermes: null, qoder: null, 'qoder-db': null, cursor: null, 'kilocode-db': null, copilot: null })
     expect(data.sync).toBeNull()
   })
 
