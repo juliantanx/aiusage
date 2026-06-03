@@ -3,17 +3,24 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+let mockHome = tmpdir()
+let mockPlatform: NodeJS.Platform = 'linux'
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<typeof import('node:os')>('node:os')
+  return {
+    ...actual,
+    homedir: () => mockHome,
+    platform: () => mockPlatform,
+  }
+})
+
+vi.mock('../src/config.js', () => ({ loadConfig: () => null }))
+
 async function loadDiscovery(options: { home: string; platform?: NodeJS.Platform }) {
+  mockHome = options.home
+  mockPlatform = options.platform ?? 'linux'
   vi.resetModules()
-  vi.doMock('node:os', async () => {
-    const actual = await vi.importActual<typeof import('node:os')>('node:os')
-    return {
-      ...actual,
-      homedir: () => options.home,
-      platform: () => options.platform ?? 'linux',
-    }
-  })
-  vi.doMock('../src/config.js', () => ({ loadConfig: () => null }))
   return import('../src/discovery.js')
 }
 
