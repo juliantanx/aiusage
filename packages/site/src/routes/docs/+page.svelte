@@ -731,6 +731,20 @@
         <li><strong>Qoder</strong> — <code>~/.qoder/logs/sessions</code> + {zh ? '平台相关的' : 'platform-specific'} <code>local.db</code></li>
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
         <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（需配置 OTEL 环境变量）' : '(requires OTEL env vars)'}</li>
+        <li><strong>KiloCode</strong> — {zh ? 'IDE 扩展目录' : 'IDE extension directory'} + {zh ? '平台相关的' : 'platform-specific'} SQLite DB</li>
+        <li><strong>Gemini CLI</strong> — <code>~/.gemini/tmp</code></li>
+        <li><strong>Kimi Code</strong> — <code>~/.kimi-code/sessions</code></li>
+        <li><strong>CodeBuddy</strong> — <code>~/.codebuddy/projects</code></li>
+        <li><strong>Kiro</strong> — {zh ? 'IDE SQLite + CLI JSON/JSONL 会话文件' : 'IDE SQLite + CLI JSON/JSONL session files'}</li>
+        <li><strong>Grok Build</strong> — <code>~/.grok/sessions</code></li>
+        <li><strong>Antigravity</strong> — <code>~/.gemini/tmp/antigravity</code></li>
+        <li><strong>Roo Code</strong> — {zh ? 'IDE 扩展' : 'IDE extension'} <code>ui_messages.json</code></li>
+        <li><strong>Zed</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>threads.db</code></li>
+        <li><strong>Goose</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>sessions.db</code></li>
+        <li><strong>oh-my-pi</strong> — <code>~/.omp/agent/sessions</code></li>
+        <li><strong>pi</strong> — <code>~/.pi/agent/sessions</code></li>
+        <li><strong>Craft</strong> — <code>~/.craft-agent</code></li>
+        <li><strong>Droid</strong> — <code>~/.droid/sessions</code></li>
       </ul>
       <Callout type="info">
         {zh
