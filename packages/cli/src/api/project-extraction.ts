@@ -47,8 +47,21 @@ const GENERIC_DIRECTORY_NAMES = new Set([
   '.opencode',
   '.openclaw',
   '.qoder',
+  '.kimi',
+  '.kimi-code',
+  '.codebuddy',
+  '.kiro',
+  '.grok',
+  '.gemini',
+  '.omp',
+  '.pi',
+  '.craft-agent',
+  '.droid',
   'projects',
   'runs',
+  'wire',
+  'globalStorage',
+  'dev_data',
 ])
 
 const TOOL_DIRECTORY_NAMES = new Set(['agents', 'main'])
@@ -96,6 +109,18 @@ function extractProjectFromKnownToolPath(sourceFile: string): string | null {
 
   const qoderSessionMatch = normalized.match(/\/\.qoder\/logs\/sessions\/([^/]+)\//)
   if (qoderSessionMatch) return decodeEncodedPath(qoderSessionMatch[1])
+
+  const codeBuddyProjectMatch = normalized.match(/\/\.codebuddy\/projects\/([^/]+)\//)
+  if (codeBuddyProjectMatch) return decodeEncodedPath(codeBuddyProjectMatch[1])
+
+  const kimiSessionMatch = normalized.match(/\/\.kimi-code\/sessions\/([^/]+)\//)
+  if (kimiSessionMatch) return decodeEncodedPath(kimiSessionMatch[1])
+
+  const legacyKimiSessionMatch = normalized.match(/\/\.kimi\/sessions\/([^/]+)\//)
+  if (legacyKimiSessionMatch) return decodeEncodedPath(legacyKimiSessionMatch[1])
+
+  const taskMatch = normalized.match(/\/globalStorage\/(?:rooveterinaryinc\.roo-cline|kilocode\.kilo-code)\/tasks\/([^/]+)\//)
+  if (taskMatch) return `task/${taskMatch[1]}`
 
   if (normalized.includes('/.openclaw/')) {
     const parts = normalized.split('/').filter(Boolean)

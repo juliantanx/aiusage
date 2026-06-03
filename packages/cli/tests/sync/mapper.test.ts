@@ -119,4 +119,33 @@ describe('SyncRecord Mapper', () => {
     expect(sync2.id).toBe('opencode-record-2')
     expect(sync1.id).not.toBe(sync2.id)
   })
+
+  it.each(['qoder', 'cursor', 'kilocode', 'goose', 'zed', 'kiro', 'roocode'] as const)(
+    'uses record.id for %s imports whose lineOffset is not a byte position',
+    (tool) => {
+      const first: StatsRecord = {
+        ...testRecord,
+        id: `${tool}-record-1`,
+        tool,
+        sourceFile: `/Users/test/${tool}/source.db`,
+        lineOffset: 0,
+        sessionId: 'sess-1',
+      }
+      const second: StatsRecord = {
+        ...testRecord,
+        id: `${tool}-record-2`,
+        tool,
+        sourceFile: `/Users/test/${tool}/source.db`,
+        lineOffset: 0,
+        sessionId: 'sess-2',
+      }
+
+      const sync1 = mapStatsRecordToSyncRecord(first)
+      const sync2 = mapStatsRecordToSyncRecord(second)
+
+      expect(sync1.id).toBe(first.id)
+      expect(sync2.id).toBe(second.id)
+      expect(sync1.id).not.toBe(sync2.id)
+    },
+  )
 })

@@ -155,6 +155,106 @@ function parseUiMessagesFile(options: {
   return { records, errors }
 }
 
+function normalizeKiroModel(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return 'kiro-agent'
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .replace(/^(anthropic\.|openai\.|aws\.)/, '')
+    .replace(/:\d+$/, '')
+    .replace(/-\d{8}-v\d+(?:-\d+)?$/i, '')
+}
+
+function parseTimestamp(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value < 1e12 ? value * 1000 : value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value).getTime()
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
+function pathIsFile(filePath: string): boolean {
+  try {
+    return statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+function parseKiroSessionFile(options: {
+  filePath: string
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+  exchangeRate?: number
+}): { records: StatsRecord[]; errors: string[] } {
+  const { filePath, device, deviceInstanceId, platform, now, exchangeRate } = options
+  const records: StatsRecord[] = []
+  const errors: string[] = []
+
+  let parsed: any
+  try {
+    parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+  } catch (e) {
+    return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
+  }
+
+  const turns = parsed?.session_state?.conversation_metadata?.user_turn_metadatas
+  if (!Array.isArray(turns)) return { records, errors }
+  const sessionId = typeof parsed?.session_id === 'string' && parsed.session_id
+    ? parsed.session_id
+    : extractSessionId(filePath, 'kiro')
+  const sessionModel = parsed?.session_state?.rts_model_state?.model_info?.model_id
+    ?? parsed?.session_state?.rts_model_state?.model_info?.model_name
+
+  for (const [index, turn] of turns.entries()) {
+    const inputTokens = toNumber(turn?.input_token_count)
+    const outputTokens = toNumber(turn?.output_token_count)
+    if (inputTokens + outputTokens === 0) continue
+
+    const model = normalizeKiroModel(turn?.model_id ?? sessionModel)
+    const recordTs = parseTimestamp(
+      turn?.request_start_timestamp_ms ?? turn?.start_timestamp ?? turn?.end_timestamp,
+      now,
+    )
+    const requestId = turn?.loop_id?.rand != null
+      ? `${sessionId}:${turn.loop_id.rand}`
+      : Array.isArray(turn?.message_ids) && turn.message_ids[0]
+        ? String(turn.message_ids[0])
+        : String(index)
+    const tokenArgs = { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0 }
+    const cost = calculateCost(model, tokenArgs, exchangeRate)
+
+    records.push({
+      id: generateRecordId(deviceInstanceId, `${filePath}:${requestId}`, recordTs),
+      ts: recordTs,
+      ingestedAt: now,
+      updatedAt: now,
+      lineOffset: index,
+      tool: 'kiro',
+      model,
+      provider: inferProvider(model),
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost,
+      costSource: cost > 0 ? 'pricing' : 'unknown',
+      sessionId,
+      sourceFile: filePath,
+      device,
+      deviceInstanceId,
+      platform,
+    })
+  }
+
+  return { records, errors }
+}
+
 export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; cursorDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
   const state = getState(AIUSAGE_DIR)
   const config = loadConfig()
@@ -200,6 +300,30 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           const result = parseUiMessagesFile({
             filePath,
             tool,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            exchangeRate,
+          })
+          for (const record of result.records) {
+            insertRecord(db, record)
+            parsedCount++
+          }
+          errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          continue
+        }
+
+        if (tool === 'kiro' && filePath.endsWith('.json')) {
+          const result = parseKiroSessionFile({
+            filePath,
             device,
             deviceInstanceId,
             platform: devicePlatform,
@@ -529,7 +653,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
   // Kiro: tokens_generated or conversations_v2 SQLite data
   const kiroDbPath = getDbPath('kiro') ?? ''
-  if ((!filterTool || filterTool === 'kiro') && existsSync(kiroDbPath)) {
+  if ((!filterTool || filterTool === 'kiro') && pathIsFile(kiroDbPath)) {
     try {
       const kiroDb = new Database(kiroDbPath, { readonly: true })
       try {

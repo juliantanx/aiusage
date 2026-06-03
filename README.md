@@ -105,6 +105,19 @@ Your AI coding tools each log usage separately — different formats, different 
 | OpenClaw | ✅ |
 | KiloCode | ✅ |
 | Copilot | ✅ |
+| Gemini CLI | ✅ |
+| Kimi Code | ✅ |
+| CodeBuddy | ✅ |
+| Kiro | ✅ |
+| Grok Build | ✅ |
+| Antigravity | ✅ |
+| Roo Code | ✅ |
+| Zed | ✅ |
+| Goose | ✅ |
+| oh-my-pi | ✅ |
+| pi | ✅ |
+| Craft | ✅ |
+| Droid | ✅ |
 
 
 ## CLI Reference
@@ -119,7 +132,7 @@ Import newly appended local session data from discovered source paths.
 
 | Option | Description |
 |--------|-------------|
-| `--tool <tool>` | Only parse a specific tool: `claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder`, `cursor`, `kilocode`, `copilot` |
+| `--tool <tool>` | Only parse a specific tool, such as `claude-code`, `codex`, `opencode`, `cursor`, `kilocode`, `copilot`, `gemini`, `kimi`, `kiro`, `zed`, or `goose` |
 | `--progress` | Show real-time progress bar on stderr (TTY only, silent in pipes/CI) |
 
 ```bash
@@ -148,7 +161,7 @@ Print a usage summary in the terminal.
 | Option | Description |
 |--------|-------------|
 | `--device <id>` | Filter by device instance ID |
-| `--tool <tool>` | Filter by tool type (`claude-code`, `codex`, `openclaw`, `opencode`, `hermes`, `qoder`, `cursor`, `copilot`) |
+| `--tool <tool>` | Filter by tool type, such as `claude-code`, `codex`, `opencode`, `cursor`, `kilocode`, `copilot`, `gemini`, `kimi`, `kiro`, `zed`, or `goose` |
 
 ```bash
 aiusage summary                        # All-time summary
@@ -489,6 +502,19 @@ docker build -t aiusage .
 | Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | `~/.config/Cursor/User/globalStorage/state.vscdb` | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
 | KiloCode | `~/Library/Application Support/kilo/kilo.db` | `~/.local/share/kilo/kilo.db` | `%LOCALAPPDATA%\kilo\kilo.db` |
 | Copilot | `~/.copilot/otel/` | `~/.copilot/otel/` | `%USERPROFILE%\.copilot\otel\` |
+| Gemini CLI | `~/.gemini/tmp/` | `~/.gemini/tmp/` | `%USERPROFILE%\.gemini\tmp\` |
+| Kimi Code | `~/.kimi-code/sessions/` | `~/.kimi-code/sessions/` | `%USERPROFILE%\.kimi-code\sessions\` |
+| CodeBuddy | `~/.codebuddy/projects/` | `~/.codebuddy/projects/` | `%USERPROFILE%\.codebuddy\projects\` |
+| Kiro | `~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/dev_data/devdata.sqlite` | `~/.local/share/kiro-cli/data.sqlite3` | `%USERPROFILE%\.kiro\sessions\cli\` |
+| Grok Build | `~/.grok/sessions/` | `~/.grok/sessions/` | `%USERPROFILE%\.grok\sessions\` |
+| Antigravity | `~/.gemini/tmp/antigravity/` | `~/.gemini/tmp/antigravity/` | `%USERPROFILE%\.gemini\tmp\antigravity\` |
+| Roo Code | VS Code-family `globalStorage/rooveterinaryinc.roo-cline/tasks/` | VS Code-family `globalStorage/rooveterinaryinc.roo-cline/tasks/` | VS Code-family `globalStorage\rooveterinaryinc.roo-cline\tasks\` |
+| Zed | `~/Library/Application Support/Zed/threads/threads.db` | `~/.local/share/zed/threads/threads.db` | `%LOCALAPPDATA%\Zed\threads\threads.db` |
+| Goose | `~/Library/Application Support/goose/sessions/sessions.db` | `~/.local/share/goose/sessions/sessions.db` | `%APPDATA%\goose\sessions\sessions.db` |
+| oh-my-pi | `~/.omp/agent/sessions/` | `~/.omp/agent/sessions/` | `%USERPROFILE%\.omp\agent\sessions\` |
+| pi | `~/.pi/agent/sessions/` | `~/.pi/agent/sessions/` | `%USERPROFILE%\.pi\agent\sessions\` |
+| Craft | `~/.craft-agent/` | `~/.craft-agent/` | `%USERPROFILE%\.craft-agent\` |
+| Droid | `~/.droid/sessions/` | `~/.droid/sessions/` | `%USERPROFILE%\.droid\sessions\` |
 
 Discovery behavior:
 
@@ -502,6 +528,7 @@ Discovery behavior:
 - **Cursor** — reads Cursor's `state.vscdb` SQLite database directly and imports composer conversations with token usage data.
 - **KiloCode** — reads the `kilo.db` SQLite database directly and imports assistant messages from the `message` table with token usage data. Supports input, output, cache read/write, and thinking tokens.
 - **Copilot** — scans `~/.copilot/otel/*.jsonl` for OTEL JSONL files exported by Copilot CLI (v1.0.4+). Also checks the `$COPILOT_OTEL_FILE_EXPORTER_PATH` env var. To enable OTEL export, set `COPILOT_OTEL_ENABLED=true`, `COPILOT_OTEL_EXPORTER_TYPE=file`, and `COPILOT_OTEL_FILE_EXPORTER_PATH=~/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl` in your shell profile.
+- **Additional tools** — Gemini, Kimi, CodeBuddy, Grok, Antigravity, oh-my-pi, pi, Craft, and Droid are imported from JSONL session data when token usage fields are present. Roo Code and Kilo Code extension task files are imported from `ui_messages.json`. Kiro, Zed, and Goose are imported from their local SQLite databases when supported token usage tables are present.
 
 > On Linux, OpenCode respects `$XDG_DATA_HOME` if set.
 
@@ -522,13 +549,27 @@ If you installed a tool to a non-default location, override the paths in the **S
     "qoder": "/custom/path/.qoder/logs/sessions",
     "qoder-db": "/custom/path/local.db",
     "cursor": "/custom/path/state.vscdb",
+    "kilocode": "/custom/path/kilocode-tasks",
     "kilocode-db": "/custom/path/kilo.db",
-    "copilot": "/custom/path/.copilot/otel"
+    "copilot": "/custom/path/.copilot/otel",
+    "gemini": "/custom/path/.gemini/tmp",
+    "kimi": "/custom/path/.kimi-code/sessions",
+    "codebuddy": "/custom/path/.codebuddy/projects",
+    "kiro": "/custom/path/kiro.sqlite",
+    "grok": "/custom/path/.grok/sessions",
+    "antigravity": "/custom/path/.gemini/tmp/antigravity",
+    "roocode": "/custom/path/roo-code/tasks",
+    "zed": "/custom/path/threads.db",
+    "goose": "/custom/path/sessions.db",
+    "omp": "/custom/path/.omp/agent/sessions",
+    "pi": "/custom/path/.pi/agent/sessions",
+    "craft": "/custom/path/.craft-agent",
+    "droid": "/custom/path/.droid/sessions"
   }
 }
 ```
 
-Only the paths you specify are overridden; unspecified tools fall back to their defaults. `qoder` points to the session logs directory; `qoder-db` points directly to the `local.db` SQLite file; `kilocode-db` points directly to the `kilo.db` SQLite file.
+Only the paths you specify are overridden; unspecified tools fall back to their defaults. Source keys ending in `-db` point directly to SQLite database files; other keys point to the tool's log/session directory.
 
 ## Database Visualization
 

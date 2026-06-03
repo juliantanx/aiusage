@@ -119,7 +119,7 @@ pnpm rebuild:sqlite
 
 | 选项 | 说明 |
 |------|------|
-| `--tool <tool>` | 只解析指定工具：`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor`、`copilot` |
+| `--tool <tool>` | 只解析指定工具，例如 `claude-code`、`codex`、`opencode`、`cursor`、`kilocode`、`copilot`、`gemini`、`kimi`、`kiro`、`zed`、`goose` |
 | `--progress` | 在 stderr 显示实时进度条（仅 TTY 环境，管道/CI 下自动静默） |
 
 ```bash
@@ -148,7 +148,7 @@ aiusage serve -p 8080     # 使用 8080 端口启动
 | 选项 | 说明 |
 |------|------|
 | `--device <id>` | 按设备实例 ID 筛选 |
-| `--tool <tool>` | 按工具类型筛选（`claude-code`、`codex`、`openclaw`、`opencode`、`hermes`、`qoder`、`cursor`、`copilot`） |
+| `--tool <tool>` | 按工具类型筛选，例如 `claude-code`、`codex`、`opencode`、`cursor`、`kilocode`、`copilot`、`gemini`、`kimi`、`kiro`、`zed`、`goose` |
 
 ```bash
 aiusage summary                        # 全部时间
@@ -487,7 +487,21 @@ docker build -t aiusage .
 | Qoder（会话日志） | `~/.qoder/logs/sessions/` | `~/.qoder/logs/sessions/`，以及 WSL 挂载的 Windows 用户目录 | `%USERPROFILE%\.qoder\logs\sessions\` |
 | Qoder（SQLite） | `~/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db` | `~/.local/share/Qoder/SharedClientCache/cache/db/local.db` | `%LOCALAPPDATA%\Qoder\SharedClientCache\cache\db\local.db` |
 | Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` | `~/.config/Cursor/User/globalStorage/state.vscdb` | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
+| KiloCode | `~/Library/Application Support/kilo/kilo.db` | `~/.local/share/kilo/kilo.db` | `%LOCALAPPDATA%\kilo\kilo.db` |
 | Copilot | `~/.copilot/otel/` | `~/.copilot/otel/` | `%USERPROFILE%\.copilot\otel\` |
+| Gemini CLI | `~/.gemini/tmp/` | `~/.gemini/tmp/` | `%USERPROFILE%\.gemini\tmp\` |
+| Kimi Code | `~/.kimi-code/sessions/` | `~/.kimi-code/sessions/` | `%USERPROFILE%\.kimi-code\sessions\` |
+| CodeBuddy | `~/.codebuddy/projects/` | `~/.codebuddy/projects/` | `%USERPROFILE%\.codebuddy\projects\` |
+| Kiro | `~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/dev_data/devdata.sqlite` | `~/.local/share/kiro-cli/data.sqlite3` | `%USERPROFILE%\.kiro\sessions\cli\` |
+| Grok Build | `~/.grok/sessions/` | `~/.grok/sessions/` | `%USERPROFILE%\.grok\sessions\` |
+| Antigravity | `~/.gemini/tmp/antigravity/` | `~/.gemini/tmp/antigravity/` | `%USERPROFILE%\.gemini\tmp\antigravity\` |
+| Roo Code | VS Code 系应用的 `globalStorage/rooveterinaryinc.roo-cline/tasks/` | VS Code 系应用的 `globalStorage/rooveterinaryinc.roo-cline/tasks/` | VS Code 系应用的 `globalStorage\rooveterinaryinc.roo-cline\tasks\` |
+| Zed | `~/Library/Application Support/Zed/threads/threads.db` | `~/.local/share/zed/threads/threads.db` | `%LOCALAPPDATA%\Zed\threads\threads.db` |
+| Goose | `~/Library/Application Support/goose/sessions/sessions.db` | `~/.local/share/goose/sessions/sessions.db` | `%APPDATA%\goose\sessions\sessions.db` |
+| oh-my-pi | `~/.omp/agent/sessions/` | `~/.omp/agent/sessions/` | `%USERPROFILE%\.omp\agent\sessions\` |
+| pi | `~/.pi/agent/sessions/` | `~/.pi/agent/sessions/` | `%USERPROFILE%\.pi\agent\sessions\` |
+| Craft | `~/.craft-agent/` | `~/.craft-agent/` | `%USERPROFILE%\.craft-agent\` |
+| Droid | `~/.droid/sessions/` | `~/.droid/sessions/` | `%USERPROFILE%\.droid\sessions\` |
 
 发现行为：
 
@@ -499,7 +513,9 @@ docker build -t aiusage .
 - **Qoder（会话日志）** — 递归扫描结构化 session segment 日志（`logs/sessions/**/segments/*.jsonl`），导入 `model.response.completed` token 事件。在 WSL 中，aiusage 也会检查 `/mnt/c/Users/<user>`、`/mnt/d/Users/<user>`、`/mnt/e/Users/<user>` 等挂载的 Windows 用户目录下是否存在同样的 Qoder session 日志结构。
 - **Qoder（SQLite）** — 直接读取 `local.db` SQLite 数据库（`SharedClientCache/cache/db/local.db`），从 `chat_message` 表导入助手消息，并关联 `chat_record` 获取模型信息。这是 macOS 上的主要数据来源，与会话日志目录并行尝试。
 - **Cursor** — 直接读取 Cursor 的 `state.vscdb` SQLite 数据库，导入 composer 会话的 token 用量数据。
+- **KiloCode** — 直接读取 `kilo.db` SQLite 数据库，导入 `message` 表中带 token 用量的助手消息。支持 input、output、cache read/write 和 thinking tokens。
 - **Copilot** — 扫描 `~/.copilot/otel/*.jsonl` 下由 Copilot CLI（v1.0.4+）导出的 OTEL JSONL 文件，同时检查 `$COPILOT_OTEL_FILE_EXPORTER_PATH` 环境变量。需要在 shell profile 中设置以下环境变量来启用 OTEL 导出：`COPILOT_OTEL_ENABLED=true`、`COPILOT_OTEL_EXPORTER_TYPE=file`、`COPILOT_OTEL_FILE_EXPORTER_PATH=~/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl`。
+- **其他工具** — Gemini、Kimi、CodeBuddy、Grok、Antigravity、oh-my-pi、pi、Craft、Droid 会在 JSONL 会话数据包含 token usage 字段时导入。Roo Code 和 Kilo Code 扩展任务从 `ui_messages.json` 导入。Kiro、Zed、Goose 会在本地 SQLite 数据库包含受支持的 token 表时导入。
 
 > 在 Linux 上，如果设置了 `$XDG_DATA_HOME`，OpenCode 会优先使用它。
 
@@ -520,12 +536,27 @@ Qoder 桌面端还会在 `Program Files` 下写入安装文件，在 `AppData/Ro
     "qoder": "/自定义路径/.qoder/logs/sessions",
     "qoder-db": "/自定义路径/local.db",
     "cursor": "/自定义路径/state.vscdb",
-    "copilot": "/自定义路径/.copilot/otel"
+    "kilocode": "/自定义路径/kilocode-tasks",
+    "kilocode-db": "/自定义路径/kilo.db",
+    "copilot": "/自定义路径/.copilot/otel",
+    "gemini": "/自定义路径/.gemini/tmp",
+    "kimi": "/自定义路径/.kimi-code/sessions",
+    "codebuddy": "/自定义路径/.codebuddy/projects",
+    "kiro": "/自定义路径/kiro.sqlite",
+    "grok": "/自定义路径/.grok/sessions",
+    "antigravity": "/自定义路径/.gemini/tmp/antigravity",
+    "roocode": "/自定义路径/roo-code/tasks",
+    "zed": "/自定义路径/threads.db",
+    "goose": "/自定义路径/sessions.db",
+    "omp": "/自定义路径/.omp/agent/sessions",
+    "pi": "/自定义路径/.pi/agent/sessions",
+    "craft": "/自定义路径/.craft-agent",
+    "droid": "/自定义路径/.droid/sessions"
   }
 }
 ```
 
-只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。`qoder` 指向会话日志目录；`qoder-db` 直接指向 `local.db` SQLite 文件。
+只有你显式指定的工具路径会被覆盖；未指定的仍使用默认路径。以 `-db` 结尾的 source key 直接指向 SQLite 数据库文件，其他 key 指向对应工具的日志或会话目录。
 
 ## 数据库可视化查看
 

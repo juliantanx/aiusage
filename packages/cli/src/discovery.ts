@@ -690,7 +690,9 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
 
   for (const source of jsonlSources) {
     if (!source.path || !existsSync(source.path)) continue
-    let paths = findJsonlFiles(source.path)
+    let paths = source.tool === 'kiro'
+      ? [...findJsonlFiles(source.path), ...findJsonFiles(source.path)]
+      : findJsonlFiles(source.path)
     if (source.filter) paths = paths.filter(source.filter)
     if (paths.length > 0) results.push({ tool: source.tool, paths: unique(paths) })
   }
