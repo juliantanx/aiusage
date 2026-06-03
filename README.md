@@ -26,7 +26,7 @@ aiusage serve
 
 Open `http://localhost:3847` to explore the dashboard.
 
-> aiusage does not run a built-in background parser. Schedule `aiusage parse` with cron or Task Scheduler for automatic imports, or use `aiusage pm2-start` to keep the dashboard running in the background.
+> `aiusage serve` can auto-parse on a configurable interval (set **Auto-Parse Interval** in Settings). For headless environments, schedule `aiusage parse` with cron or Task Scheduler, or use `aiusage pm2-start` to keep the dashboard running in the background.
 
 ## Supported Tools
 

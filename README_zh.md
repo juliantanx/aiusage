@@ -26,7 +26,7 @@ aiusage serve
 
 打开 `http://localhost:3847` 即可查看仪表盘。
 
-> aiusage 不会内建后台解析任务。如需自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`，或使用 `aiusage pm2-start` 保持后台运行。
+> `aiusage serve` 内建自动解析功能，可在设置页配置「自动解析间隔」。如需在无界面环境下自动导入，请使用 cron 或任务计划定时执行 `aiusage parse`，或使用 `aiusage pm2-start` 保持后台运行。
 
 ## 已支持的工具
 
