@@ -1,8 +1,7 @@
 <script>
   import { selectedTool, setTool } from '../stores.js'
   import { t } from '../i18n.js'
-
-  const tools = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor']
+  import { TOOLS } from '../constants.js'
 
   function handleChange(e) {
     setTool(e.target.value)
@@ -12,7 +11,7 @@
 <div class="tool-selector">
   <select value={$selectedTool} on:change={handleChange} title={$t('tool.allTools')}>
     <option value="">{$t('tool.allTools')}</option>
-    {#each tools as tool}
+    {#each TOOLS as tool}
       <option value={tool}>{tool}</option>
     {/each}
   </select>

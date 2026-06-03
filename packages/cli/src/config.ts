@@ -23,23 +23,6 @@ export interface SyncConfig {
   credentialRef?: string
 }
 
-export interface SourcesConfig {
-  /** Custom path to Claude Code projects dir (default: ~/.claude/projects) */
-  'claude-code'?: string
-  /** Custom path to Codex sessions dir (default: ~/.codex/sessions) */
-  'codex'?: string
-  /** Custom path to OpenClaw sessions dir (default: ~/.openclaw/agents/main/sessions) */
-  'openclaw'?: string
-  /** Custom path to opencode.db file (default: platform-specific) */
-  'opencode'?: string
-  /** Custom path to Hermes state.db (default: ~/.hermes/state.db) */
-  'hermes'?: string
-  /** Custom path to Qoder .qoder root or session logs dir (default: platform-specific logs/sessions candidates) */
-  'qoder'?: string
-  /** Custom path to Cursor state.vscdb (default: platform-specific globalStorage path) */
-  'cursor'?: string
-}
-
 export interface Config {
   sync?: SyncConfig
   device?: string
@@ -49,8 +32,8 @@ export interface Config {
   dashboardPollInterval?: number
   credentials?: Record<string, string>
   priceOverrides?: Record<string, PriceEntry>
-  /** Override default source paths for each AI tool */
-  sources?: SourcesConfig
+  /** @deprecated Legacy source paths — use AIUSAGE_*_PATH env vars instead. Kept for migration only. */
+  sources?: Record<string, string>
   /** First day of week: 0 = Sunday (Western), 1 = Monday (ISO/Chinese). Defaults to 1. */
   weekStart?: 0 | 1
   /** Display currency for the web UI: 'USD' (default) or 'CNY' */

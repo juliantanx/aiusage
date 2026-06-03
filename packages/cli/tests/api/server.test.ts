@@ -210,6 +210,132 @@ describe('Device filtering', () => {
     expect(models).toContain('gpt-4.1')
   })
 
+  it('models returns per-model token breakdown, total cost, and token percentage', async () => {
+    insertTestRecord(db, {
+      id: 'local00000002',
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_tokens: 10,
+      cache_write_tokens: 5,
+      thinking_tokens: 15,
+      cost: 0.002,
+      session_id: 'session2',
+    })
+    insertTestSyncedRecord(db, {
+      id: 'synced0000002',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_tokens: 20,
+      cache_write_tokens: 10,
+      thinking_tokens: 30,
+      cost: 0.004,
+      session_key: 'sessionkey2',
+    })
+
+    const res = await fetch(`${baseUrl}/api/models?range=all`)
+    const data = await res.json()
+    const model = data.models.find((m: any) => m.model === 'claude-sonnet-4-6')
+
+    expect(model).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      callCount: 3,
+      inputTokens: 300,
+      outputTokens: 150,
+      cacheReadTokens: 30,
+      cacheWriteTokens: 15,
+      thinkingTokens: 45,
+      totalTokens: 540,
+    })
+    expect(model.totalCost).toBeCloseTo(0.007)
+    expect(model.percentage).toBeCloseTo(64.3, 1)
+  })
+
+  it('models returns an empty list when only unknown models match', async () => {
+    insertTestRecord(db, {
+      id: 'localunknown001',
+      model: 'unknown',
+      provider: 'unknown',
+      input_tokens: 10,
+      output_tokens: 5,
+      cost: 0.001,
+      session_id: 'unknown-session',
+      tool: 'opencode',
+    })
+
+    const res = await fetch(`${baseUrl}/api/models?range=all&tool=opencode&device=${CURRENT_DEVICE_ID}`)
+    expect(res.ok).toBe(true)
+    const data = await res.json()
+
+    expect(data.models).toEqual([])
+  })
+
+  it('models returns synced-only breakdown for a remote device', async () => {
+    insertTestSyncedRecord(db, {
+      id: 'synced0000002',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_tokens: 20,
+      cache_write_tokens: 10,
+      thinking_tokens: 30,
+      cost: 0.004,
+      session_key: 'sessionkey2',
+    })
+
+    const res = await fetch(`${baseUrl}/api/models?range=all&device=remote-uuid-0001`)
+    const data = await res.json()
+    const model = data.models.find((m: any) => m.model === 'claude-sonnet-4-6')
+
+    expect(model).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      callCount: 1,
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheReadTokens: 20,
+      cacheWriteTokens: 10,
+      thinkingTokens: 30,
+      totalTokens: 210,
+    })
+    expect(model.totalCost).toBeCloseTo(0.004)
+    expect(model.percentage).toBeCloseTo(41.2, 1)
+  })
+
+  it('models returns local-only breakdown for the current device', async () => {
+    insertTestRecord(db, {
+      id: 'local00000002',
+      input_tokens: 200,
+      output_tokens: 100,
+      cache_read_tokens: 30,
+      cache_write_tokens: 15,
+      thinking_tokens: 45,
+      cost: 0.006,
+      session_id: 'session2',
+    })
+
+    const res = await fetch(`${baseUrl}/api/models?range=all&device=${CURRENT_DEVICE_ID}`)
+    const data = await res.json()
+    const model = data.models.find((m: any) => m.model === 'claude-sonnet-4-6')
+
+    expect(model).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      callCount: 2,
+      inputTokens: 300,
+      outputTokens: 150,
+      cacheReadTokens: 30,
+      cacheWriteTokens: 15,
+      thinkingTokens: 45,
+      totalTokens: 540,
+    })
+    expect(model.totalCost).toBeCloseTo(0.007)
+    expect(model.percentage).toBeCloseTo(100, 1)
+  })
+
   it('sessions with other device returns empty', async () => {
     const res = await fetch(`${baseUrl}/api/sessions?range=all&device=remote-uuid-0001`)
     const data = await res.json()

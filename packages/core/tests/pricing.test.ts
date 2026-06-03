@@ -141,10 +141,10 @@ describe('calculateCost', () => {
   })
 
   it('converts CNY model cost to USD using exchangeRate', () => {
-    // deepseek-v4-pro has currency: 'CNY' with input: 12.6, output: 25.2
+    // deepseek-v4-pro has currency: 'CNY' with input: 3.13, output: 6.26
     // 1000 input tokens + 500 output tokens
-    // CNY cost: (1000/1M * 12.6) + (500/1M * 25.2) = 0.0126 + 0.0126 = 0.0252 CNY
-    // USD cost: 0.0252 * 0.14 = 0.003528
+    // CNY cost: (1000/1M * 3.13) + (500/1M * 6.26) = 0.00313 + 0.00313 = 0.00626 CNY
+    // USD cost: 0.00626 * 0.14 = 0.0008764
     const cost = calculateCost('deepseek-v4-pro', {
       inputTokens: 1000,
       outputTokens: 500,
@@ -152,7 +152,7 @@ describe('calculateCost', () => {
       cacheWriteTokens: 0,
       thinkingTokens: 0,
     }, 0.14)
-    expect(cost).toBeCloseTo(0.003528, 6)
+    expect(cost).toBeCloseTo(0.0008764, 6)
   })
 
   it('uses FALLBACK_RATE when no exchangeRate provided for CNY model', () => {
@@ -163,8 +163,8 @@ describe('calculateCost', () => {
       cacheWriteTokens: 0,
       thinkingTokens: 0,
     })
-    // CNY cost: 0.0252, USD cost: 0.0252 * 0.137 = 0.0034524
-    expect(cost).toBeCloseTo(0.0252 * FALLBACK_RATE, 6)
+    // CNY cost: 0.00626, USD cost: 0.00626 * FALLBACK_RATE
+    expect(cost).toBeCloseTo(0.00626 * FALLBACK_RATE, 6)
   })
 
   it('does not convert USD model even when exchangeRate is provided', () => {
@@ -180,7 +180,7 @@ describe('calculateCost', () => {
   })
 
   it('handles CNY model with cache tokens', () => {
-    // deepseek-v4-pro: input: 12.6, output: 25.2, cacheRead: 0.105, currency: 'CNY'
+    // deepseek-v4-pro: input: 3.13, output: 6.26, cacheRead: 0.026, currency: 'CNY'
     const cost = calculateCost('deepseek-v4-pro', {
       inputTokens: 1000,
       outputTokens: 500,
@@ -188,9 +188,9 @@ describe('calculateCost', () => {
       cacheWriteTokens: 0,
       thinkingTokens: 0,
     }, 0.14)
-    // CNY: (1000/1M * 12.6) + (500/1M * 25.2) + (2000/1M * 0.105) = 0.0126 + 0.0126 + 0.00021 = 0.02541
-    // USD: 0.02541 * 0.14 = 0.0035574
-    expect(cost).toBeCloseTo(0.0035574, 6)
+    // CNY: (1000/1M * 3.13) + (500/1M * 6.26) + (2000/1M * 0.026) = 0.00313 + 0.00313 + 0.000052 = 0.006312
+    // USD: 0.006312 * 0.14 = 0.00088368
+    expect(cost).toBeCloseTo(0.00088368, 6)
   })
 })
 

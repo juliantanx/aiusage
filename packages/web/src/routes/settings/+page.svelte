@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig, fetchCredential, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let loading = true
@@ -9,9 +9,8 @@
 
   // Form data — all strings for simplicity, coerced on save
   let general = { device: '', weekStart: 1, dashboardPollInterval: '', parseInterval: '' }
-  let sources = { 'claude-code': '', codex: '', openclaw: '', opencode: '', hermes: '', qoder: '', 'qoder-db': '', cursor: '' }
+  let detectedTools = []
   let currentPlatform = ''
-  let defaultPaths = {}
   let currentHostname = ''
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
@@ -58,7 +57,6 @@
 
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
-  let sourcesSaving = false; let sourcesError = ''; let sourcesSaved = false
   let syncSaving = false;    let syncError = '';    let syncSaved = false
   let dataSaving = false;    let dataError = '';    let dataSaved = false
   let currencySaving = false; let currencyError = ''; let currencySaved = false
@@ -98,25 +96,15 @@
 
   onMount(async () => {
     try {
-      const cfg = await fetchConfig()
+      const [cfg, toolsResult] = await Promise.all([fetchConfig(), fetchDetectedTools()])
       general = {
         device: cfg.device ?? '',
         weekStart: cfg.weekStart ?? 1,
         dashboardPollInterval: cfg.dashboardPollInterval != null ? String(cfg.dashboardPollInterval) : '',
         parseInterval: cfg.parseInterval != null ? String(cfg.parseInterval) : '',
       }
-      sources = {
-        'claude-code': cfg.sources?.['claude-code'] ?? '',
-        codex: cfg.sources?.codex ?? '',
-        openclaw: cfg.sources?.openclaw ?? '',
-        opencode: cfg.sources?.opencode ?? '',
-        hermes: cfg.sources?.hermes ?? '',
-        qoder: cfg.sources?.qoder ?? '',
-        'qoder-db': cfg.sources?.['qoder-db'] ?? '',
-        cursor: cfg.sources?.cursor ?? '',
-      }
+      detectedTools = toolsResult.tools ?? []
       currentPlatform = cfg.platform ?? ''
-      defaultPaths = cfg.defaultPaths ?? {}
       currentHostname = cfg.hostname ?? ''
       syncData = {
         backend: cfg.sync?.backend ?? '',
@@ -178,19 +166,6 @@
       generalError = e instanceof Error ? e.message : 'Save failed'
     } finally {
       generalSaving = false
-    }
-  }
-
-  async function saveSources() {
-    sourcesSaving = true; sourcesError = ''
-    try {
-      await saveConfig({ sources })
-      sourcesSaved = true
-      setTimeout(() => { sourcesSaved = false }, 2000)
-    } catch (e) {
-      sourcesError = e instanceof Error ? e.message : 'Save failed'
-    } finally {
-      sourcesSaving = false
     }
   }
 
@@ -420,28 +395,40 @@
       </div>
     </div>
 
-    <!-- Sources -->
+    <!-- Detected Tools -->
     <div class="card">
       <div class="group-title-row">
-        <span class="group-title">{$t('settings.sources')}</span>
+        <span class="group-title">{$t('settings.detectedTools')}</span>
         {#if currentPlatform}
           <span class="platform-badge">{PLATFORM_LABEL[currentPlatform] ?? currentPlatform}</span>
         {/if}
       </div>
-      <div class="fields">
-        {#each [['claude-code', 'Claude Code'], ['codex', 'Codex'], ['openclaw', 'OpenClaw'], ['opencode', 'OpenCode'], ['hermes', 'Hermes'], ['qoder', 'Qoder (sessions dir)'], ['qoder-db', 'Qoder (local.db)'], ['cursor', 'Cursor']] as [key, label]}
-          <div class="field full">
-            <label class="field-label" for="field-source-{key}">{label}</label>
-            <div class="field-hint">{$t('settings.sourcePath')}</div>
-            <input id="field-source-{key}" type="text" bind:value={sources[key]} class="field-input mono" placeholder={defaultPaths[key] ?? ''} />
+      <div class="field-hint" style="margin-bottom: 0.75rem">{$t('settings.detectedToolsHint')}</div>
+      <div class="detected-tools-list">
+        {#each detectedTools as tool}
+          <div class="detected-tool" class:found={tool.status === 'found'} class:not-found={tool.status === 'not_found'}>
+            <div class="detected-tool-header">
+              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'} class:gray={tool.status === 'not_found'}></span>
+              <span class="detected-tool-name">{tool.label}</span>
+              <span class="detected-tool-status">
+                {#if tool.status === 'found'}
+                  {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
+                {:else if tool.status === 'empty'}
+                  {$t('settings.toolEmpty')}
+                {:else}
+                  {$t('settings.toolNotFound')}
+                {/if}
+              </span>
+            </div>
+            {#if tool.paths?.length}
+              {#each tool.paths as path}
+                <div class="detected-tool-path">{path}</div>
+              {/each}
+            {:else if tool.path}
+              <div class="detected-tool-path">{tool.path}</div>
+            {/if}
           </div>
         {/each}
-      </div>
-      {#if sourcesError}<p class="section-error">{sourcesError}</p>{/if}
-      <div class="section-footer">
-        <button class="btn-save" class:saved={sourcesSaved} on:click={saveSources} disabled={sourcesSaving}>
-          {btnLabel(sourcesSaving, sourcesSaved, $t('settings.save'), $t('settings.saved'))}
-        </button>
       </div>
     </div>
 
@@ -799,5 +786,57 @@
     color: var(--text-muted);
     font-size: 0.6875rem;
     margin-left: 0.25rem;
+  }
+
+  .detected-tools-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .detected-tool {
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    background: var(--raised);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .detected-tool-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.green { background: var(--green); }
+  .status-dot.yellow { background: var(--amber, #f59e0b); }
+  .status-dot.gray { background: var(--text-muted); opacity: 0.4; }
+
+  .detected-tool-name {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .detected-tool-status {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  .detected-tool-path {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+    margin-left: 1.25rem;
+    word-break: break-all;
   }
 </style>

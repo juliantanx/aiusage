@@ -4,6 +4,8 @@ import { ClaudeCodeParser } from './parsers/claude-code.js'
 import { CodexParser } from './parsers/codex.js'
 import { OpenClawParser } from './parsers/openclaw.js'
 import { QoderParser } from './parsers/qoder.js'
+import { CopilotParser } from './parsers/copilot.js'
+import { GenericJsonlParser } from './parsers/generic-jsonl.js'
 
 export interface CreateContextOptions {
   tool: Tool
@@ -26,6 +28,15 @@ export class Aggregator {
       ['codex', new CodexParser()],
       ['openclaw', new OpenClawParser()],
       ['qoder', new QoderParser()],
+      ['copilot', new CopilotParser()],
+      ['gemini', new GenericJsonlParser('gemini', 'gemini-unknown')],
+      ['kimi', new GenericJsonlParser('kimi', 'kimi-for-coding')],
+      ['codebuddy', new GenericJsonlParser('codebuddy', 'codebuddy-unknown')],
+      ['antigravity', new GenericJsonlParser('antigravity', 'antigravity-unknown')],
+      ['omp', new GenericJsonlParser('omp', 'omp-unknown')],
+      ['pi', new GenericJsonlParser('pi', 'pi-unknown')],
+      ['craft', new GenericJsonlParser('craft', 'craft-unknown')],
+      ['droid', new GenericJsonlParser('droid', 'droid-unknown')],
     ])
   }
 

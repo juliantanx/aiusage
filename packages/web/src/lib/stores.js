@@ -31,6 +31,9 @@ export function setTool(tool) {
   selectedTool.set(tool)
 }
 
+// Pricing recalc status: 'idle' | 'updating' | 'done'
+export const recalcStatus = writable('idle')
+
 export const pollingInterval = writable(30000) // 30 seconds default
 
 export const displayCurrency = writable('USD')

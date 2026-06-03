@@ -1,18 +1,23 @@
 import Database from 'better-sqlite3'
-import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
-import { join, extname } from 'node:path'
-import { homedir, hostname, platform } from 'node:os'
-import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, type Tool } from '@aiusage/core'
+import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
+import { join } from 'node:path'
+import { hostname } from 'node:os'
+import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, generateRecordId, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
 import { loadConfig, AIUSAGE_DIR } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
+import { discoverLogFiles, getDbPath } from '../discovery.js'
 import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
 import { runParseCursor } from './parse-cursor.js'
+import { runParseKilo } from './parse-kilo.js'
+import { runParseGoose } from './parse-goose.js'
+import { runParseZed } from './parse-zed.js'
+import { runParseKiro } from './parse-kiro.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -26,217 +31,8 @@ interface ToolPaths {
   paths: string[]
 }
 
-function unique(paths: string[]): string[] {
-  return [...new Set(paths)]
-}
-
-function findJsonlFiles(dir: string): string[] {
-  const results: string[] = []
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        results.push(...findJsonlFiles(fullPath))
-      } else if (entry.isFile() && extname(entry.name) === '.jsonl') {
-        results.push(fullPath)
-      }
-    }
-  } catch {}
-  return results
-}
-
-function findQoderSessionSegmentFiles(dir: string): string[] {
-  return findJsonlFiles(dir).filter((filePath) => {
-    const parts = filePath.replace(/\\/g, '/').split('/').filter(Boolean)
-    const sessionsIndex = parts.lastIndexOf('sessions')
-    const segmentsIndex = parts.lastIndexOf('segments')
-    return sessionsIndex >= 0
-      && segmentsIndex > sessionsIndex
-      && segmentsIndex === parts.length - 2
-  })
-}
-
-function windowsUserHomesFromWsl(): string[] {
-  const homes: string[] = []
-  if (!existsSync('/mnt')) return homes
-
-  try {
-    const drives = readdirSync('/mnt', { withFileTypes: true })
-    for (const drive of drives) {
-      if (!drive.isDirectory() || !/^[a-z]$/i.test(drive.name)) continue
-      const usersDir = join('/mnt', drive.name, 'Users')
-      if (!existsSync(usersDir)) continue
-
-      try {
-        const users = readdirSync(usersDir, { withFileTypes: true })
-        for (const user of users) {
-          if (!user.isDirectory()) continue
-          if (['All Users', 'Default', 'Default User', 'Public'].includes(user.name)) continue
-          homes.push(join(usersDir, user.name))
-        }
-      } catch {
-        // Permission errors on individual user dirs are non-fatal; skip and continue.
-      }
-    }
-  } catch {
-    // /mnt may exist but be unreadable; WSL detection is best-effort.
-  }
-
-  return homes
-}
-
-function defaultQoderSessionDirs(home: string): string[] {
-  const windowsHomes = [
-    process.env.USERPROFILE,
-    ...windowsUserHomesFromWsl(),
-  ].filter((value): value is string => !!value)
-
-  const dirs = [
-    join(home, '.qoder', 'logs', 'sessions'),
-    ...windowsHomes.flatMap((windowsHome) => [
-      join(windowsHome, '.qoder', 'logs', 'sessions'),
-      join(windowsHome, 'AppData', 'Local', '.qoder', 'logs', 'sessions'),
-      join(windowsHome, 'AppData', 'Roaming', 'Qoder', 'logs', 'sessions'),
-    ]),
-  ]
-
-  if (process.env.LOCALAPPDATA) {
-    dirs.push(join(process.env.LOCALAPPDATA, '.qoder', 'logs', 'sessions'))
-  }
-  if (process.env.APPDATA) {
-    dirs.push(join(process.env.APPDATA, 'Qoder', 'logs', 'sessions'))
-  }
-
-  return unique(dirs)
-}
-
-function qoderSessionDirs(source: string | undefined, home: string): string[] {
-  if (!source) return defaultQoderSessionDirs(home)
-
-  const normalized = source.replace(/\\/g, '/').replace(/\/+$/, '')
-  if (normalized.endsWith('/logs/sessions') || normalized.endsWith('/sessions') || normalized.endsWith('/segments')) {
-    return [source]
-  }
-  if (normalized.endsWith('/logs')) return [join(source, 'sessions')]
-
-  return [join(source, 'logs', 'sessions')]
-}
-
-export function defaultOpenCodeDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    // Windows: %APPDATA%\opencode\opencode.db
-    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
-    return join(appData, 'opencode', 'opencode.db')
-  }
-  if (plat === 'darwin') {
-    // macOS: ~/Library/Application Support/opencode/opencode.db
-    return join(home, 'Library', 'Application Support', 'opencode', 'opencode.db')
-  }
-  // Linux: $XDG_DATA_HOME/opencode/opencode.db (defaults to ~/.local/share)
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'opencode', 'opencode.db')
-}
-
-export function defaultHermesDbPath(): string {
-  return join(homedir(), '.hermes', 'state.db')
-}
-
-export function defaultQoderDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'darwin') {
-    return join(home, 'Library', 'Application Support', 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
-  }
-  if (plat === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
-    return join(localAppData, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
-  }
-  // Linux: $XDG_DATA_HOME/Qoder/... (defaults to ~/.local/share)
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
-}
-
-export function defaultCursorDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    // Windows: %APPDATA%\Cursor\User\globalStorage\state.vscdb
-    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
-    return join(appData, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
-  }
-  if (plat === 'darwin') {
-    // macOS: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
-    return join(home, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb')
-  }
-  // Linux: ~/.config/Cursor/User/globalStorage/state.vscdb
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME ?? join(home, '.config')
-  return join(xdgConfigHome, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
-}
-
-function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
-  const home = homedir()
-  const results: ToolPaths[] = []
-
-  // Claude Code: ~/.claude/projects/**/*.jsonl (recursive, includes subagents)
-  const claudeDir = sources?.['claude-code'] ?? join(home, '.claude', 'projects')
-  if (existsSync(claudeDir)) {
-    const claudePaths = findJsonlFiles(claudeDir)
-    if (claudePaths.length > 0) {
-      results.push({ tool: 'claude-code', paths: claudePaths })
-    }
-  }
-
-  // Codex: ~/.codex/sessions/**/*.jsonl (recursive)
-  const codexDir = sources?.['codex'] ?? join(home, '.codex', 'sessions')
-  if (existsSync(codexDir)) {
-    const codexPaths = findJsonlFiles(codexDir)
-    if (codexPaths.length > 0) {
-      results.push({ tool: 'codex', paths: codexPaths })
-    }
-  }
-
-  // OpenClaw: ~/.openclaw/agents/*/sessions/*.jsonl (all agents, skip checkpoint files)
-  const openclawBase = sources?.['openclaw'] ?? join(home, '.openclaw', 'agents')
-  if (existsSync(openclawBase)) {
-    // If user provided a custom path, treat it directly as the sessions dir
-    // Otherwise scan all agents under ~/.openclaw/agents/*/sessions/
-    let openclawPaths: string[]
-    if (sources?.['openclaw']) {
-      openclawPaths = findJsonlFiles(openclawBase).filter(p => !p.includes('.checkpoint.'))
-    } else {
-      openclawPaths = []
-      try {
-        const agentEntries = readdirSync(openclawBase, { withFileTypes: true })
-        for (const agentEntry of agentEntries) {
-          if (!agentEntry.isDirectory()) continue
-          const sessionsDir = join(openclawBase, agentEntry.name, 'sessions')
-          if (existsSync(sessionsDir)) {
-            openclawPaths.push(...findJsonlFiles(sessionsDir).filter(p => !p.includes('.checkpoint.')))
-          }
-        }
-      } catch {}
-    }
-    if (openclawPaths.length > 0) {
-      results.push({ tool: 'openclaw', paths: openclawPaths })
-    }
-  }
-
-  // Qoder: structured session logs only. Desktop context-usage snapshots and transcripts
-  // are not per-request token records, so they are intentionally ignored.
-  const qoderPaths = unique(
-    qoderSessionDirs(sources?.['qoder'], home)
-      .filter((dir) => existsSync(dir))
-      .flatMap((dir) => findQoderSessionSegmentFiles(dir))
-  )
-  if (qoderPaths.length > 0) {
-    results.push({ tool: 'qoder', paths: qoderPaths })
-  }
-
-  return results
-}
+// Re-export for backward compatibility with other modules that import from here
+export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath, defaultGooseDbPath, defaultZedDbPath } from '../discovery.js'
 
 function extractSessionId(filePath: string, tool: Tool): string {
   if (tool === 'claude-code') {
@@ -264,7 +60,199 @@ function extractSessionId(filePath: string, tool: Tool): string {
     const filename = parts[parts.length - 1] ?? ''
     return filename.replace('.jsonl', '') || 'unknown'
   }
+  if (tool === 'copilot') {
+    // OTEL: ~/.copilot/otel/copilot-otel-20250601.jsonl → filename
+    const parts = filePath.split('/')
+    return (parts.pop() ?? '').replace('.jsonl', '')
+  }
   return 'unknown'
+}
+
+function toNumber(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
+
+function parseUiMessagesFile(options: {
+  filePath: string
+  tool: 'roocode' | 'kilocode'
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+  exchangeRate?: number
+}): { records: StatsRecord[]; errors: string[] } {
+  const { filePath, tool, device, deviceInstanceId, platform, now, exchangeRate } = options
+  const records: StatsRecord[] = []
+  const errors: string[] = []
+
+  let messages: any[]
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+    messages = Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
+  }
+
+  const taskId = filePath.split('/').slice(-2, -1)[0] || 'unknown'
+  for (const [index, message] of messages.entries()) {
+    if (message?.say !== 'api_req_started' || typeof message.text !== 'string') continue
+    let payload: any
+    try {
+      payload = JSON.parse(message.text)
+    } catch {
+      continue
+    }
+
+    const inputTokens = toNumber(payload.tokensIn)
+    const outputTokens = toNumber(payload.tokensOut)
+    const cacheReadTokens = toNumber(payload.cacheReads)
+    const cacheWriteTokens = toNumber(payload.cacheWrites)
+    const thinkingTokens = toNumber(payload.reasoningTokens ?? payload.reasoning)
+    if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens + thinkingTokens === 0) continue
+
+    const model = typeof payload.model === 'string' && payload.model.trim()
+      ? payload.model.trim()
+      : typeof payload.modelId === 'string' && payload.modelId.trim()
+        ? payload.modelId.trim()
+        : typeof payload.apiProtocol === 'string' && payload.apiProtocol.trim()
+          ? `protocol:${payload.apiProtocol.trim().toLowerCase()}`
+          : 'unknown'
+    const provider = typeof payload.inferenceProvider === 'string' && payload.inferenceProvider.trim()
+      ? payload.inferenceProvider.trim().toLowerCase()
+      : inferProvider(model)
+    const ts = typeof message.ts === 'number' ? message.ts : now
+    const recordId = generateRecordId(deviceInstanceId, `${filePath}:${index}`, ts)
+    const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens }
+    const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
+    const logCost = Number(payload.cost)
+    const hasLogCost = Number.isFinite(logCost) && logCost > 0
+
+    records.push({
+      id: recordId,
+      ts,
+      ingestedAt: now,
+      updatedAt: now,
+      lineOffset: index,
+      tool,
+      model,
+      provider,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      thinkingTokens,
+      cost: hasLogCost ? logCost : calculatedCost,
+      costSource: hasLogCost ? 'log' : calculatedCost > 0 ? 'pricing' : 'unknown',
+      sessionId: taskId,
+      sourceFile: filePath,
+      device,
+      deviceInstanceId,
+      platform,
+    })
+  }
+
+  return { records, errors }
+}
+
+function normalizeKiroModel(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return 'kiro-agent'
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .replace(/^(anthropic\.|openai\.|aws\.)/, '')
+    .replace(/:\d+$/, '')
+    .replace(/-\d{8}-v\d+(?:-\d+)?$/i, '')
+}
+
+function parseTimestamp(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value < 1e12 ? value * 1000 : value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value).getTime()
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
+function pathIsFile(filePath: string): boolean {
+  try {
+    return statSync(filePath).isFile()
+  } catch {
+    return false
+  }
+}
+
+function parseKiroSessionFile(options: {
+  filePath: string
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+  exchangeRate?: number
+}): { records: StatsRecord[]; errors: string[] } {
+  const { filePath, device, deviceInstanceId, platform, now, exchangeRate } = options
+  const records: StatsRecord[] = []
+  const errors: string[] = []
+
+  let parsed: any
+  try {
+    parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+  } catch (e) {
+    return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
+  }
+
+  const turns = parsed?.session_state?.conversation_metadata?.user_turn_metadatas
+  if (!Array.isArray(turns)) return { records, errors }
+  const sessionId = typeof parsed?.session_id === 'string' && parsed.session_id
+    ? parsed.session_id
+    : extractSessionId(filePath, 'kiro')
+  const sessionModel = parsed?.session_state?.rts_model_state?.model_info?.model_id
+    ?? parsed?.session_state?.rts_model_state?.model_info?.model_name
+
+  for (const [index, turn] of turns.entries()) {
+    const inputTokens = toNumber(turn?.input_token_count)
+    const outputTokens = toNumber(turn?.output_token_count)
+    if (inputTokens + outputTokens === 0) continue
+
+    const model = normalizeKiroModel(turn?.model_id ?? sessionModel)
+    const recordTs = parseTimestamp(
+      turn?.request_start_timestamp_ms ?? turn?.start_timestamp ?? turn?.end_timestamp,
+      now,
+    )
+    const requestId = turn?.loop_id?.rand != null
+      ? `${sessionId}:${turn.loop_id.rand}`
+      : Array.isArray(turn?.message_ids) && turn.message_ids[0]
+        ? String(turn.message_ids[0])
+        : String(index)
+    const tokenArgs = { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0 }
+    const cost = calculateCost(model, tokenArgs, exchangeRate)
+
+    records.push({
+      id: generateRecordId(deviceInstanceId, `${filePath}:${requestId}`, recordTs),
+      ts: recordTs,
+      ingestedAt: now,
+      updatedAt: now,
+      lineOffset: index,
+      tool: 'kiro',
+      model,
+      provider: inferProvider(model),
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost,
+      costSource: cost > 0 ? 'pricing' : 'unknown',
+      sessionId,
+      sourceFile: filePath,
+      device,
+      deviceInstanceId,
+      platform,
+    })
+  }
+
+  return { records, errors }
 }
 
 export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; cursorDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
@@ -278,7 +266,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   const watermarkPath = join(AIUSAGE_DIR, 'watermark.json')
   const wm = new WatermarkManager(watermarkPath)
 
-  const toolPaths = discoverLogFiles(config?.sources)
+  const toolPaths = discoverLogFiles()
   const aggregator = new Aggregator()
 
   let parsedCount = 0
@@ -306,6 +294,55 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         if (offset >= stat.size) {
           onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
           continue // No new data
+        }
+
+        if ((tool === 'roocode' || tool === 'kilocode') && filePath.endsWith('ui_messages.json')) {
+          const result = parseUiMessagesFile({
+            filePath,
+            tool,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            exchangeRate,
+          })
+          for (const record of result.records) {
+            insertRecord(db, record)
+            parsedCount++
+          }
+          errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          continue
+        }
+
+        if (tool === 'kiro' && filePath.endsWith('.json')) {
+          const result = parseKiroSessionFile({
+            filePath,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            exchangeRate,
+          })
+          for (const record of result.records) {
+            insertRecord(db, record)
+            parsedCount++
+          }
+          errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          continue
         }
 
         const content = readFileSync(filePath, 'utf-8')
@@ -371,9 +408,13 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           byteOffset += Buffer.byteLength(line, 'utf-8') + 1
         }
 
-        // Handle finalize (orphan tool calls for Codex)
+        // Handle finalize (orphan tool calls for Codex, deduped fallback records for Copilot OTEL, etc.)
         const orphanResults = aggregator.finalize()
         for (const result of orphanResults) {
+          if (result.record) {
+            insertRecord(db, result.record)
+            parsedCount++
+          }
           for (const tc of result.toolCalls) {
             insertToolCall(db, tc)
             toolCallCount++
@@ -399,7 +440,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // OpenCode: SQLite database
-  const openCodeDbPath = options?.openCodeDbPath ?? config?.sources?.['opencode'] ?? defaultOpenCodeDbPath()
+  const openCodeDbPath = options?.openCodeDbPath ?? getDbPath('opencode') ?? ''
   if ((!filterTool || filterTool === 'opencode') && existsSync(openCodeDbPath)) {
     try {
       const openCodeDb = new Database(openCodeDbPath, { readonly: true })
@@ -433,7 +474,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Hermes: SQLite database
-  const hermesDbPath = options?.hermesDbPath ?? config?.sources?.['hermes'] ?? defaultHermesDbPath()
+  const hermesDbPath = options?.hermesDbPath ?? getDbPath('hermes') ?? ''
   if ((!filterTool || filterTool === 'hermes') && existsSync(hermesDbPath)) {
     try {
       const hermesDb = new Database(hermesDbPath, { readonly: true })
@@ -467,7 +508,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Qoder: SQLite database (Mac/Linux/Windows desktop app)
-  const qoderDbPath = options?.qoderDbPath ?? config?.sources?.['qoder-db'] ?? defaultQoderDbPath()
+  const qoderDbPath = options?.qoderDbPath ?? getDbPath('qoder-db') ?? ''
   if ((!filterTool || filterTool === 'qoder') && existsSync(qoderDbPath)) {
     try {
       const qoderDb = new Database(qoderDbPath, { readonly: true })
@@ -501,7 +542,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Cursor: SQLite database (state.vscdb)
-  const cursorDbPath = options?.cursorDbPath ?? config?.sources?.['cursor'] ?? defaultCursorDbPath()
+  const cursorDbPath = options?.cursorDbPath ?? getDbPath('cursor') ?? ''
   if ((!filterTool || filterTool === 'cursor') && existsSync(cursorDbPath)) {
     try {
       const cursorDb = new Database(cursorDbPath, { readonly: true })
@@ -532,6 +573,146 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
       errors.push(`${cursorDbPath}: ${e instanceof Error ? e.message : e}`)
     }
   }
+
+  // Kilo: SQLite database (new Kilo local storage)
+  const kiloDbPath = getDbPath('kilocode-db') ?? ''
+  if ((!filterTool || filterTool === 'kilocode') && existsSync(kiloDbPath)) {
+    try {
+      const kiloDb = new Database(kiloDbPath, { readonly: true })
+      try {
+        const result = runParseKilo(kiloDb, {
+          dbPath: kiloDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getOpenCodeCursor(),
+          exchangeRate,
+        })
+
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setOpenCodeCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+
+        // 输出KiloCode统计信息
+        if (result.records.length > 0) {
+          const inputTokens = result.records.reduce((sum, r) => sum + r.inputTokens, 0)
+          const outputTokens = result.records.reduce((sum, r) => sum + r.outputTokens, 0)
+          const cacheReadTokens = result.records.reduce((sum, r) => sum + r.cacheReadTokens, 0)
+          const cacheWriteTokens = result.records.reduce((sum, r) => sum + r.cacheWriteTokens, 0)
+          const thinkingTokens = result.records.reduce((sum, r) => sum + r.thinkingTokens, 0)
+          const totalCost = result.records.reduce((sum, r) => sum + r.cost, 0)
+          console.log(`[KiloCode] Parsed ${result.records.length} records`)
+          console.log(`[KiloCode] Input: ${inputTokens.toLocaleString()}, Output: ${outputTokens.toLocaleString()}, CacheRead: ${cacheReadTokens.toLocaleString()}, CacheWrite: ${cacheWriteTokens.toLocaleString()}, Thinking: ${thinkingTokens.toLocaleString()}`)
+          console.log(`[KiloCode] Total Cost: ${totalCost.toFixed(4)} USD`)
+        }
+
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'kilocode', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        kiloDb.close()
+      }
+    } catch (e) {
+      errors.push(`${kiloDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // Goose: SQLite sessions database
+  const gooseDbPath = getDbPath('goose') ?? ''
+  if ((!filterTool || filterTool === 'goose') && existsSync(gooseDbPath)) {
+    try {
+      const gooseDb = new Database(gooseDbPath, { readonly: true })
+      try {
+        const result = runParseGoose(gooseDb, {
+          dbPath: gooseDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getGooseCursor(),
+          exchangeRate,
+        })
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setGooseCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'goose', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        gooseDb.close()
+      }
+    } catch (e) {
+      errors.push(`${gooseDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // Kiro: tokens_generated or conversations_v2 SQLite data
+  const kiroDbPath = getDbPath('kiro') ?? ''
+  if ((!filterTool || filterTool === 'kiro') && pathIsFile(kiroDbPath)) {
+    try {
+      const kiroDb = new Database(kiroDbPath, { readonly: true })
+      try {
+        const result = runParseKiro(kiroDb, {
+          dbPath: kiroDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getKiroCursor(),
+          exchangeRate,
+        })
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setKiroCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'kiro', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        kiroDb.close()
+      }
+    } catch (e) {
+      errors.push(`${kiroDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // Zed: SQLite threads database. Currently imports JSON-encoded thread rows.
+  const zedDbPath = getDbPath('zed') ?? ''
+  if ((!filterTool || filterTool === 'zed') && existsSync(zedDbPath)) {
+    try {
+      const zedDb = new Database(zedDbPath, { readonly: true })
+      try {
+        const result = runParseZed(zedDb, {
+          dbPath: zedDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getZedCursor(),
+          exchangeRate,
+        })
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setZedCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'zed', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        zedDb.close()
+      }
+    } catch (e) {
+      errors.push(`${zedDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
 
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
@@ -781,18 +962,4 @@ function deriveSessionId(tool: Tool, sourceFile: string): string {
   if (tool === 'openclaw') return fileName.replace(/\.(trajectory\.)?jsonl$/, '')
   if (tool === 'qoder') return normalized.split('/').slice(-2, -1)[0] ?? fileName.replace(/\.jsonl$/, '')
   return fileName.replace(/\.jsonl$/, '')
-}
-
-export function getDefaultSourcePaths(): Record<string, string> {
-  const home = homedir()
-  return {
-    'claude-code': join(home, '.claude', 'projects'),
-    'codex':       join(home, '.codex', 'sessions'),
-    'openclaw':    join(home, '.openclaw', 'agents'),
-    'opencode':    defaultOpenCodeDbPath(),
-    'hermes':      defaultHermesDbPath(),
-    'qoder':       join(home, '.qoder', 'logs', 'sessions'),
-    'qoder-db':    defaultQoderDbPath(),
-    'cursor':      defaultCursorDbPath(),
-  }
 }

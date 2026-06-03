@@ -16,7 +16,7 @@
 
 ## 前置条件
 
-- 已安装 [aiusage](https://github.com/juliantanx/aiusage) CLI 并完成数据解析（`aiusage parse`）
+- 已安装 [aiusage](https://github.com/juliantanx/aiusage) CLI 并完成数据解析（`aiusage serve` 启动时会自动解析）
 - Node.js >= 20
 
 ## 安装
@@ -32,7 +32,7 @@ npm install -g @juliantanx/aiusage-widget
 aiusage-widget
 ```
 
-组件会读取 `~/.aiusage/cache.db`。请确保至少执行过一次 `aiusage parse`，使数据库文件存在。
+组件会读取 `~/.aiusage/cache.db`。运行 `aiusage serve` 时会自动创建数据库。
 
 ### 使用 PM2 后台运行
 

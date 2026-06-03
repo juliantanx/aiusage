@@ -97,7 +97,7 @@
       '@type': 'Organization',
       name: 'AIUsage'
     },
-    softwareVersion: '1.3.4',
+    softwareVersion: '1.4.0',
     downloadUrl: 'https://www.npmjs.com/package/@juliantanx/aiusage',
     featureList: zh
       ? 'Token用量追踪,费用估算与分析,模型使用排名,工具调用分析,项目维度统计,配额监控,多设备同步,数据导出'
@@ -279,16 +279,6 @@
         </div>
         <div class="footer-col">
           <h4>{zh ? '联系' : 'Contact'}</h4>
-          <span class="wechat-wrap">
-            <span class="wechat-trigger">{zh ? '微信' : 'WeChat'}</span>
-            <span class="wechat-popup">
-              <img src="/wechat-qr.jpg" alt="WeChat QR" width="160" height="160" />
-              <span class="wechat-tip">{zh ? '扫码添加微信' : 'Scan to add on WeChat'}</span>
-            </span>
-          </span>
-          <a href="https://discord.gg/ggE8cZUA" target="_blank" rel="noopener">Discord</a>
-          <a href="https://t.me/+DWaxtoPB7CY2Yjc1" target="_blank" rel="noopener">Telegram</a>
-          <a href="https://www.facebook.com/juliantanx" target="_blank" rel="noopener">Facebook</a>
           <a href="mailto:hi@jtanx.com">{zh ? '邮件联系' : 'Email'}</a>
         </div>
         <div class="footer-col">
@@ -720,60 +710,6 @@
   }
 
   /* ── WeChat QR popup ────────────────────────────────────────────────────── */
-  .wechat-wrap {
-    position: relative;
-    display: block;
-    margin-bottom: 0.4rem;
-  }
-
-  .wechat-trigger {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-
-  .wechat-wrap:hover .wechat-trigger {
-    color: var(--accent);
-  }
-
-  .footer-col .wechat-popup {
-    display: none;
-  }
-
-  .wechat-popup {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
-    background: var(--surface);
-    border: 1px solid var(--border-medium);
-    border-radius: 10px;
-    padding: 0.75rem;
-    box-shadow: var(--shadow-lg);
-    z-index: 200;
-    text-align: center;
-    white-space: nowrap;
-  }
-
-  .footer-col .wechat-wrap:hover .wechat-popup {
-    display: block;
-  }
-
-  .wechat-popup img {
-    display: block;
-    width: 140px;
-    height: 140px;
-    border-radius: 6px;
-    object-fit: cover;
-  }
-
-  .wechat-tip {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 0.5rem;
-  }
-
   /* ── Global typography ──────────────────────────────────────────────────── */
   :global(h1, h2, h3, h4, h5, h6) {
     line-height: 1.25;

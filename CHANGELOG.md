@@ -5,11 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-03
+
+### Added
+- **GitHub Copilot usage tracking and quota support** ([#19](https://github.com/juliantanx/aiusage/pull/19)) — CopilotParser for OTEL JSONL files (Copilot CLI and VS Code Copilot Chat), Copilot quota API query via GitHub OAuth token, auto-discovery of `~/.copilot/otel/*.jsonl` and `$COPILOT_OTEL_FILE_EXPORTER_PATH`
+- **KiloCode parser support** ([#20](https://github.com/juliantanx/aiusage/pull/20) by @zhaolu83949426-hub) — parser for KiloCode VS Code extension SQLite database (`kilo.db`), supports input/output/cache/thinking tokens and cost calculation
+- **Per-model token breakdown with stacked bar visualization** ([#21](https://github.com/juliantanx/aiusage/pull/21)) — API exposes inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens, totalCost per model; unified ranked list with stacked composition bars
+- **Auto-detect tools and expand from 8 to 22** ([#22](https://github.com/juliantanx/aiusage/pull/22)) — automatic detection of installed AI tools replaces manual source path configuration; read-only Detected Tools panel in settings UI; `GET /api/detected-tools` endpoint
+- **USD/CNY currency toggle** ([#17](https://github.com/juliantanx/aiusage/pull/17)) — segmented toggle in Pricing page to switch between USD and CNY display with exchange rate conversion
+- **Expanded model pricing table** — added OpenRouter, Google, and additional Claude/OpenAI model variants; new `inputText` pricing field for models with separate text input pricing
+
+### Fixed
+- **Auto-recalculate costs after pricing save/reset** ([#15](https://github.com/juliantanx/aiusage/pull/15)) — server automatically recalculates all record costs after save/reset, removing the need for manual recalculation; fix edit form layout for Chinese labels
+- **Fallback to credential file when keychain data is unusable** ([#18](https://github.com/juliantanx/aiusage/pull/18)) — falls through to file-based credentials when macOS Keychain entry is not usable (parse error, wrong auth_mode)
+
+### Changed
+- Removed announcement banner from site layout
+- Simplified hero section on homepage
+
+---
+
 ## [1.3.4] - 2026-05-29
 
 ### Fixed
 - **Widget global install crash** — `aiusage-widget` failed with `Cannot find module 'electron'` after `npm install -g`, because `electron` was a dev dependency and never installed for end users. It is now a runtime dependency.
 - **Cross-platform native binding** — the widget previously shipped a single prebuilt `better-sqlite3` binary built on the CI runner (Linux x64), which could not load on macOS or Windows. A `postinstall` step now fetches the `better-sqlite3` binding matching the user's platform, arch, and the installed Electron ABI, without disturbing the Node-ABI binding used by the CLI.
+
+---
+
+## [1.3.3] - 2026-05-28
+
+### Added
+- **Logo redesign** — new rising bar chart icon replacing the previous logo
+- **Contact footer** — WeChat QR popup, Discord, Telegram, and Email links on the site
+- **Facebook link** in site contact footer section
+- **Xiaomi MiMo model pricing** added to pricing table
+- **Comprehensive site SEO** — structured data, meta tags, favicon set
+- **Official website link** added to sidebar navigation
+- **Expanded widget documentation** — screenshot, panel features, tray icon usage
+- **Font size legibility and mobile responsiveness** improvements
+
+### Fixed
+- **Widget panel positioning and Node/Electron sqlite ABI conflict** — resolve crash when loading sqlite in Electron environment
+- **Widget launcher syntax error** that prevented background detach
+- **Widget tray icon rendering** — replaced lightning icon with new logo
+- **PM2 startup failures** with ESM and native module compatibility
+- **Docker release builds** — repair broken build pipeline
+- **GitHub stats badges** — render via API instead of flaky shields.io
+- **Node 26 widget sqlite dependency** — fix native binding loading
+- **Docs sidebar scroll** — keep active item in view while navigating
+
+### Changed
+- Minimum Node.js requirement bumped from 18 to 20
+- Generated SvelteKit build output no longer tracked in git
+- README GIF replaced with static screenshots
+- Site docs aligned with actual dashboard behavior
+- Screenshots desensitized (project names, source paths, device aliases)
 
 ---
 
@@ -71,6 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove unused imports in serve.ts and pricing.ts
 - Push annotated tag explicitly to trigger downstream workflows
 
+---
+
 ## [1.2.1] - 2026-05-22
 
 ### Added
@@ -82,6 +135,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - README (EN/ZH): Node version notes, rebuild docs, Hermes support
 
+---
+
+## [1.2.0] - 2026-05-22
+
+### Added
+- **Hermes Agent parser** — detect and display Hermes AI agent usage ([#3](https://github.com/juliantanx/aiusage/pull/3))
+- Hermes watermark manager and tool type integration
+
+### Fixed
+- Add hermes to tool filter allowlist and fix token import for orphaned sessions
+
+### Changed
+- Minimum Node.js requirement set to >=18 via engine constraint
+
+---
+
 ## [1.1.1] - 2026-05-21
 
 ### Fixed
@@ -91,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - CI npm auth rewritten to write token directly to `~/.npmrc` instead of relying on `setup-node` registry-url
+
+---
 
 ## [1.1.0] - 2026-05-21
 
@@ -111,11 +182,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nav home label renamed: Dashboard → Home
 - README screenshots updated (dashboard, overview, token pages)
 
+---
+
 ## [1.0.6] - 2026-05-17
 
 ### Changed
 - Added package metadata (homepage, repository, keywords, license) to CLI package
 - README screenshot served via jsDelivr CDN for access in China
+
+---
 
 ## [1.0.5] - 2026-05-17
 
@@ -123,11 +198,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README screenshot compressed and re-exported as clean PNG
 - README added to npm package files
 
+---
+
+## [1.0.4] - 2026-05-17
+
+### Added
+- **Settings page** — general/sources/sync/data sections with i18n support
+- **Runtime settings controller** — changes take effect immediately without restart
+- **Home page redesign** — live token counter replaces overview stats; stats moved to `/overview`
+- **Dev mode support** with tsx and Vite API proxy
+- Credential reveal toggle in settings form
+- `weekStart` config field for weekly aggregation start day
+
+### Fixed
+- Dynamic type attribute in settings form, i18n Show/Hide labels
+- Effective device name fallback for empty strings
+- Poll interval fallback using nullish coalescing
+- `onConfigUpdated` test server cleanup with try/finally
+
+---
+
+## [1.0.3] - 2026-05-16
+
+### Fixed
+- **6 security and correctness bugs** resolved
+- New model prices added to pricing table, cleaned up thinking dead code
+
+### Changed
+- Improved test coverage
+
+---
+
+## [1.0.2] - 2026-05-16
+
+### Added
+- **Layered project extraction** — smarter project name resolution from session data
+
+### Changed
+- Removed superpowers planning artifacts from repository
+
+---
+
+## [1.0.1] - 2026-05-16
+
+### Added
+- **OpenCode support** — parse and display OpenCode AI tool usage from SQLite
+- **Custom source paths** — configure non-default log file locations
+- **Cross-platform fixes** — improved compatibility across macOS, Linux, and Windows
+- **Complete UI redesign** — Obsidian Terminal theme with i18n and theme system
+- **Bidirectional data sync** — pull/push with GitHub and S3 backends
+- **Docker support** — containerized deployment with deployment guide
+- **Multi-device filtering** — `--device` flag for CLI, DeviceSelector for web dashboard
+- **Pricing management** — edit and customize model pricing in settings
+- **Background sync** — progress tracking with hourly partitioning and DB views
+- **Tool filter** — filter dashboard views by tool type (Claude Code, Cursor, etc.)
+
+### Fixed
+- Package renamed to `@juliantanx/aiusage` to avoid npm name conflict
+- Pricing table updated with verified 2026 model prices
+- Parse data loss and accuracy issues resolved
+- Record ID collisions prevented, cache tokens included in skip check
+- Timestamps normalized to integers, conflict retry logic added
+
+---
+
+[1.4.0]: https://github.com/juliantanx/aiusage/compare/v1.3.4...v1.4.0
+[1.3.4]: https://github.com/juliantanx/aiusage/compare/v1.3.3...v1.3.4
+[1.3.3]: https://github.com/juliantanx/aiusage/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/juliantanx/aiusage/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/juliantanx/aiusage/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/juliantanx/aiusage/compare/v1.2.1...v1.3.0
-[1.2.1]: https://github.com/juliantanx/aiusage/compare/v1.1.1...v1.2.1
+[1.2.1]: https://github.com/juliantanx/aiusage/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/juliantanx/aiusage/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/juliantanx/aiusage/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/juliantanx/aiusage/compare/v1.0.6...v1.1.0
 [1.0.6]: https://github.com/juliantanx/aiusage/compare/v1.0.5...v1.0.6
-[1.0.5]: https://github.com/juliantanx/aiusage/releases/tag/v1.0.5
+[1.0.5]: https://github.com/juliantanx/aiusage/compare/v1.0.4...v1.0.5
+[1.0.4]: https://github.com/juliantanx/aiusage/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/juliantanx/aiusage/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/juliantanx/aiusage/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/juliantanx/aiusage/releases/tag/v1.0.1

@@ -2,13 +2,52 @@ import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
-import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, type PriceEntry } from '@aiusage/core'
+import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
-import type { Config, SourcesConfig, SyncConfig } from '../config.js'
+import type { Config, SyncConfig } from '../config.js'
 import { extractProject, extractProjectFromCwd } from './project-extraction.js'
-import { getDefaultSourcePaths } from '../commands/parse.js'
+import { discoverTools } from '../discovery.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 import { queryAllQuotas } from '../quota.js'
+
+function recalcCosts(db: Database.Database): number {
+  const BATCH_SIZE = 1000
+  let updated = 0
+  let lastId = ''
+  const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
+  while (true) {
+    const records = db.prepare(
+      'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
+    ).all(lastId, BATCH_SIZE) as any[]
+    if (records.length === 0) break
+    const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
+    const tx = db.transaction((batch: any[]) => {
+      for (const r of batch) {
+        if (r.cost_source === 'log') continue
+
+        const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
+        const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
+        const provider = model !== r.model ? inferProvider(model) : r.provider
+        const hasPrice = resolvePrice(model) != null
+        const cost = hasPrice ? calculateCost(model, {
+          inputTokens: r.input_tokens,
+          outputTokens: r.output_tokens,
+          cacheReadTokens: r.cache_read_tokens,
+          cacheWriteTokens: r.cache_write_tokens,
+          thinkingTokens: r.thinking_tokens,
+        }, exchangeRate) : 0
+        const costSource = hasPrice ? 'pricing' : 'unknown'
+
+        if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
+        updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)
+        updated++
+      }
+    })
+    tx(records)
+    lastId = records[records.length - 1].id
+  }
+  return updated
+}
 
 function getDateRangeFilter(range: string | null, from: string | null, to: string | null, prefix = '', weekStart: 0 | 1 = 1): { where: string; params: Record<string, unknown> } {
   const ts = prefix ? `${prefix}.ts` : 'ts'
@@ -159,8 +198,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
     // Validate tool parameter early — same style as range validation
     const toolParam = url.searchParams.get('tool')
-    const VALID_TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor']
-    if (toolParam && !VALID_TOOLS.includes(toolParam)) {
+    if (toolParam && !(TOOLS as readonly string[]).includes(toolParam)) {
       json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid tool' } }, 400)
       return
     }
@@ -473,55 +511,97 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool)
 
-        let total: number
+        let totalTokensAcrossModels: number
         let rows: any[]
 
         if (df.useUnion) {
           const unionSql = `
-            SELECT model, provider, COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            SELECT model, provider,
+                   COUNT(*) AS callCount,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
             GROUP BY model, provider
             UNION ALL
-            SELECT model, provider, COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+            SELECT model, provider,
+                   COUNT(*) AS callCount,
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
             GROUP BY model, provider
           `
           const mergedRows = db.prepare(`
-            SELECT model, provider, SUM(callCount) AS callCount, SUM(totalTokens) AS totalTokens
+            SELECT model, provider,
+                   SUM(callCount) AS callCount,
+                   SUM(inputTokens) AS inputTokens,
+                   SUM(outputTokens) AS outputTokens,
+                   SUM(cacheReadTokens) AS cacheReadTokens,
+                   SUM(cacheWriteTokens) AS cacheWriteTokens,
+                   SUM(thinkingTokens) AS thinkingTokens,
+                   SUM(totalTokens) AS totalTokens,
+                   SUM(totalCost) AS totalCost
             FROM (${unionSql})
             WHERE model != 'unknown'
-            GROUP BY model, provider ORDER BY callCount DESC
+            GROUP BY model, provider ORDER BY totalTokens DESC
           `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
-          total = mergedRows.reduce((s, r) => s + r.callCount, 0) || 1
+          totalTokensAcrossModels = mergedRows.reduce((sum, row) => sum + row.totalTokens, 0)
           rows = mergedRows
         } else if (device && device !== options?.currentDeviceInstanceId) {
           rows = db.prepare(`
             SELECT model, provider,
                    COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM synced_records WHERE 1=1 AND model != 'unknown' ${df.where} ${dr.where} ${tf.where}
-            GROUP BY model, provider ORDER BY callCount DESC
+            GROUP BY model, provider ORDER BY totalTokens DESC
           `).all({ ...df.params, ...dr.params, ...tf.params }) as any[]
-          total = rows.reduce((s, r) => s + r.callCount, 0) || 1
+          totalTokensAcrossModels = rows.reduce((sum, row) => sum + row.totalTokens, 0)
         } else {
           rows = db.prepare(`
             SELECT model, provider,
                    COUNT(*) AS callCount,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens
+                   SUM(input_tokens) AS inputTokens,
+                   SUM(output_tokens) AS outputTokens,
+                   SUM(cache_read_tokens) AS cacheReadTokens,
+                   SUM(cache_write_tokens) AS cacheWriteTokens,
+                   SUM(thinking_tokens) AS thinkingTokens,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS totalCost
             FROM records WHERE 1=1 AND model != 'unknown' ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-            GROUP BY model, provider ORDER BY callCount DESC
+            GROUP BY model, provider ORDER BY totalTokens DESC
           `).all({ ...dr.params, ...tf.params }) as any[]
-          total = rows.reduce((s, r) => s + r.callCount, 0) || 1
+          totalTokensAcrossModels = rows.reduce((sum, row) => sum + row.totalTokens, 0)
         }
 
         const models = rows.map(r => ({
           model: r.model,
           provider: r.provider,
           callCount: r.callCount,
+          inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens,
+          cacheReadTokens: r.cacheReadTokens,
+          cacheWriteTokens: r.cacheWriteTokens,
+          thinkingTokens: r.thinkingTokens,
           totalTokens: r.totalTokens,
-          percentage: Math.round((r.callCount / total) * 1000) / 10,
+          totalCost: r.totalCost,
+          percentage: totalTokensAcrossModels > 0
+            ? Math.round((r.totalTokens / totalTokensAcrossModels) * 1000) / 10
+            : 0,
         }))
 
         json(res, { models })
@@ -874,7 +954,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             const cfg = loadConfig() ?? {}
             cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
             saveConfig(cfg)
-            json(res, { ok: true })
+            const recalculated = recalcCosts(db)
+            json(res, { ok: true, recalculated })
           } catch {
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
           }
@@ -893,48 +974,15 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             delete cfg.priceOverrides[model]
             saveConfig(cfg)
           }
-          json(res, { ok: true })
+          const recalculated = recalcCosts(db)
+          json(res, { ok: true, recalculated })
           return
         }
       }
 
       // ── /api/pricing/recalc ─────────────────────────────────────────
       if (url.pathname === '/api/pricing/recalc' && req.method === 'POST') {
-        const BATCH_SIZE = 1000
-        let updated = 0
-        let lastId = ''
-        const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
-        while (true) {
-          const records = db.prepare(
-            'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
-          ).all(lastId, BATCH_SIZE) as any[]
-          if (records.length === 0) break
-          const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
-          const tx = db.transaction((batch: any[]) => {
-            for (const r of batch) {
-              if (r.cost_source === 'log') continue
-
-              const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
-              const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
-              const provider = model !== r.model ? inferProvider(model) : r.provider
-              const hasPrice = resolvePrice(model) != null
-              const cost = hasPrice ? calculateCost(model, {
-                inputTokens: r.input_tokens,
-                outputTokens: r.output_tokens,
-                cacheReadTokens: r.cache_read_tokens,
-                cacheWriteTokens: r.cache_write_tokens,
-                thinkingTokens: r.thinking_tokens,
-              }, exchangeRate) : 0
-              const costSource = hasPrice ? 'pricing' : 'unknown'
-
-              if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
-              updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)
-              updated++
-            }
-          })
-          tx(records)
-          lastId = records[records.length - 1].id
-        }
+        const updated = recalcCosts(db)
         json(res, { updated })
         return
       }
@@ -1078,23 +1126,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         if (req.method === 'GET') {
           const currentCfg = loadConfig() ?? {}
           const osPlatform = platform()
-          const { credentials, priceOverrides, platform: _cfgPlatform, ...rest } = currentCfg
+          const { credentials, priceOverrides, platform: _cfgPlatform, sources: _legacySources, ...rest } = currentCfg
           json(res, {
             device: rest.device ?? null,
             weekStart: rest.weekStart ?? 1,
             dashboardPollInterval: rest.dashboardPollInterval ?? null,
             parseInterval: rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
-            sources: {
-              'claude-code': rest.sources?.['claude-code'] ?? null,
-              codex: rest.sources?.codex ?? null,
-              openclaw: rest.sources?.openclaw ?? null,
-              opencode: rest.sources?.opencode ?? null,
-              hermes: rest.sources?.hermes ?? null,
-              qoder: rest.sources?.qoder ?? null,
-              'qoder-db': rest.sources?.['qoder-db'] ?? null,
-              cursor: rest.sources?.cursor ?? null,
-            },
             sync: rest.sync ?? null,
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
@@ -1102,7 +1140,6 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             credentialKeys: credentials ? Object.keys(credentials) : [],
             hostname: hostname(),
             platform: osPlatform,
-            defaultPaths: getDefaultSourcePaths(),
           })
           return
         }
@@ -1157,19 +1194,6 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               else existing.retentionDays = Number(update.retentionDays)
             }
 
-            if (update.sources && typeof update.sources === 'object') {
-              const src = update.sources as Record<string, unknown>
-              const s: SourcesConfig = existing.sources ?? {}
-              for (const key of ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'qoder-db', 'cursor'] as const) {
-                if (key in src) {
-                  if (!src[key]) delete s[key]
-                  else s[key] = String(src[key])
-                }
-              }
-              if (Object.keys(s).length) existing.sources = s
-              else delete existing.sources
-            }
-
             if ('sync' in update) {
               const syncUpdate = update.sync as Record<string, unknown> | null
               if (!syncUpdate?.backend) {
@@ -1208,6 +1232,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           }
           return
         }
+      }
+
+      // ── /api/detected-tools ──────────────────────────────────────
+      if (url.pathname === '/api/detected-tools' && req.method === 'GET') {
+        const tools = discoverTools()
+        json(res, { tools })
+        return
       }
 
       // ── /api/exchange-rate/refresh ────────────────────────────────

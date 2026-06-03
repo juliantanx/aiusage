@@ -45,7 +45,7 @@
 | `synced_at` | INTEGER | 最近上传到云端时间，NULL = 未同步 |
 | `updated_at` | INTEGER | 业务字段最近更新时间 |
 | `line_offset` | INTEGER | 来源日志行偏移 |
-| `tool` | TEXT | `claude-code` / `codex` / `openclaw` / `opencode` / `hermes` / `qoder` |
+| `tool` | TEXT | AI 工具标识，如 `claude-code`、`codex`、`opencode`、`cursor`、`kilocode`、`copilot`、`gemini`、`kimi`、`kiro`、`zed`、`goose` 等 |
 | `model` | TEXT | 模型名 |
 | `provider` | TEXT | 供应商 |
 | `input_tokens` | INTEGER | |
@@ -228,8 +228,8 @@ sync()
 
 ### 4.4.1 自动化与刷新频率
 
-- 项目本身不内建定时同步或定时解析能力
-- `aiusage parse` 与 `aiusage sync` 的执行频率由用户手动触发或外部 cron / 任务计划控制
+- 项目本身不内建定时同步能力
+- `aiusage serve` 启动时会自动执行一次 parse；之后 `aiusage parse` 与 `aiusage sync` 的执行频率由用户手动触发或外部 cron / 任务计划控制
 - Web 概览页首次加载时会调用 `/api/refresh`，触发一次本地增量 parse
 - Web Sync 按钮触发后，前端会每 2 秒轮询 `/api/sync` 查询进度；这不是新的数据采集周期
 

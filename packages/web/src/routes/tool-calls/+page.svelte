@@ -18,7 +18,25 @@
     { key: 'skill',    label: () => $t('toolCalls.typeSkill') },
   ]
 
-  const NO_TOOL_CALL_TOOLS = new Set(['qoder', 'cursor'])
+  const NO_TOOL_CALL_TOOLS = new Set([
+    'qoder',
+    'cursor',
+    'kilocode',
+    'copilot',
+    'gemini',
+    'kimi',
+    'codebuddy',
+    'kiro',
+    'grok',
+    'antigravity',
+    'roocode',
+    'zed',
+    'goose',
+    'omp',
+    'pi',
+    'craft',
+    'droid',
+  ])
   $: showNoToolCallNotice = NO_TOOL_CALL_TOOLS.has($selectedTool)
 
   async function loadData() {
