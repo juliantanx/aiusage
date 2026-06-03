@@ -20,7 +20,6 @@
 
 ```bash
 npm install -g @juliantanx/aiusage
-aiusage parse
 aiusage serve
 ```
 

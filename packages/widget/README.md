@@ -16,7 +16,7 @@ English | [中文](./README_zh.md)
 
 ## Prerequisites
 
-- [aiusage](https://github.com/juliantanx/aiusage) CLI installed and data parsed (`aiusage parse`)
+- [aiusage](https://github.com/juliantanx/aiusage) CLI installed and data parsed (`aiusage serve` auto-parses on startup)
 - Node.js >= 20
 
 ## Install
@@ -32,7 +32,7 @@ npm install -g @juliantanx/aiusage-widget
 aiusage-widget
 ```
 
-The widget reads from `~/.aiusage/cache.db`. Make sure you have run `aiusage parse` at least once so the database exists.
+The widget reads from `~/.aiusage/cache.db`. The database is created automatically when you run `aiusage serve`.
 
 ### Running with PM2
 

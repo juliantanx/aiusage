@@ -300,8 +300,8 @@
     </section>
 
     <section id="parse">
-      <h3>{zh ? '解析数据' : 'Parse Data'}</h3>
-      <p>{zh ? '解析 AI 工具的日志文件，写入本地数据库：' : 'Parse log files from your AI tools into the local database:'}</p>
+      <h3>{zh ? '手动解析数据（可选）' : 'Manual Parse (Optional)'}</h3>
+      <p>{zh ? 'aiusage serve 启动时会自动解析日志。如需在不启动仪表盘的情况下单独解析，可手动运行：' : 'aiusage serve auto-parses logs on startup. To parse without starting the dashboard, run manually:'}</p>
       <CodeBlock lang="Terminal" copyText="aiusage parse">
         <span slot="lines"><span>1</span></span>
         <span class="tk-kw">aiusage</span> parse
@@ -318,8 +318,8 @@
       <p>{zh ? '浏览器打开 http://localhost:3847 即可查看仪表盘。' : 'Open http://localhost:3847 in your browser to view the dashboard.'}</p>
       <Callout type="info">
         {zh
-          ? '首页会按当前时间范围从 API 拉取汇总数据，并根据设置中的轮询间隔自动刷新。需要导入新日志时，可手动运行 aiusage parse，或在设置里启用自动解析间隔。'
-          : 'The home page loads summary data for the current range and refreshes automatically based on the dashboard poll interval. To import new logs, run aiusage parse manually or enable the auto-parse interval in Settings.'
+          ? 'serve 启动时会自动解析一次日志。之后首页会按设置中的轮询间隔自动刷新。需要导入新日志时，可在设置里启用自动解析间隔，或手动运行 aiusage parse。'
+          : 'serve auto-parses logs on startup. The home page then refreshes automatically based on the dashboard poll interval. To import new logs, enable the auto-parse interval in Settings, or run aiusage parse manually.'
         }
       </Callout>
     </section>

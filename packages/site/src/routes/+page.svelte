@@ -189,8 +189,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? '通过 npm 全局安装：npm install -g @juliantanx/aiusage，然后运行 aiusage parse 解析数据，最后运行 aiusage serve 启动仪表盘。'
-            : 'Install globally via npm: npm install -g @juliantanx/aiusage, then run aiusage parse to parse data, and aiusage serve to start the dashboard.'
+            ? '通过 npm 全局安装：npm install -g @juliantanx/aiusage，然后运行 aiusage serve 启动仪表盘（会自动解析数据）。'
+            : 'Install globally via npm: npm install -g @juliantanx/aiusage, then run aiusage serve to start the dashboard (data is parsed automatically).'
         }
       },
       {
@@ -234,7 +234,7 @@
           </div>
           <pre><code><span class="tk-cmt">{zh ? '# 安装并启动' : '# Install & start'}</span>
 <span class="tk-kw">npm</span> install -g <span class="tk-str">@juliantanx/aiusage</span>
-<span class="tk-kw">aiusage</span> parse && <span class="tk-kw">aiusage</span> serve</code></pre>
+<span class="tk-kw">aiusage</span> serve</code></pre>
         </div>
       </div>
       <div class="hero-actions">
@@ -331,14 +331,14 @@
       <div class="step-connector"></div>
       <div class="step">
         <div class="step-num">02</div>
-        <h3>{zh ? '解析日志文件' : 'Parse Log Files'}</h3>
-        <p>{zh ? '运行 aiusage parse，自动发现并解析 AI 工具生成的本地日志文件，写入 SQLite 数据库。' : 'Run aiusage parse to auto-discover and parse AI tool logs into a local SQLite database.'}</p>
+        <h3>{zh ? '启动仪表盘' : 'Start the Dashboard'}</h3>
+        <p>{zh ? '运行 aiusage serve，自动解析日志并启动 Web 仪表盘，所有数据一目了然。' : 'Run aiusage serve to auto-parse logs and start the web dashboard — all data at a glance.'}</p>
       </div>
       <div class="step-connector"></div>
       <div class="step">
         <div class="step-num">03</div>
-        <h3>{zh ? '查看仪表盘' : 'View the Dashboard'}</h3>
-        <p>{zh ? '运行 aiusage serve 启动本地 Web 仪表盘。浏览器打开 localhost:3847，所有数据一目了然。' : 'Run aiusage serve to start a local web dashboard. Open localhost:3847 — all data at a glance.'}</p>
+        <h3>{zh ? '查看数据' : 'View Your Data'}</h3>
+        <p>{zh ? '浏览器打开 localhost:3847，查看 token 用量、费用明细和会话历史。' : 'Open localhost:3847 to explore token usage, cost breakdowns, and session history.'}</p>
       </div>
     </div>
   </div>
@@ -417,10 +417,8 @@
           <div class="term-body">
             <div class="tl"><span class="tp">$</span><span class="tc">npm install -g @juliantanx/aiusage</span></div>
             <div class="to">+ @juliantanx/aiusage@1.3.1</div>
-            <div class="tl"><span class="tp">$</span><span class="tc">aiusage parse</span></div>
-            <div class="to">{zh ? '✓ 已解析 3 个工具的 1,247 条会话记录' : '✓ Parsed 1,247 sessions from 3 tools'}</div>
             <div class="tl"><span class="tp">$</span><span class="tc">aiusage serve</span></div>
-            <div class="to">{zh ? '✓ 仪表盘已启动: http://localhost:3847' : '✓ Dashboard running: http://localhost:3847'}</div>
+            <div class="to">{zh ? '✓ 自动解析完成，仪表盘已启动: http://localhost:3847' : '✓ Auto-parse complete, dashboard running: http://localhost:3847'}</div>
           </div>
         </div>
       </div>
@@ -469,7 +467,7 @@
     </div>
     <div class="cli-grid">
       <a href="/docs#cli-parse" class="cli-item">
-        <div><code>aiusage parse</code><p>{zh ? '解析所有 AI 工具的日志文件' : 'Parse log files from all AI tools'}</p></div>
+        <div><code>aiusage parse</code><p>{zh ? '手动解析 AI 工具的日志文件' : 'Manually parse log files from AI tools'}</p></div>
         <span class="cli-arrow">→</span>
       </a>
       <a href="/docs#cli-serve" class="cli-item">

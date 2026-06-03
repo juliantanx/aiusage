@@ -20,7 +20,6 @@ Track token usage, cost, and sessions across **22 AI coding tools** in one local
 
 ```bash
 npm install -g @juliantanx/aiusage
-aiusage parse
 aiusage serve
 ```
 

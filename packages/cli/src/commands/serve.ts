@@ -74,6 +74,11 @@ export function serve(options: ServeOptions): void {
   })
   runtimeSettings.start()
 
+  // Parse logs once on startup so the dashboard has data immediately
+  runParse(options.db).catch((err) => {
+    console.error('[serve] initial parse failed:', err)
+  })
+
   const apiServer = createApiServer(options.db, {
     currentDeviceInstanceId: getState(AIUSAGE_DIR)?.deviceInstanceId,
     onRefresh: () => runParse(options.db),

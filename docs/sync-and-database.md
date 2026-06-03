@@ -228,8 +228,8 @@ sync()
 
 ### 4.4.1 自动化与刷新频率
 
-- 项目本身不内建定时同步或定时解析能力
-- `aiusage parse` 与 `aiusage sync` 的执行频率由用户手动触发或外部 cron / 任务计划控制
+- 项目本身不内建定时同步能力
+- `aiusage serve` 启动时会自动执行一次 parse；之后 `aiusage parse` 与 `aiusage sync` 的执行频率由用户手动触发或外部 cron / 任务计划控制
 - Web 概览页首次加载时会调用 `/api/refresh`，触发一次本地增量 parse
 - Web Sync 按钮触发后，前端会每 2 秒轮询 `/api/sync` 查询进度；这不是新的数据采集周期
 
