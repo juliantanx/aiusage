@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
-import { join, extname } from 'node:path'
+import { join, extname, isAbsolute } from 'node:path'
 import { homedir, platform } from 'node:os'
 import type { Tool } from '@aiusage/core'
 import { loadConfig } from './config.js'
@@ -10,6 +10,7 @@ export interface DetectedTool {
   sourceKey: string
   label: string
   path: string
+  paths?: string[]
   fileCount: number
   status: 'found' | 'empty' | 'not_found'
 }
@@ -22,6 +23,29 @@ function envKey(sourceKey: string): string {
 
 function envOverride(sourceKey: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
   return env[envKey(sourceKey)] || undefined
+}
+
+function xdgDataDir(home: string, app: string, env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.XDG_DATA_HOME ?? join(home, '.local', 'share'), app)
+}
+
+function relativeOrAbsolute(baseDir: string, value: string): string {
+  return value === ':memory:' || isAbsolute(value) ? value : join(baseDir, value)
+}
+
+function existingOpenCodeDbs(env: NodeJS.ProcessEnv = process.env): string[] {
+  const dataDir = xdgDataDir(homedir(), 'opencode', env)
+  const primary = join(dataDir, 'opencode.db')
+  const paths = [primary]
+  try {
+    for (const entry of readdirSync(dataDir, { withFileTypes: true })) {
+      if (!entry.isFile()) continue
+      if (!/^opencode(?:-[A-Za-z0-9._-]+)?\.db$/.test(entry.name)) continue
+      const dbPath = join(dataDir, entry.name)
+      if (dbPath !== primary) paths.push(dbPath)
+    }
+  } catch {}
+  return unique(paths)
 }
 
 // ── File helpers ─────────────────────────────────────────────────────
@@ -57,6 +81,16 @@ function unique(paths: string[]): string[] {
   return [...new Set(paths)]
 }
 
+function codexLogDirs(ctx: ProbeContext, sessionsDir: string): string[] {
+  const customPath = envOverride('codex', ctx.env) || ctx.legacySources?.['codex']
+  if (customPath) {
+    const root = customPath.replace(/[\\/]sessions[\\/]?$/, '')
+    return unique([customPath, join(root, 'archived_sessions')])
+  }
+  const root = ctx.env.CODEX_HOME ?? join(ctx.home, '.codex')
+  return [sessionsDir, join(root, 'archived_sessions')]
+}
+
 function windowsUserHomesFromWsl(): string[] {
   const homes: string[] = []
   if (!existsSync('/mnt')) return homes
@@ -82,23 +116,7 @@ function windowsUserHomesFromWsl(): string[] {
 // ── Platform-aware default path resolvers ────────────────────────────
 
 export function defaultOpenCodeDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
-    return join(appData, 'opencode', 'opencode.db')
-  }
-  if (plat === 'darwin') {
-    // OpenCode CLI uses XDG (~/.local/share), Desktop uses ~/Library/Application Support
-    const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-    const candidates = [
-      join(xdgDataHome, 'opencode', 'opencode.db'),
-      join(home, 'Library', 'Application Support', 'opencode', 'opencode.db'),
-    ]
-    return candidates.find((p) => existsSync(p)) ?? candidates[0]
-  }
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'opencode', 'opencode.db')
+  return join(xdgDataDir(homedir(), 'opencode'), 'opencode.db')
 }
 
 export function defaultHermesDbPath(): string {
@@ -134,25 +152,7 @@ export function defaultCursorDbPath(): string {
 }
 
 export function defaultKiloDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
-    const candidates = [
-      join(localAppData, 'kilo', 'kilo.db'),
-      join(home, '.local', 'share', 'kilo', 'kilo.db'),
-    ]
-    return candidates.find((p) => existsSync(p)) ?? candidates[0]
-  }
-  if (plat === 'darwin') {
-    const candidates = [
-      join(home, 'Library', 'Application Support', 'kilo', 'kilo.db'),
-      join(home, '.local', 'share', 'kilo', 'kilo.db'),
-    ]
-    return candidates.find((p) => existsSync(p)) ?? candidates[0]
-  }
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'kilo', 'kilo.db')
+  return join(xdgDataDir(homedir(), 'kilo'), 'kilo.db')
 }
 
 // ── Per-tool probe functions ─────────────────────────────────────────
@@ -168,6 +168,7 @@ interface ProbeContext {
 function probeClaudeCode(ctx: ProbeContext): string | null {
   const override = envOverride('claude-code', ctx.env)
   if (override) return override
+  if (ctx.env.CLAUDE_CONFIG_DIR) return join(ctx.env.CLAUDE_CONFIG_DIR, 'projects')
   const legacy = ctx.legacySources?.['claude-code']
   if (legacy) return legacy
   const dir = join(ctx.home, '.claude', 'projects')
@@ -177,15 +178,19 @@ function probeClaudeCode(ctx: ProbeContext): string | null {
 function probeCodex(ctx: ProbeContext): string | null {
   const override = envOverride('codex', ctx.env)
   if (override) return override
+  if (ctx.env.CODEX_HOME) return join(ctx.env.CODEX_HOME, 'sessions')
   const legacy = ctx.legacySources?.['codex']
   if (legacy) return legacy
-  const dir = join(ctx.home, '.codex', 'sessions')
-  return existsSync(dir) ? dir : null
+  const codexHome = join(ctx.home, '.codex')
+  const sessionsDir = join(codexHome, 'sessions')
+  const archivedDir = join(codexHome, 'archived_sessions')
+  return existsSync(sessionsDir) || existsSync(archivedDir) ? sessionsDir : null
 }
 
 function probeOpenClaw(ctx: ProbeContext): string | null {
   const override = envOverride('openclaw', ctx.env)
   if (override) return override
+  if (ctx.env.OPENCLAW_STATE_DIR) return join(ctx.env.OPENCLAW_STATE_DIR, 'agents')
   const legacy = ctx.legacySources?.['openclaw']
   if (legacy) return legacy
   const dir = join(ctx.home, '.openclaw', 'agents')
@@ -195,15 +200,17 @@ function probeOpenClaw(ctx: ProbeContext): string | null {
 function probeOpenCode(ctx: ProbeContext): string | null {
   const override = envOverride('opencode', ctx.env)
   if (override) return override
+  if (ctx.env.OPENCODE_DB) return ctx.env.OPENCODE_DB
   const legacy = ctx.legacySources?.['opencode']
   if (legacy) return legacy
-  const dbPath = defaultOpenCodeDbPath()
-  return existsSync(dbPath) ? dbPath : null
+  const dbPaths = existingOpenCodeDbs(ctx.env)
+  return dbPaths.find((dbPath) => existsSync(dbPath)) ?? null
 }
 
 function probeHermes(ctx: ProbeContext): string | null {
   const override = envOverride('hermes', ctx.env)
   if (override) return override
+  if (ctx.env.HERMES_HOME) return join(ctx.env.HERMES_HOME, 'state.db')
   const legacy = ctx.legacySources?.['hermes']
   if (legacy) return legacy
   const dbPath = defaultHermesDbPath()
@@ -240,6 +247,7 @@ function probeCursor(ctx: ProbeContext): string | null {
 function probeKiloDb(ctx: ProbeContext): string | null {
   const override = envOverride('kilocode-db', ctx.env)
   if (override) return override
+  if (ctx.env.KILO_DB) return relativeOrAbsolute(xdgDataDir(ctx.home, 'kilo', ctx.env), ctx.env.KILO_DB)
   const legacy = ctx.legacySources?.['kilocode-db']
   if (legacy) return legacy
   const dbPath = defaultKiloDbPath()
@@ -327,18 +335,39 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
     }
 
     // Count data files for the detected path
+    const detectedPaths = entry.sourceKey === 'opencode'
+      && !envOverride('opencode', env)
+      && !env.OPENCODE_DB
+      && !legacySources?.['opencode']
+      ? existingOpenCodeDbs(env).filter((dbPath) => existsSync(dbPath))
+      : entry.sourceKey === 'codex'
+        ? codexLogDirs(ctx, path)
+        : [path]
     let fileCount = 0
-    try {
-      const stat = statSync(path)
-      if (stat.isDirectory()) {
-        fileCount = findJsonlFiles(path).length
-      } else if (stat.isFile()) {
-        fileCount = 1
-      }
-    } catch {}
+    for (const detectedPath of detectedPaths) {
+      try {
+        const stat = statSync(detectedPath)
+        if (stat.isDirectory()) {
+          fileCount += findJsonlFiles(detectedPath).length
+        } else if (stat.isFile()) {
+          fileCount += 1
+        }
+      } catch {}
+    }
 
     const status = fileCount > 0 ? 'found' as const : 'empty' as const
-    return { tool: entry.tool, sourceKey: entry.sourceKey, label: entry.label, path, fileCount, status }
+    const visiblePaths = entry.sourceKey === 'codex'
+      ? detectedPaths.filter((detectedPath) => existsSync(detectedPath))
+      : detectedPaths
+    return {
+      tool: entry.tool,
+      sourceKey: entry.sourceKey,
+      label: entry.label,
+      path,
+      paths: visiblePaths.length > 1 || (entry.sourceKey === 'codex' && visiblePaths.length > 0) ? visiblePaths : undefined,
+      fileCount,
+      status,
+    }
   })
 }
 
@@ -363,8 +392,12 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
 
   // Codex
   const codexPath = probeCodex(ctx)
-  if (codexPath && existsSync(codexPath)) {
-    const paths = findJsonlFiles(codexPath)
+  if (codexPath) {
+    const paths = unique(
+      codexLogDirs(ctx, codexPath)
+        .filter((dir) => existsSync(dir))
+        .flatMap((dir) => findJsonlFiles(dir))
+    )
     if (paths.length > 0) results.push({ tool: 'codex', paths })
   }
 

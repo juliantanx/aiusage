@@ -420,7 +420,11 @@
                 {/if}
               </span>
             </div>
-            {#if tool.path}
+            {#if tool.paths?.length}
+              {#each tool.paths as path}
+                <div class="detected-tool-path">{path}</div>
+              {/each}
+            {:else if tool.path}
               <div class="detected-tool-path">{tool.path}</div>
             {/if}
           </div>
