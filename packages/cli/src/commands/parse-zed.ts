@@ -67,14 +67,22 @@ export function runParseZed(db: Database.Database, options: ZedImportOptions): Z
     return { records, nextCursor, errors: ['threads table does not contain data/data_type columns'] }
   }
 
-  const updatedExpr = hasColumn(db, 'threads', 'updated_at') ? 'updated_at' : "'' AS updated_at"
+  const hasUpdatedAt = hasColumn(db, 'threads', 'updated_at')
+  const updatedExpr = hasUpdatedAt ? 'updated_at' : "'' AS updated_at"
   const createdExpr = hasColumn(db, 'threads', 'created_at') ? 'created_at' : "'' AS created_at"
-  const rows = db.prepare(`
-    SELECT id, ${updatedExpr}, ${createdExpr}, data_type, data
-    FROM threads
-    WHERE updated_at > ? OR (updated_at = ? AND id > ?)
-    ORDER BY updated_at, id
-  `).all(cursor?.lastCreatedAt ?? '', cursor?.lastCreatedAt ?? '', cursor?.lastId ?? '') as any[]
+  const rows = hasUpdatedAt
+    ? db.prepare(`
+      SELECT id, ${updatedExpr}, ${createdExpr}, data_type, data
+      FROM threads
+      WHERE updated_at > ? OR (updated_at = ? AND id > ?)
+      ORDER BY updated_at, id
+    `).all(cursor?.lastCreatedAt ?? '', cursor?.lastCreatedAt ?? '', cursor?.lastId ?? '') as any[]
+    : db.prepare(`
+      SELECT id, ${updatedExpr}, ${createdExpr}, data_type, data
+      FROM threads
+      WHERE id > ?
+      ORDER BY id
+    `).all(cursor?.lastId ?? '') as any[]
 
   for (const row of rows) {
     nextCursor = { lastCreatedAt: String(row.updated_at ?? ''), lastId: String(row.id ?? '') }

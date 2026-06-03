@@ -563,6 +563,8 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
         if (stat.isDirectory()) {
           if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
             fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'ui_messages.json').length
+          } else if (entry.sourceKey === 'kiro') {
+            fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
           } else {
             fileCount += findJsonlFiles(detectedPath).length
           }
