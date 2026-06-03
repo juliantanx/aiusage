@@ -33,6 +33,7 @@ describe('discovery path resolution', () => {
     delete process.env.XDG_DATA_HOME
     delete process.env.APPDATA
     delete process.env.LOCALAPPDATA
+    delete process.env.AIUSAGE_IDE_ROOTS
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -165,11 +166,13 @@ describe('discovery path resolution', () => {
     writeFileSync(join(home, '.codebuddy', 'projects', '-workspace', 'session.jsonl'), '{}\n')
     mkdirSync(join(home, '.kiro', 'sessions', 'cli'), { recursive: true })
     writeFileSync(join(home, '.kiro', 'sessions', 'cli', 'session-1.json'), '{}')
-    mkdirSync(join(home, '.config', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1'), { recursive: true })
-    writeFileSync(join(home, '.config', 'Code', 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1', 'ui_messages.json'), '[]')
+    const ideRoot = join(home, '.config', 'Code')
+    mkdirSync(join(ideRoot, 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1'), { recursive: true })
+    writeFileSync(join(ideRoot, 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1', 'ui_messages.json'), '[]')
     mkdirSync(join(home, '.local', 'share', 'goose', 'sessions'), { recursive: true })
     writeFileSync(join(home, '.local', 'share', 'goose', 'sessions', 'sessions.db'), '')
 
+    process.env.AIUSAGE_IDE_ROOTS = ideRoot
     const { discoverLogFiles, discoverTools } = await loadDiscovery({ home, platform: 'linux' })
 
     expect(discoverTools().find((tool) => tool.sourceKey === 'kimi')?.status).toBe('found')
