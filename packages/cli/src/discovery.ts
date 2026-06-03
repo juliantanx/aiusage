@@ -89,7 +89,13 @@ export function defaultOpenCodeDbPath(): string {
     return join(appData, 'opencode', 'opencode.db')
   }
   if (plat === 'darwin') {
-    return join(home, 'Library', 'Application Support', 'opencode', 'opencode.db')
+    // OpenCode CLI uses XDG (~/.local/share), Desktop uses ~/Library/Application Support
+    const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
+    const candidates = [
+      join(xdgDataHome, 'opencode', 'opencode.db'),
+      join(home, 'Library', 'Application Support', 'opencode', 'opencode.db'),
+    ]
+    return candidates.find((p) => existsSync(p)) ?? candidates[0]
   }
   const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
   return join(xdgDataHome, 'opencode', 'opencode.db')
