@@ -317,7 +317,7 @@
     --chart-output:     oklch(0.6 0.15 250);
     --chart-cache-read: oklch(0.7 0.1 65);
     --chart-cache-write: oklch(0.65 0.12 310);
-    --chart-thinking:   oklch(0.6 0.16 300);
+    --chart-thinking:   oklch(0.62 0.18 20);
     --chart-total:      oklch(0.55 0.12 175);
   }
 
@@ -358,7 +358,7 @@
     --chart-output:     oklch(0.68 0.14 250);
     --chart-cache-read: oklch(0.75 0.09 65);
     --chart-cache-write: oklch(0.72 0.11 310);
-    --chart-thinking:   oklch(0.7 0.14 300);
+    --chart-thinking:   oklch(0.7 0.17 20);
     --chart-total:      oklch(0.7 0.12 175);
   }
 
