@@ -53,6 +53,20 @@
     { name: 'Qoder',       icon: '▣', color: 'var(--rose)' },
     { name: 'Cursor',      icon: '⌖', color: 'var(--blue)' },
     { name: 'Copilot',     icon: '⬡', color: 'var(--green)' },
+    { name: 'KiloCode',    icon: '▧', color: 'var(--purple)' },
+    { name: 'Gemini CLI',  icon: '◉', color: 'var(--blue)' },
+    { name: 'Kimi Code',   icon: '◐', color: 'var(--accent)' },
+    { name: 'CodeBuddy',   icon: '◈', color: 'var(--green)' },
+    { name: 'Kiro',        icon: '◇', color: 'var(--amber)' },
+    { name: 'Grok Build',  icon: '◆', color: 'var(--rose)' },
+    { name: 'Antigravity',  icon: '◎', color: 'var(--purple)' },
+    { name: 'Roo Code',    icon: '⬡', color: 'var(--green)' },
+    { name: 'Zed',         icon: '▣', color: 'var(--blue)' },
+    { name: 'Goose',       icon: '⌖', color: 'var(--amber)' },
+    { name: 'oh-my-pi',    icon: '◐', color: 'var(--accent)' },
+    { name: 'pi',          icon: '◈', color: 'var(--rose)' },
+    { name: 'Craft',       icon: '◇', color: 'var(--purple)' },
+    { name: 'Droid',       icon: '◆', color: 'var(--green)' },
   ]
 
   const features = [
@@ -145,8 +159,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 是一个本地优先的 AI 编程工具用量分析平台，支持追踪 Claude Code、Codex、Copilot、Cursor 等 8 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
-            : 'AIUsage is a local-first AI coding usage analytics platform that tracks token consumption, costs, and usage patterns across 8 AI tools including Claude Code, Codex, Copilot, and Cursor. Data stays on your machine — no third-party servers.'
+            ? 'AIUsage 是一个本地优先的 AI 编程工具用量分析平台，支持追踪 Claude Code、Codex、Copilot、Cursor 等 22 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
+            : 'AIUsage is a local-first AI coding usage analytics platform that tracks token consumption, costs, and usage patterns across 22 AI tools including Claude Code, Codex, Copilot, and Cursor. Data stays on your machine — no third-party servers.'
         }
       },
       {
@@ -155,8 +169,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 支持 8 种 AI 编程工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot。'
-            : 'AIUsage supports 8 AI coding tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, and Copilot.'
+            ? 'AIUsage 支持 22 种 AI 编程工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid。'
+            : 'AIUsage supports 22 AI coding tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
         }
       },
       {
@@ -207,8 +221,8 @@
       </h1>
       <p class="hero-sub">
         {zh
-          ? 'AIUsage 追踪 Claude Code、Codex、Copilot、Cursor 等 8 种 AI 工具的 Token 用量和费用。数据存储在本地，不经过任何第三方服务器。'
-          : 'AIUsage tracks token consumption and costs across 8 AI coding tools. Data stays on your machine — no third-party servers.'}
+          ? 'AIUsage 追踪 Claude Code、Codex、Copilot、Cursor 等 22 种 AI 工具的 Token 用量和费用。数据存储在本地，不经过任何第三方服务器。'
+          : 'AIUsage tracks token consumption and costs across 22 AI coding tools. Data stays on your machine — no third-party servers.'}
       </p>
       <div class="hero-install">
         <div class="code-block">

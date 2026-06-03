@@ -26,6 +26,24 @@ describe('extractProject', () => {
     ).toBe('code/myproject')
   })
 
+  it('extracts codebuddy project names from encoded project paths', () => {
+    expect(
+      extractProject('/Users/example/.codebuddy/projects/-Users-example-WebstormProjects-myapp/session-1.jsonl')
+    ).toBe('myapp')
+  })
+
+  it('extracts kimi project names from session paths', () => {
+    expect(
+      extractProject('/Users/example/.kimi-code/sessions/-Users-example-code-myapp/session-1/agents/main/wire.jsonl')
+    ).toBe('code/myapp')
+  })
+
+  it('extracts task ids from VS Code task storage paths', () => {
+    expect(
+      extractProject('/Users/example/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks/task-123/ui_messages.json')
+    ).toBe('task/task-123')
+  })
+
   it('joins multi-level claude project paths with / not -', () => {
     expect(
       extractProject('/Users/alice/.claude/projects/-Users-alice-WebstormProjects-myorg-myproject/session.jsonl')
