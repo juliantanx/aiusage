@@ -9,6 +9,7 @@ import { extractProject, extractProjectFromCwd } from './project-extraction.js'
 import { discoverTools } from '../discovery.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 import { queryAllQuotas } from '../quota.js'
+import { getSiteUrl } from '../site-url.js'
 
 function recalcCosts(db: Database.Database): number {
   const BATCH_SIZE = 1000
@@ -87,6 +88,48 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(data))
+}
+
+function getLeaderboardFallback(periodType: string): Record<string, unknown> {
+  return {
+    entries: [],
+    next_cursor: null,
+    current_user: null,
+    period_type: periodType,
+    period_start: new Date().toISOString().slice(0, 10),
+    source_status: 'unavailable',
+  }
+}
+
+async function proxyLeaderboard(res: http.ServerResponse, url: URL): Promise<void> {
+  const periodType = url.searchParams.get('period_type') || 'daily'
+  const upstreamBase = getSiteUrl()
+  const upstream = new URL('/api/leaderboard', upstreamBase)
+  upstream.searchParams.set('period_type', periodType)
+
+  const cursor = url.searchParams.get('cursor')
+  if (cursor) upstream.searchParams.set('cursor', cursor)
+
+  try {
+    const response = await fetch(upstream, {
+      headers: { Accept: 'application/json' },
+    })
+    const contentType = response.headers.get('content-type') || ''
+    if (!response.ok || !contentType.includes('application/json')) {
+      json(res, getLeaderboardFallback(periodType))
+      return
+    }
+
+    const data = await response.json().catch(() => null)
+    if (!data || !Array.isArray(data.entries)) {
+      json(res, getLeaderboardFallback(periodType))
+      return
+    }
+
+    json(res, data)
+  } catch {
+    json(res, getLeaderboardFallback(periodType))
+  }
 }
 
 
@@ -1022,6 +1065,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
+      // ── /api/leaderboard ──────────────────────────────────────────
+      if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
+        await proxyLeaderboard(res, url)
+        return
+      }
+
       // ── /api/devices ──────────────────────────────────────────────
       if (url.pathname === '/api/devices') {
         const currentId = options?.currentDeviceInstanceId
@@ -1137,6 +1186,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
             exchangeRateCache: rest.exchangeRateCache ?? null,
+            siteUrl: getSiteUrl(),
             credentialKeys: credentials ? Object.keys(credentials) : [],
             hostname: hostname(),
             platform: osPlatform,

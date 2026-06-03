@@ -30,6 +30,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     // Only validate CSRF for browser form submissions (not API endpoints with HMAC auth)
     if (!url.startsWith('/api/leaderboard/uploads') &&
+        !url.startsWith('/api/cli/device/start') &&
         !url.startsWith('/api/cli/device/complete') &&
         !(url.startsWith('/api/oauth/') && url.endsWith('/callback'))) {
       if (!validateCsrfToken(event.request)) {

@@ -52,7 +52,7 @@
 <div class="auth-page">
   <div class="auth-card">
     <h1>{zh ? '登录' : 'Sign In'}</h1>
-    <p class="auth-subtitle">{zh ? '登录以查看 Token 排行榜' : 'Sign in to view the Token Leaderboard'}</p>
+    <p class="auth-subtitle">{zh ? '登录后可上传数据并管理个人资料。' : 'Sign in to upload data and manage your profile.'}</p>
 
     {#if error}
       <div class="error-msg">{error}</div>

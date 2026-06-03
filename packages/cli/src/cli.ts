@@ -17,6 +17,7 @@ import { runLeaderboardLogin } from './commands/leaderboard-login.js'
 import { runLeaderboardUpload } from './commands/leaderboard-upload.js'
 import { runLeaderboardStatus } from './commands/leaderboard-status.js'
 import { runLeaderboardLogout } from './commands/leaderboard-logout.js'
+import { runLeaderboardView } from './commands/leaderboard-view.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
@@ -37,6 +38,13 @@ program
 // Default command: summary
 program
   .action(() => {
+    const unknownCommand = program.args.find((arg) => typeof arg === 'string')
+    if (unknownCommand) {
+      console.error(`error: unknown command '${unknownCommand}'`)
+      console.error(`Run 'aiusage --help' to see available commands.`)
+      process.exit(1)
+    }
+
     const db = createDatabase(DB_PATH)
     const state = getState(AIUSAGE_DIR)
     const summary = generateSummary(db, {
@@ -288,33 +296,39 @@ program
     await launchWidget()
   })
 
-// leaderboard command group
-const leaderboard = program
-  .command('leaderboard')
-  .description('Token leaderboard commands')
+// rank command
+program
+  .command('rank')
+  .description('View the public leaderboard')
+  .allowExcessArguments(false)
+  .option('-p, --period <period>', 'Period to view (daily|weekly|monthly|yearly|all_time)', 'daily')
+  .option('-l, --limit <limit>', 'Number of rows to show, max 50', '20')
+  .action(async (options) => {
+    await runLeaderboardView(options)
+  })
 
-leaderboard
+program
   .command('login')
-  .description('Authorize this device to upload token usage data')
+  .description('Authorize this device for leaderboard uploads')
   .action(async () => {
     await runLeaderboardLogin()
   })
 
-leaderboard
+program
   .command('upload')
-  .description('Upload token usage data to the leaderboard')
+  .description('Upload aggregate token data to the public leaderboard')
   .action(async () => {
     await runLeaderboardUpload()
   })
 
-leaderboard
-  .command('status')
+program
+  .command('upload-status')
   .description('Show leaderboard upload status')
   .action(async () => {
     await runLeaderboardStatus()
   })
 
-leaderboard
+program
   .command('logout')
   .description('Remove local leaderboard credentials')
   .action(async () => {

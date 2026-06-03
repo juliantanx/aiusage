@@ -6,7 +6,7 @@
 
 **[aiusage.jtanx.com](https://aiusage.jtanx.com)** · English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
-Track token usage, cost, and sessions across **22 AI coding tools** in one local dashboard. No accounts. No telemetry. No cloud required.
+Track token usage, cost, and sessions across **22 AI coding tools** in one local dashboard. No account is required for local use. No telemetry. No cloud required.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage dashboard home" width="32%" />
@@ -42,6 +42,19 @@ Your AI coding tools each log usage separately — different formats, different 
 - **One dashboard** for tokens, cost, model mix, and tool-call activity
 - **Multi-machine sync** via GitHub, S3, or R2 — entirely optional
 - **Your data stays local** by default
+
+## Public Leaderboard
+
+AIUsage includes a public token leaderboard for users who choose to share aggregate totals.
+
+- Anyone can view the leaderboard at [aiusage.jtanx.com/leaderboard](https://aiusage.jtanx.com/leaderboard) or from the CLI with `aiusage rank`.
+- Uploading requires an account and an authorized CLI device: `aiusage login`, then `aiusage upload`.
+- Leaderboard uploads contain aggregate token totals for leaderboard periods. They do not include prompts, completions, source code, file paths, model breakdowns, project data, or local cost estimates.
+
+Responsibility split:
+
+- `@juliantanx/aiusage` handles local parsing, local dashboards, sync, terminal summaries, CLI authorization, and signed leaderboard uploads.
+- The official site handles public leaderboard browsing, accounts, profile settings, authorized devices, upload review status, and admin moderation.
 
 ## Documentation
 

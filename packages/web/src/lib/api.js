@@ -119,6 +119,17 @@ export async function fetchQuotas() {
   return apiFetch('/api/quotas')
 }
 
+export async function fetchLeaderboard(baseUrl, params = {}) {
+  const data = await apiFetch(buildUrl('/api/leaderboard', {
+    period_type: params.period_type,
+    cursor: params.cursor,
+  }))
+  if (!data || !Array.isArray(data.entries)) {
+    throw new Error('Invalid leaderboard response')
+  }
+  return data
+}
+
 export async function refreshExchangeRate() {
   const response = await fetch('/api/exchange-rate/refresh', { method: 'POST' })
   if (!response.ok) {

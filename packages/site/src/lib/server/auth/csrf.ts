@@ -42,8 +42,8 @@ export function validateCsrfToken(request: Request): boolean {
     return true
   }
 
-  // Skip CSRF for device complete (uses PKCE)
-  if (url.pathname === '/api/cli/device/complete') {
+  // Skip CSRF for CLI device authorization endpoints (use device code + PKCE)
+  if (url.pathname === '/api/cli/device/start' || url.pathname === '/api/cli/device/complete') {
     return true
   }
 

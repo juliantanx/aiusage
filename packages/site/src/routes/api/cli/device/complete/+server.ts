@@ -3,6 +3,11 @@ import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { nanoid } from 'nanoid'
 import { sha256, generateDeviceSecret, encryptDeviceSecret } from '$lib/server/crypto/hmac.js'
+import { createHash } from 'node:crypto'
+
+function pkceChallenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url')
+}
 
 export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json()
@@ -32,7 +37,7 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 
   // Verify PKCE challenge
-  const computedChallenge = sha256(device_verifier)
+  const computedChallenge = pkceChallenge(device_verifier)
   if (computedChallenge !== req.device_challenge) {
     return json({ error: 'Invalid verifier' }, { status: 400 })
   }

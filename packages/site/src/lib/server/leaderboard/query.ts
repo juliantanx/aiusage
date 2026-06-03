@@ -28,33 +28,41 @@ export async function queryLeaderboard(
   let entries: Array<{ user_id: string; display_name: string; avatar_url: string | null; total_tokens: string; updated_at: string; rn: string }>
 
   if (cursor) {
-    const [cursorTokens, cursorUserId] = decodeCursor(cursor)
+    const cursorRank = decodeCursor(cursor)
     entries = await sql`
-      SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
-        ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
-      FROM leaderboard_entries le
-      JOIN users u ON u.id = le.user_id
-      WHERE le.period_type = ${periodType}::period_type
-        AND le.period_start = ${periodStart}
-        AND le.visibility = 'public'
-        AND u.status = 'active'
-        AND u.leaderboard_visibility = 'public'
-        AND (le.total_tokens < ${cursorTokens} OR (le.total_tokens = ${cursorTokens} AND le.user_id > ${cursorUserId}))
-      ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC
+      WITH ranked AS (
+        SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
+          ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
+        FROM leaderboard_entries le
+        JOIN users u ON u.id = le.user_id
+        WHERE le.period_type = ${periodType}::period_type
+          AND le.period_start = ${periodStart}
+          AND le.visibility = 'public'
+          AND u.status = 'active'
+          AND u.leaderboard_visibility = 'public'
+      )
+      SELECT *
+      FROM ranked
+      WHERE rn > ${cursorRank}
+      ORDER BY rn ASC
       LIMIT ${PAGE_SIZE + 1}
     `
   } else {
     entries = await sql`
-      SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
-        ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
-      FROM leaderboard_entries le
-      JOIN users u ON u.id = le.user_id
-      WHERE le.period_type = ${periodType}::period_type
-        AND le.period_start = ${periodStart}
-        AND le.visibility = 'public'
-        AND u.status = 'active'
-        AND u.leaderboard_visibility = 'public'
-      ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC
+      WITH ranked AS (
+        SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
+          ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
+        FROM leaderboard_entries le
+        JOIN users u ON u.id = le.user_id
+        WHERE le.period_type = ${periodType}::period_type
+          AND le.period_start = ${periodStart}
+          AND le.visibility = 'public'
+          AND u.status = 'active'
+          AND u.leaderboard_visibility = 'public'
+      )
+      SELECT *
+      FROM ranked
+      ORDER BY rn ASC
       LIMIT ${PAGE_SIZE + 1}
     `
   }
@@ -65,7 +73,7 @@ export async function queryLeaderboard(
   let nextCursor: string | null = null
   if (hasMore && page.length > 0) {
     const last = page[page.length - 1]
-    nextCursor = encodeCursor(last.total_tokens, last.user_id)
+    nextCursor = encodeCursor(last.rn)
   }
 
   // Get current user's rank
@@ -91,7 +99,11 @@ export async function queryLeaderboard(
           AND le.visibility = 'public'
           AND u.status = 'active'
           AND u.leaderboard_visibility = 'public'
-          AND le.total_tokens > ${ue.total_tokens}
+          AND (
+            le.total_tokens > ${ue.total_tokens}
+            OR (le.total_tokens = ${ue.total_tokens} AND le.updated_at < ${ue.updated_at})
+            OR (le.total_tokens = ${ue.total_tokens} AND le.updated_at = ${ue.updated_at} AND le.user_id < ${ue.user_id})
+          )
       `
       currentUser = {
         rank: Number((rankResult[0] as { rank: bigint }).rank),
@@ -138,12 +150,12 @@ export function getCurrentPeriodStart(periodType: string): string {
   }
 }
 
-function encodeCursor(tokens: string, userId: string): string {
-  return Buffer.from(`${tokens}:${userId}`).toString('base64url')
+function encodeCursor(rank: string): string {
+  return Buffer.from(rank).toString('base64url')
 }
 
-function decodeCursor(cursor: string): [string, string] {
+function decodeCursor(cursor: string): number {
   const decoded = Buffer.from(cursor, 'base64url').toString('utf8')
-  const [tokens, userId] = decoded.split(':')
-  return [tokens, userId]
+  const rank = Number(decoded)
+  return Number.isFinite(rank) && rank > 0 ? Math.floor(rank) : 0
 }

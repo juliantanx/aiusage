@@ -5,9 +5,6 @@ import { getUserFromEvent } from '$lib/server/auth/session.js'
 
 export const GET: RequestHandler = async (event) => {
   const user = await getUserFromEvent(event)
-  if (!user) {
-    return json({ error: 'unauthorized' }, { status: 401 })
-  }
 
   const periodType = event.url.searchParams.get('period_type') || 'daily'
   let periodStart = event.url.searchParams.get('period_start')
@@ -21,6 +18,6 @@ export const GET: RequestHandler = async (event) => {
     return json({ error: 'Invalid period_type' }, { status: 400 })
   }
 
-  const result = await queryLeaderboard(periodType, periodStart, cursor, user.id)
+  const result = await queryLeaderboard(periodType, periodStart, cursor, user?.id ?? null)
   return json(result)
 }

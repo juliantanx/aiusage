@@ -8,6 +8,7 @@
     "dev:widget": "pnpm --filter @aiusage/core build && pnpm --filter @juliantanx/aiusage-widget dev",
     "start:widget": "pnpm --filter @juliantanx/aiusage-widget build && node packages/widget/bin/launcher.js",
     "dev:site": "pnpm --filter @aiusage/site dev",
+    "cli": "pnpm --dir packages/cli cli",
     "build:site": "pnpm --filter @aiusage/site build",
     "db:migrate": "pnpm --filter @aiusage/site db:migrate",
     "docker:site": "docker build -f packages/site/Dockerfile -t aiusage-site .",

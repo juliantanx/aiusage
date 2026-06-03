@@ -7,12 +7,9 @@ import { computeTokenSnapshotHash } from '../leaderboard/crypto.js'
 import { getCurrentPeriods } from '../leaderboard/periods.js'
 import { hasCredentials } from '../leaderboard/credentials.js'
 import { join } from 'node:path'
+import { getSiteUrl } from '../site-url.js'
 
 const DB_PATH = join(AIUSAGE_DIR, 'cache.db')
-
-function getServerUrl(): string {
-  return process.env.AIUSAGE_LEADERBOARD_URL || 'https://aiusage.jtanx.com'
-}
 
 function getClientPlatform(): string {
   if (process.platform === 'darwin') return 'macos'
@@ -51,11 +48,11 @@ async function sleep(ms: number): Promise<void> {
 
 export async function runLeaderboardUpload(): Promise<void> {
   if (!hasCredentials()) {
-    console.error('Not logged in. Run `aiusage leaderboard login` first.')
+    console.error('Not logged in. Run `aiusage login` first.')
     process.exit(1)
   }
 
-  const serverUrl = getServerUrl()
+  const serverUrl = getSiteUrl()
   const db = createDatabase(DB_PATH)
   const state = getState(AIUSAGE_DIR)
 
@@ -158,11 +155,11 @@ export async function runLeaderboardUpload(): Promise<void> {
       console.error(`\n✗ Upload failed: ${lastError.message}`)
 
       if (lastError.code === 'device_not_found' || lastError.code === 'device_revoked') {
-        console.error('Please run `aiusage leaderboard login` to re-authenticate.')
+        console.error('Please run `aiusage login` to re-authenticate.')
       } else if (lastError.code === 'user_banned') {
         console.error('Your account has been banned from the leaderboard.')
       } else if (lastError.code === 'invalid_signature') {
-        console.error('Authentication error. Please run `aiusage leaderboard login` again.')
+        console.error('Authentication error. Please run `aiusage login` again.')
       } else if (lastError.code === 'unsupported_schema_version' || lastError.code === 'client_version_too_old') {
         console.error('Please update your CLI to the latest version.')
       }

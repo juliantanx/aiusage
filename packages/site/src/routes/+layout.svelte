@@ -49,7 +49,7 @@
     ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。本地优先，隐私至上。'
     : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more. Local-first, privacy-respecting.'
   } />
-  <meta name="keywords" content="AIUsage, AI coding, token tracker, Claude Code, Codex, Cursor, OpenClaw, OpenCode, Hermes, Qoder, AI usage analytics, token consumption, cost tracking, local-first, AI programming tools, AI编程工具, Token用量, 费用追踪" />
+  <meta name="keywords" content="AIUsage, AI coding, Claude Code, Codex, Cursor, OpenClaw, OpenCode, Hermes, Qoder, AI usage analytics, token consumption, cost tracking, local-first, AI programming tools, AI编程工具, Token用量, 费用追踪" />
   <link rel="canonical" href="https://aiusage.jtanx.com{$page.url.pathname}" />
 
   <!-- Open Graph -->
@@ -668,8 +668,7 @@
     margin-bottom: 0.75rem;
   }
 
-  .footer-col a,
-  .footer-col span {
+  .footer-col a {
     display: block;
     font-size: 0.875rem;
     color: var(--text-secondary);

@@ -300,8 +300,8 @@
             <input id="edit-display-name" type="text" bind:value={editDisplayName} required minlength="1" maxlength="64" />
           </div>
           <div class="field">
-            <label>{zh ? '邮箱' : 'Email'}</label>
-            <input type="email" value={me.email} disabled />
+            <label for="profile-email">{zh ? '邮箱' : 'Email'}</label>
+            <input id="profile-email" type="email" value={me.email} disabled />
             <span class="field-hint">{zh ? '邮箱暂不支持修改。' : 'Email cannot be changed yet.'}</span>
           </div>
           <button type="submit" class="btn-primary" disabled={profileSaving}>
@@ -354,7 +354,7 @@
       {#if loading}
         <p class="muted">{zh ? '加载中...' : 'Loading...'}</p>
       {:else if devices.length === 0}
-        <p class="muted">{zh ? '暂无已授权设备。运行' : 'No devices authorized yet. Run'} <code>aiusage leaderboard login</code> {zh ? '来授权设备。' : 'to authorize a device.'}</p>
+        <p class="muted">{zh ? '暂无已授权设备。运行' : 'No devices authorized yet. Run'} <code>aiusage login</code> {zh ? '来授权设备。' : 'to authorize a device.'}</p>
       {:else}
         <div class="device-list">
           {#each devices as device}

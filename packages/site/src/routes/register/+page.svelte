@@ -56,7 +56,7 @@
 <div class="auth-page">
   <div class="auth-card">
     <h1>{zh ? '创建账号' : 'Create Account'}</h1>
-    <p class="auth-subtitle">{zh ? '注册以加入 Token 排行榜' : 'Register to join the Token Leaderboard'}</p>
+    <p class="auth-subtitle">{zh ? '创建账号后可授权 CLI 上传公开总量。' : 'Create an account to authorize CLI uploads.'}</p>
 
     {#if error}
       <div class="error-msg">{error}</div>

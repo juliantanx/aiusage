@@ -4,10 +4,7 @@ import { saveCredentials, hasCredentials } from '../leaderboard/credentials.js'
 import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { execSync } from 'node:child_process'
 import * as readline from 'node:readline'
-
-function getServerUrl(): string {
-  return process.env.AIUSAGE_LEADERBOARD_URL || 'https://aiusage.jtanx.com'
-}
+import { getSiteUrl } from '../site-url.js'
 
 function getDeviceName(): string {
   try {
@@ -61,11 +58,11 @@ function openBrowser(url: string): boolean {
 
 export async function runLeaderboardLogin(): Promise<void> {
   if (hasCredentials()) {
-    console.log('Already logged in. Run `aiusage leaderboard logout` first to re-authenticate.')
+    console.log('Already logged in. Run `aiusage logout` first to re-authenticate.')
     return
   }
 
-  const serverUrl = getServerUrl()
+  const serverUrl = getSiteUrl()
   const deviceName = getDeviceName()
   const cliVersion = getCliVersion()
 
@@ -124,7 +121,7 @@ export async function runLeaderboardLogin(): Promise<void> {
 
         console.log('\n✓ Authorization successful!')
         console.log(`Device ID: ${completeResponse.device_id}`)
-        console.log('Credentials saved. You can now run `aiusage leaderboard upload`.')
+        console.log('Credentials saved. You can now run `aiusage upload`.')
         return
       } catch (error: any) {
         if (error.code === 'authorization_pending') {
@@ -139,7 +136,8 @@ export async function runLeaderboardLogin(): Promise<void> {
           console.error('\n✗ Authorization was declined.')
           return
         }
-        // Other errors - continue polling
+        console.error(`\n✗ Authorization failed: ${error instanceof Error ? error.message : error}`)
+        return
       }
     }
 

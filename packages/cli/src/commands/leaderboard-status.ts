@@ -1,17 +1,14 @@
 import { fetchLeaderboardStatus, LeaderboardApiError } from '../leaderboard/api.js'
 import { hasCredentials, loadCredentials } from '../leaderboard/credentials.js'
-
-function getServerUrl(): string {
-  return process.env.AIUSAGE_LEADERBOARD_URL || 'https://aiusage.jtanx.com'
-}
+import { getSiteUrl } from '../site-url.js'
 
 export async function runLeaderboardStatus(): Promise<void> {
   if (!hasCredentials()) {
-    console.error('Not logged in. Run `aiusage leaderboard login` first.')
+    console.error('Not logged in. Run `aiusage login` first.')
     process.exit(1)
   }
 
-  const serverUrl = getServerUrl()
+  const serverUrl = getSiteUrl()
   const creds = loadCredentials()
 
   console.log('=== Leaderboard Status ===')
@@ -23,7 +20,7 @@ export async function runLeaderboardStatus(): Promise<void> {
     const status = await fetchLeaderboardStatus(serverUrl)
 
     if (status.snapshots.length === 0) {
-      console.log('No uploads yet. Run `aiusage leaderboard upload` to submit your data.')
+      console.log('No uploads yet. Run `aiusage upload` to submit your data.')
       return
     }
 
@@ -55,7 +52,7 @@ export async function runLeaderboardStatus(): Promise<void> {
       console.error(`\n✗ Failed to fetch status: ${error.message}`)
 
       if (error.code === 'device_not_found' || error.code === 'device_revoked') {
-        console.error('Please run `aiusage leaderboard login` to re-authenticate.')
+        console.error('Please run `aiusage login` to re-authenticate.')
       }
     } else {
       console.error(`\n✗ Failed to fetch status: ${error}`)

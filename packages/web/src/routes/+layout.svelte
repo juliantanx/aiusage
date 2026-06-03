@@ -29,6 +29,7 @@
       key: 'nav.group.manage',
       items: [
         { path: '/quotas',     key: 'nav.quotas',    icon: '▣' },
+        { path: '/leaderboard', key: 'nav.leaderboard', icon: '#' },
         { path: '/pricing',    key: 'nav.pricing',   icon: '¤' },
         { path: '/settings',   key: 'nav.settings',  icon: '◉' },
       ]

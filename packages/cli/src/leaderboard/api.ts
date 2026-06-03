@@ -5,6 +5,7 @@ const UPLOAD_PATH = '/api/leaderboard/uploads'
 const DEVICE_START_PATH = '/api/cli/device/start'
 const DEVICE_COMPLETE_PATH = '/api/cli/device/complete'
 const LEADERBOARD_STATUS_PATH = '/api/me/leaderboard/uploads'
+const LEADERBOARD_PATH = '/api/leaderboard'
 
 export interface DeviceStartRequest {
   device_name: string
@@ -70,6 +71,23 @@ export interface LeaderboardStatusResponse {
   }>
 }
 
+export interface LeaderboardEntry {
+  rank: number
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  total_tokens: string
+  updated_at: string
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[]
+  next_cursor: string | null
+  current_user: LeaderboardEntry | null
+  period_type: string
+  period_start: string
+}
+
 export class LeaderboardApiError extends Error {
   constructor(
     message: string,
@@ -79,6 +97,47 @@ export class LeaderboardApiError extends Error {
     super(message)
     this.name = 'LeaderboardApiError'
   }
+}
+
+async function readJsonOrNull(response: Response): Promise<any | null> {
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) return null
+  return response.json().catch(() => null)
+}
+
+function endpointUnavailableMessage(path: string, status: number): string {
+  return `Leaderboard API endpoint ${path} is unavailable (HTTP ${status}). The site deployment is not routing this API request to the Node server.`
+}
+
+export async function fetchLeaderboard(
+  serverUrl: string,
+  options: { period_type?: string; cursor?: string } = {}
+): Promise<LeaderboardResponse> {
+  const params = new URLSearchParams()
+  if (options.period_type) params.set('period_type', options.period_type)
+  if (options.cursor) params.set('cursor', options.cursor)
+
+  const query = params.toString()
+  const response = await fetch(`${serverUrl}${LEADERBOARD_PATH}${query ? `?${query}` : ''}`, {
+    headers: { Accept: 'application/json' },
+  })
+  const data = await readJsonOrNull(response) || {}
+
+  if (!response.ok) {
+    throw new LeaderboardApiError(data.error || 'Failed to fetch leaderboard', data.error)
+  }
+
+  if (!data || !Array.isArray(data.entries)) {
+    return {
+      entries: [],
+      next_cursor: null,
+      current_user: null,
+      period_type: options.period_type || 'daily',
+      period_start: new Date().toISOString().slice(0, 10),
+    }
+  }
+
+  return data
 }
 
 export async function startDeviceAuth(
@@ -91,12 +150,20 @@ export async function startDeviceAuth(
     body: JSON.stringify(request),
   })
 
+  const data = await readJsonOrNull(response)
+
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}))
-    throw new LeaderboardApiError(data.error || 'Failed to start device auth', data.error)
+    throw new LeaderboardApiError(
+      data?.error || endpointUnavailableMessage(DEVICE_START_PATH, response.status),
+      data?.error || 'endpoint_unavailable'
+    )
   }
 
-  return response.json()
+  if (!data) {
+    throw new LeaderboardApiError(endpointUnavailableMessage(DEVICE_START_PATH, response.status), 'endpoint_unavailable')
+  }
+
+  return data
 }
 
 export async function completeDeviceAuth(
@@ -109,12 +176,28 @@ export async function completeDeviceAuth(
     body: JSON.stringify(request),
   })
 
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}))
-    throw new LeaderboardApiError(data.error || 'Failed to complete device auth', data.error)
+  const data = await readJsonOrNull(response)
+
+  if (response.status === 202 || data?.pending) {
+    throw new LeaderboardApiError('Authorization pending', 'authorization_pending')
   }
 
-  return response.json()
+  if (!response.ok) {
+    throw new LeaderboardApiError(
+      data?.error || endpointUnavailableMessage(DEVICE_COMPLETE_PATH, response.status),
+      data?.error || 'endpoint_unavailable'
+    )
+  }
+
+  if (!data) {
+    throw new LeaderboardApiError(endpointUnavailableMessage(DEVICE_COMPLETE_PATH, response.status), 'endpoint_unavailable')
+  }
+
+  if (!data.device_id || !data.device_secret) {
+    throw new LeaderboardApiError('Invalid device auth response: missing device credentials', 'invalid_response')
+  }
+
+  return data
 }
 
 export async function uploadSnapshots(
@@ -123,7 +206,7 @@ export async function uploadSnapshots(
 ): Promise<UploadResponse> {
   const creds = loadCredentials()
   if (!creds) {
-    throw new LeaderboardApiError('Not logged in. Run `aiusage leaderboard login` first.', 'not_logged_in')
+    throw new LeaderboardApiError('Not logged in. Run `aiusage login` first.', 'not_logged_in')
   }
 
   const body = JSON.stringify(payload)
@@ -156,14 +239,18 @@ export async function uploadSnapshots(
     body,
   })
 
-  const data = await response.json().catch(() => ({}))
+  const data = await readJsonOrNull(response)
 
   if (!response.ok) {
     throw new LeaderboardApiError(
-      data.error || `Upload failed with status ${response.status}`,
-      data.error,
-      data.retry_after
+      data?.error || endpointUnavailableMessage(UPLOAD_PATH, response.status),
+      data?.error || 'endpoint_unavailable',
+      data?.retry_after
     )
+  }
+
+  if (!data) {
+    throw new LeaderboardApiError(endpointUnavailableMessage(UPLOAD_PATH, response.status), 'endpoint_unavailable')
   }
 
   return data
@@ -172,7 +259,7 @@ export async function uploadSnapshots(
 export async function fetchLeaderboardStatus(serverUrl: string): Promise<LeaderboardStatusResponse> {
   const creds = loadCredentials()
   if (!creds) {
-    throw new LeaderboardApiError('Not logged in. Run `aiusage leaderboard login` first.', 'not_logged_in')
+    throw new LeaderboardApiError('Not logged in. Run `aiusage login` first.', 'not_logged_in')
   }
 
   const response = await fetch(`${serverUrl}${LEADERBOARD_STATUS_PATH}`, {
@@ -181,10 +268,18 @@ export async function fetchLeaderboardStatus(serverUrl: string): Promise<Leaderb
     },
   })
 
+  const data = await readJsonOrNull(response)
+
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}))
-    throw new LeaderboardApiError(data.error || 'Failed to fetch status', data.error)
+    throw new LeaderboardApiError(
+      data?.error || endpointUnavailableMessage(LEADERBOARD_STATUS_PATH, response.status),
+      data?.error || 'endpoint_unavailable'
+    )
   }
 
-  return response.json()
+  if (!data) {
+    throw new LeaderboardApiError(endpointUnavailableMessage(LEADERBOARD_STATUS_PATH, response.status), 'endpoint_unavailable')
+  }
+
+  return data
 }

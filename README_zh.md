@@ -6,7 +6,7 @@
 
 **[aiusage.jtanx.com](https://aiusage.jtanx.com)** · [English](https://github.com/juliantanx/aiusage/blob/main/README.md) | 中文
 
-一站式追踪 **22 款 AI 编程工具**的 token 用量、费用和会话。本地优先，无需注册，无遥测，无需上云。
+一站式追踪 **22 款 AI 编程工具**的 token 用量、费用和会话。本地使用无需注册，无遥测，无需上云。
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage 仪表盘首页" width="32%" />
@@ -42,6 +42,19 @@ aiusage serve
 - **一个仪表盘** 查看 token 用量、费用、模型分布和工具调用活跃度
 - **多机同步** 通过 GitHub、S3 或 R2 — 完全可选
 - **数据默认本地** 不上传、不追踪
+
+## 公开排行榜
+
+AIUsage 内置公开 Token 排行榜，适合愿意分享聚合总量的用户参与。
+
+- 任何人都可以在 [aiusage.jtanx.com/leaderboard](https://aiusage.jtanx.com/leaderboard) 查看排行榜，也可以用 `aiusage rank` 在终端查看。
+- 上传数据需要账号和已授权的 CLI 设备：先运行 `aiusage login`，再运行 `aiusage upload`。
+- 排行榜上传内容只包含各排名周期的聚合 Token 总量，不包含 prompt、completion、源码、文件路径、模型分布、项目数据或本地费用估算。
+
+职责边界：
+
+- `@juliantanx/aiusage` 负责本地解析、本地仪表盘、同步、终端摘要、CLI 授权和签名上传。
+- 官方站点负责公开榜单浏览、账号资料、授权设备、上传审核状态和管理员治理。
 
 ## 文档
 

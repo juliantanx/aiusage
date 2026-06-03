@@ -72,6 +72,7 @@
         { id: 'widget-tray', en: 'Tray Icon', zh: '托盘图标' },
       ]
     },
+    { id: 'leaderboard', en: 'Public Leaderboard', zh: '公开排行榜', children: [] },
     { id: 'cli', en: 'CLI Reference', zh: 'CLI 命令',
       children: [
         { id: 'cli-parse', en: 'parse', zh: 'parse' },
@@ -80,6 +81,7 @@
         { id: 'cli-export', en: 'export', zh: 'export' },
         { id: 'cli-clean', en: 'clean', zh: 'clean' },
         { id: 'cli-reset', en: 'reset', zh: 'reset' },
+        { id: 'cli-leaderboard', en: 'leaderboard', zh: 'leaderboard' },
         { id: 'cli-other', en: 'Other Commands', zh: '其他命令' },
       ]
     },
@@ -897,14 +899,38 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     </section>
 
     <!-- ══════ CLI Reference ══════ -->
-    <section id="cli">
+    <section id="leaderboard">
       <div class="sec-head">
         <span class="sec-idx">16</span>
+        <h2>{zh ? '公开排行榜' : 'Public Leaderboard'}</h2>
+      </div>
+      <p>{zh
+        ? '公开排行榜用于展示用户主动提交的聚合 Token 总量。查看排行榜不需要登录；上传数据需要登录并授权 CLI 设备。'
+        : 'The public leaderboard shows aggregate token totals submitted by users who opt in. Viewing does not require sign-in; uploading requires an account and an authorized CLI device.'
+      }</p>
+      <ul>
+        <li>{zh ? '站点地址：' : 'Site: '}<a href="/leaderboard">/leaderboard</a></li>
+        <li>{zh ? '终端查看：' : 'CLI view: '}<code>aiusage rank</code></li>
+        <li>{zh ? '上传流程：' : 'Upload flow: '}<code>aiusage login</code> → <code>aiusage upload</code></li>
+      </ul>
+      <p>{zh
+        ? '上传内容仅包含排名周期内的聚合 Token 总量和必要元数据，不包含 prompt、completion、源码、文件路径、模型分布、项目数据或本地费用估算。'
+        : 'Uploads contain only aggregate token totals for ranking periods plus required metadata. They do not include prompts, completions, source code, file paths, model breakdowns, project data, or local cost estimates.'
+      }</p>
+      <p>{zh
+        ? '职责边界：CLI 负责本地解析、授权和签名上传；站点负责公开浏览、账号资料、授权设备、上传状态和管理员治理。'
+        : 'Responsibility split: the CLI handles local parsing, authorization, and signed uploads; the site handles public browsing, profiles, authorized devices, upload status, and moderation.'
+      }</p>
+    </section>
+
+    <section id="cli">
+      <div class="sec-head">
+        <span class="sec-idx">17</span>
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
-        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、pm2-setup 和 pm2-start。'
-        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, pm2-setup, and pm2-start.'
+        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、rank、login、upload、upload-status、logout、pm2-setup 和 pm2-start。'
+        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, rank, login, upload, upload-status, logout, pm2-setup, and pm2-start.'
       }</p>
     </section>
 
@@ -984,6 +1010,31 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
           ['<code>--yes</code>', zh ? '跳过确认提示（必须指定才会执行）' : 'Skip confirmation prompt (required to execute)'],
+        ]}
+      />
+    </section>
+
+    <section id="cli-leaderboard">
+      <h3><code>rank</code> — {zh ? '公开榜单与上传' : 'Public Leaderboard and Uploads'}</h3>
+      <p>{zh
+        ? '不带子命令时会查看公开排行榜。查看不需要登录；上传和上传状态查询需要先完成设备授权。'
+        : 'Without a subcommand, this views the public leaderboard. Viewing does not require sign-in; uploads and upload status require device authorization first.'
+      }</p>
+      <DocsTable
+        headers={zh ? ['命令', '说明'] : ['Command', 'Description']}
+        rows={[
+          ['<code>rank</code>', zh ? '查看公开排行榜，默认 daily 周期，默认 20 行' : 'View the public leaderboard. Defaults to daily and 20 rows'],
+          ['<code>login</code>', zh ? '授权当前 CLI 设备用于上传聚合总量' : 'Authorize this CLI device for aggregate uploads'],
+          ['<code>upload</code>', zh ? '上传当前设备可见的聚合 Token 快照' : 'Upload aggregate token snapshots visible to this device'],
+          ['<code>upload-status</code>', zh ? '查看自己的近期上传状态和审核结果' : 'Show your recent upload status and review results'],
+          ['<code>logout</code>', zh ? '删除本地排行榜设备凭证' : 'Remove local leaderboard credentials'],
+        ]}
+      />
+      <DocsTable
+        headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
+        rows={[
+          ['<code>-p, --period &lt;period&gt;</code>', zh ? '查看周期：daily、weekly、monthly、yearly、all_time' : 'View period: daily, weekly, monthly, yearly, all_time'],
+          ['<code>-l, --limit &lt;n&gt;</code>', zh ? '显示行数，最大 50' : 'Number of rows to show, max 50'],
         ]}
       />
     </section>
