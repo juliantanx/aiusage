@@ -29,6 +29,11 @@ export interface CursorCursor {
   lastId: string         // composerId
 }
 
+export interface TimestampIdCursor {
+  lastCreatedAt: string
+  lastId: string
+}
+
 export type FileWatermarkData = Record<Tool, Record<string, WatermarkEntry>>
 
 export interface WatermarkState {
@@ -37,6 +42,9 @@ export interface WatermarkState {
   hermes?: HermesCursor | null
   qoder?: QoderCursor | null
   cursor?: CursorCursor | null
+  goose?: TimestampIdCursor | null
+  zed?: TimestampIdCursor | null
+  kiro?: TimestampIdCursor | null
 }
 
 /** @deprecated Use FileWatermarkData instead */
@@ -51,7 +59,21 @@ function defaultFileData(): FileWatermarkData {
     'hermes': {},
     'qoder': {},
     'cursor': {},
+    'kilocode': {},
     'copilot': {},
+    'gemini': {},
+    'kimi': {},
+    'codebuddy': {},
+    'kiro': {},
+    'grok': {},
+    'antigravity': {},
+    'roocode': {},
+    'zed': {},
+    'goose': {},
+    'omp': {},
+    'pi': {},
+    'craft': {},
+    'droid': {},
   }
 }
 
@@ -75,7 +97,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null }
+      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null }
     } catch {
       return { files: defaultFileData() }
     }
@@ -137,5 +159,29 @@ export class WatermarkManager {
 
   setCursorCursor(cursor: CursorCursor): void {
     this.data.cursor = cursor
+  }
+
+  getGooseCursor(): TimestampIdCursor | null {
+    return this.data.goose ?? null
+  }
+
+  setGooseCursor(cursor: TimestampIdCursor): void {
+    this.data.goose = cursor
+  }
+
+  getZedCursor(): TimestampIdCursor | null {
+    return this.data.zed ?? null
+  }
+
+  setZedCursor(cursor: TimestampIdCursor): void {
+    this.data.zed = cursor
+  }
+
+  getKiroCursor(): TimestampIdCursor | null {
+    return this.data.kiro ?? null
+  }
+
+  setKiroCursor(cursor: TimestampIdCursor): void {
+    this.data.kiro = cursor
   }
 }

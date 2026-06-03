@@ -1,4 +1,27 @@
-export const TOOLS = ['claude-code', 'codex', 'openclaw', 'opencode', 'hermes', 'qoder', 'cursor', 'kilocode', 'copilot'] as const
+export const TOOLS = [
+  'claude-code',
+  'codex',
+  'openclaw',
+  'opencode',
+  'hermes',
+  'qoder',
+  'cursor',
+  'kilocode',
+  'copilot',
+  'gemini',
+  'kimi',
+  'codebuddy',
+  'kiro',
+  'grok',
+  'antigravity',
+  'roocode',
+  'zed',
+  'goose',
+  'omp',
+  'pi',
+  'craft',
+  'droid',
+] as const
 export type Tool = (typeof TOOLS)[number]
 
 export interface StatsRecord {

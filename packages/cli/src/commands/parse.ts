@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import { hostname } from 'node:os'
-import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, type Tool } from '@aiusage/core'
+import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, generateRecordId, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
@@ -15,6 +15,9 @@ import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
 import { runParseCursor } from './parse-cursor.js'
 import { runParseKilo } from './parse-kilo.js'
+import { runParseGoose } from './parse-goose.js'
+import { runParseZed } from './parse-zed.js'
+import { runParseKiro } from './parse-kiro.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -29,7 +32,7 @@ interface ToolPaths {
 }
 
 // Re-export for backward compatibility with other modules that import from here
-export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath } from '../discovery.js'
+export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath, defaultGooseDbPath, defaultZedDbPath } from '../discovery.js'
 
 function extractSessionId(filePath: string, tool: Tool): string {
   if (tool === 'claude-code') {
@@ -63,6 +66,93 @@ function extractSessionId(filePath: string, tool: Tool): string {
     return (parts.pop() ?? '').replace('.jsonl', '')
   }
   return 'unknown'
+}
+
+function toNumber(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+}
+
+function parseUiMessagesFile(options: {
+  filePath: string
+  tool: 'roocode' | 'kilocode'
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+  exchangeRate?: number
+}): { records: StatsRecord[]; errors: string[] } {
+  const { filePath, tool, device, deviceInstanceId, platform, now, exchangeRate } = options
+  const records: StatsRecord[] = []
+  const errors: string[] = []
+
+  let messages: any[]
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+    messages = Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
+  }
+
+  const taskId = filePath.split('/').slice(-2, -1)[0] || 'unknown'
+  for (const [index, message] of messages.entries()) {
+    if (message?.say !== 'api_req_started' || typeof message.text !== 'string') continue
+    let payload: any
+    try {
+      payload = JSON.parse(message.text)
+    } catch {
+      continue
+    }
+
+    const inputTokens = toNumber(payload.tokensIn)
+    const outputTokens = toNumber(payload.tokensOut)
+    const cacheReadTokens = toNumber(payload.cacheReads)
+    const cacheWriteTokens = toNumber(payload.cacheWrites)
+    const thinkingTokens = toNumber(payload.reasoningTokens ?? payload.reasoning)
+    if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens + thinkingTokens === 0) continue
+
+    const model = typeof payload.model === 'string' && payload.model.trim()
+      ? payload.model.trim()
+      : typeof payload.modelId === 'string' && payload.modelId.trim()
+        ? payload.modelId.trim()
+        : typeof payload.apiProtocol === 'string' && payload.apiProtocol.trim()
+          ? `protocol:${payload.apiProtocol.trim().toLowerCase()}`
+          : 'unknown'
+    const provider = typeof payload.inferenceProvider === 'string' && payload.inferenceProvider.trim()
+      ? payload.inferenceProvider.trim().toLowerCase()
+      : inferProvider(model)
+    const ts = typeof message.ts === 'number' ? message.ts : now
+    const recordId = generateRecordId(deviceInstanceId, `${filePath}:${index}`, ts)
+    const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens }
+    const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
+    const logCost = Number(payload.cost)
+    const hasLogCost = Number.isFinite(logCost) && logCost > 0
+
+    records.push({
+      id: recordId,
+      ts,
+      ingestedAt: now,
+      updatedAt: now,
+      lineOffset: index,
+      tool,
+      model,
+      provider,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      thinkingTokens,
+      cost: hasLogCost ? logCost : calculatedCost,
+      costSource: hasLogCost ? 'log' : calculatedCost > 0 ? 'pricing' : 'unknown',
+      sessionId: taskId,
+      sourceFile: filePath,
+      device,
+      deviceInstanceId,
+      platform,
+    })
+  }
+
+  return { records, errors }
 }
 
 export async function runParse(db: Database.Database, filterTool?: string, options?: { openCodeDbPath?: string; hermesDbPath?: string; qoderDbPath?: string; cursorDbPath?: string; onProgress?: (info: ProgressInfo) => void }): Promise<ParseResult> {
@@ -104,6 +194,31 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         if (offset >= stat.size) {
           onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
           continue // No new data
+        }
+
+        if ((tool === 'roocode' || tool === 'kilocode') && filePath.endsWith('ui_messages.json')) {
+          const result = parseUiMessagesFile({
+            filePath,
+            tool,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            exchangeRate,
+          })
+          for (const record of result.records) {
+            insertRecord(db, record)
+            parsedCount++
+          }
+          errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          continue
         }
 
         const content = readFileSync(filePath, 'utf-8')
@@ -381,6 +496,99 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
+  // Goose: SQLite sessions database
+  const gooseDbPath = getDbPath('goose') ?? ''
+  if ((!filterTool || filterTool === 'goose') && existsSync(gooseDbPath)) {
+    try {
+      const gooseDb = new Database(gooseDbPath, { readonly: true })
+      try {
+        const result = runParseGoose(gooseDb, {
+          dbPath: gooseDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getGooseCursor(),
+          exchangeRate,
+        })
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setGooseCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'goose', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        gooseDb.close()
+      }
+    } catch (e) {
+      errors.push(`${gooseDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // Kiro: tokens_generated or conversations_v2 SQLite data
+  const kiroDbPath = getDbPath('kiro') ?? ''
+  if ((!filterTool || filterTool === 'kiro') && existsSync(kiroDbPath)) {
+    try {
+      const kiroDb = new Database(kiroDbPath, { readonly: true })
+      try {
+        const result = runParseKiro(kiroDb, {
+          dbPath: kiroDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getKiroCursor(),
+          exchangeRate,
+        })
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setKiroCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'kiro', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        kiroDb.close()
+      }
+    } catch (e) {
+      errors.push(`${kiroDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // Zed: SQLite threads database. Currently imports JSON-encoded thread rows.
+  const zedDbPath = getDbPath('zed') ?? ''
+  if ((!filterTool || filterTool === 'zed') && existsSync(zedDbPath)) {
+    try {
+      const zedDb = new Database(zedDbPath, { readonly: true })
+      try {
+        const result = runParseZed(zedDb, {
+          dbPath: zedDbPath,
+          device,
+          deviceInstanceId,
+          platform: devicePlatform,
+          now: Date.now(),
+          cursor: wm.getZedCursor(),
+          exchangeRate,
+        })
+        for (const record of result.records) insertRecord(db, record)
+        if (result.nextCursor) {
+          wm.setZedCursor(result.nextCursor)
+          wm.save()
+        }
+        parsedCount += result.records.length
+        errors.push(...result.errors)
+        onProgress({ phase: 'Parsing SQLite', tool: 'zed', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+      } finally {
+        zedDb.close()
+      }
+    } catch (e) {
+      errors.push(`${zedDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
 
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
@@ -631,4 +839,3 @@ function deriveSessionId(tool: Tool, sourceFile: string): string {
   if (tool === 'qoder') return normalized.split('/').slice(-2, -1)[0] ?? fileName.replace(/\.jsonl$/, '')
   return fileName.replace(/\.jsonl$/, '')
 }
-

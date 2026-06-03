@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
-import { join, extname, isAbsolute } from 'node:path'
+import { join, extname, isAbsolute, basename } from 'node:path'
 import { homedir, platform } from 'node:os'
 import type { Tool } from '@aiusage/core'
 import { loadConfig } from './config.js'
@@ -155,6 +155,32 @@ export function defaultKiloDbPath(): string {
   return join(xdgDataDir(homedir(), 'kilo'), 'kilo.db')
 }
 
+export function defaultGooseDbPath(): string {
+  const home = homedir()
+  const plat = platform()
+  if (plat === 'darwin') {
+    return join(home, 'Library', 'Application Support', 'goose', 'sessions', 'sessions.db')
+  }
+  if (plat === 'win32') {
+    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    return join(appData, 'goose', 'sessions', 'sessions.db')
+  }
+  return join(xdgDataDir(home, 'goose'), 'sessions', 'sessions.db')
+}
+
+export function defaultZedDbPath(): string {
+  const home = homedir()
+  const plat = platform()
+  if (plat === 'darwin') {
+    return join(home, 'Library', 'Application Support', 'Zed', 'threads', 'threads.db')
+  }
+  if (plat === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
+    return join(localAppData, 'Zed', 'threads', 'threads.db')
+  }
+  return join(xdgDataDir(home, 'zed'), 'threads', 'threads.db')
+}
+
 // ── Per-tool probe functions ─────────────────────────────────────────
 // Each returns the resolved data path (or null if not installed).
 // Priority: env override → legacy config.sources → platform default + existence check
@@ -254,6 +280,18 @@ function probeKiloDb(ctx: ProbeContext): string | null {
   return existsSync(dbPath) ? dbPath : null
 }
 
+function probeKiloTasks(ctx: ProbeContext): string | null {
+  const override = envOverride('kilocode', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['kilocode']
+  if (legacy) return legacy
+  for (const root of ideRoots(ctx)) {
+    const dir = join(root, 'User', 'globalStorage', 'kilocode.kilo-code', 'tasks')
+    if (existsSync(dir)) return dir
+  }
+  return null
+}
+
 function probeCopilot(ctx: ProbeContext): string | null {
   const override = envOverride('copilot', ctx.env)
   if (override) return override
@@ -263,6 +301,167 @@ function probeCopilot(ctx: ProbeContext): string | null {
   const otelPath = ctx.env.COPILOT_OTEL_FILE_EXPORTER_PATH
   if (otelPath && existsSync(otelPath)) return otelPath
   const dir = join(ctx.home, '.copilot', 'otel')
+  return existsSync(dir) ? dir : null
+}
+
+function probeGemini(ctx: ProbeContext): string | null {
+  const override = envOverride('gemini', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['gemini']
+  if (legacy) return legacy
+  const dir = ctx.env.GEMINI_HOME ? join(ctx.env.GEMINI_HOME, 'tmp') : join(ctx.home, '.gemini', 'tmp')
+  return existsSync(dir) ? dir : null
+}
+
+function probeKimi(ctx: ProbeContext): string | null {
+  const override = envOverride('kimi', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['kimi']
+  if (legacy) return legacy
+  const codeHome = ctx.env.KIMI_CODE_HOME ?? join(ctx.home, '.kimi-code')
+  const legacyHome = ctx.env.KIMI_HOME ?? join(ctx.home, '.kimi')
+  if (existsSync(join(codeHome, 'sessions'))) return join(codeHome, 'sessions')
+  return existsSync(join(legacyHome, 'sessions')) ? join(legacyHome, 'sessions') : null
+}
+
+function probeCodeBuddy(ctx: ProbeContext): string | null {
+  const override = envOverride('codebuddy', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['codebuddy']
+  if (legacy) return legacy
+  const dir = join(ctx.env.CODEBUDDY_HOME ?? join(ctx.home, '.codebuddy'), 'projects')
+  return existsSync(dir) ? dir : null
+}
+
+function probeKiro(ctx: ProbeContext): string | null {
+  const override = envOverride('kiro', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['kiro']
+  if (legacy) return legacy
+  const ideDb = join(
+    ctx.home,
+    'Library',
+    'Application Support',
+    'Kiro',
+    'User',
+    'globalStorage',
+    'kiro.kiroagent',
+    'dev_data',
+    'devdata.sqlite',
+  )
+  const cliSessions = join(ctx.env.KIRO_HOME ?? join(ctx.home, '.kiro'), 'sessions', 'cli')
+  const appSupport = platform() === 'darwin'
+    ? join(ctx.home, 'Library', 'Application Support', 'kiro-cli', 'data.sqlite3')
+    : join(ctx.env.XDG_DATA_HOME ?? join(ctx.home, '.local', 'share'), 'kiro-cli', 'data.sqlite3')
+  if (existsSync(ideDb)) return ideDb
+  if (existsSync(appSupport)) return appSupport
+  if (existsSync(cliSessions)) return cliSessions
+  return null
+}
+
+function probeGrok(ctx: ProbeContext): string | null {
+  const override = envOverride('grok', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['grok']
+  if (legacy) return legacy
+  const dir = join(ctx.env.GROK_HOME ?? join(ctx.home, '.grok'), 'sessions')
+  return existsSync(dir) ? dir : null
+}
+
+function probeAntigravity(ctx: ProbeContext): string | null {
+  const override = envOverride('antigravity', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['antigravity']
+  if (legacy) return legacy
+  const home = ctx.env.GEMINI_HOME ?? join(ctx.home, '.gemini')
+  const dir = join(home, 'tmp', 'antigravity')
+  return existsSync(dir) ? dir : null
+}
+
+function ideRoots(ctx: ProbeContext): string[] {
+  const roots: string[] = []
+  if (typeof ctx.env.AIUSAGE_IDE_ROOTS === 'string' && ctx.env.AIUSAGE_IDE_ROOTS.trim()) {
+    roots.push(...ctx.env.AIUSAGE_IDE_ROOTS.split(':').map((p) => p.trim()).filter(Boolean))
+  }
+  const home = ctx.home
+  if (platform() === 'darwin') {
+    const base = join(home, 'Library', 'Application Support')
+    roots.push(...['Code', 'Cursor', 'CodeBuddy', 'Windsurf', 'VSCodium'].map((name) => join(base, name)))
+  } else if (platform() === 'win32') {
+    const appData = ctx.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    roots.push(...['Code', 'Cursor', 'CodeBuddy', 'Windsurf', 'VSCodium'].map((name) => join(appData, name)))
+  } else {
+    const config = ctx.env.XDG_CONFIG_HOME ?? join(home, '.config')
+    roots.push(...['Code', 'Cursor', 'CodeBuddy', 'Windsurf', 'VSCodium'].map((name) => join(config, name)))
+  }
+  return unique(roots)
+}
+
+function probeRooCode(ctx: ProbeContext): string | null {
+  const override = envOverride('roocode', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['roocode']
+  if (legacy) return legacy
+  for (const root of ideRoots(ctx)) {
+    const dir = join(root, 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks')
+    if (existsSync(dir)) return dir
+  }
+  return null
+}
+
+function probeZed(ctx: ProbeContext): string | null {
+  const override = envOverride('zed', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['zed']
+  if (legacy) return legacy
+  const dbPath = defaultZedDbPath()
+  return existsSync(dbPath) ? dbPath : null
+}
+
+function probeGoose(ctx: ProbeContext): string | null {
+  const override = envOverride('goose', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['goose']
+  if (legacy) return legacy
+  const dbPath = ctx.env.GOOSE_PATH_ROOT ? join(ctx.env.GOOSE_PATH_ROOT, 'data', 'sessions', 'sessions.db') : defaultGooseDbPath()
+  return existsSync(dbPath) ? dbPath : null
+}
+
+function probeOmp(ctx: ProbeContext): string | null {
+  const override = envOverride('omp', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['omp']
+  if (legacy) return legacy
+  const dir = join(ctx.env.OMP_HOME ?? join(ctx.home, '.omp'), 'agent', 'sessions')
+  return existsSync(dir) ? dir : null
+}
+
+function probePi(ctx: ProbeContext): string | null {
+  const override = envOverride('pi', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['pi']
+  if (legacy) return legacy
+  const dir = ctx.env.PI_CODING_AGENT_DIR
+    ? join(ctx.env.PI_CODING_AGENT_DIR, 'sessions')
+    : join(ctx.home, '.pi', 'agent', 'sessions')
+  return existsSync(dir) ? dir : null
+}
+
+function probeCraft(ctx: ProbeContext): string | null {
+  const override = envOverride('craft', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['craft']
+  if (legacy) return legacy
+  const dir = ctx.env.CRAFT_CONFIG_DIR ?? join(ctx.home, '.craft-agent')
+  return existsSync(dir) ? dir : null
+}
+
+function probeDroid(ctx: ProbeContext): string | null {
+  const override = envOverride('droid', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['droid']
+  if (legacy) return legacy
+  const dir = join(ctx.home, '.droid', 'sessions')
   return existsSync(dir) ? dir : null
 }
 
@@ -311,8 +510,22 @@ const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'qoder', sourceKey: 'qoder', label: 'Qoder (sessions)', probe: probeQoderSessions },
   { tool: 'qoder', sourceKey: 'qoder-db', label: 'Qoder (desktop)', probe: probeQoderDb },
   { tool: 'cursor', sourceKey: 'cursor', label: 'Cursor', probe: probeCursor },
+  { tool: 'kilocode', sourceKey: 'kilocode', label: 'Kilo Code (extension)', probe: probeKiloTasks },
   { tool: 'kilocode', sourceKey: 'kilocode-db', label: 'KiloCode', probe: probeKiloDb },
   { tool: 'copilot', sourceKey: 'copilot', label: 'Copilot', probe: probeCopilot },
+  { tool: 'gemini', sourceKey: 'gemini', label: 'Gemini CLI', probe: probeGemini },
+  { tool: 'kimi', sourceKey: 'kimi', label: 'Kimi Code', probe: probeKimi },
+  { tool: 'codebuddy', sourceKey: 'codebuddy', label: 'CodeBuddy', probe: probeCodeBuddy },
+  { tool: 'kiro', sourceKey: 'kiro', label: 'Kiro', probe: probeKiro },
+  { tool: 'grok', sourceKey: 'grok', label: 'Grok Build', probe: probeGrok },
+  { tool: 'antigravity', sourceKey: 'antigravity', label: 'Antigravity', probe: probeAntigravity },
+  { tool: 'roocode', sourceKey: 'roocode', label: 'Roo Code', probe: probeRooCode },
+  { tool: 'zed', sourceKey: 'zed', label: 'Zed', probe: probeZed },
+  { tool: 'goose', sourceKey: 'goose', label: 'Goose', probe: probeGoose },
+  { tool: 'omp', sourceKey: 'omp', label: 'oh-my-pi', probe: probeOmp },
+  { tool: 'pi', sourceKey: 'pi', label: 'pi', probe: probePi },
+  { tool: 'craft', sourceKey: 'craft', label: 'Craft', probe: probeCraft },
+  { tool: 'droid', sourceKey: 'droid', label: 'Droid', probe: probeDroid },
 ] as const
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -348,7 +561,11 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
       try {
         const stat = statSync(detectedPath)
         if (stat.isDirectory()) {
-          fileCount += findJsonlFiles(detectedPath).length
+          if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
+            fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'ui_messages.json').length
+          } else {
+            fileCount += findJsonlFiles(detectedPath).length
+          }
         } else if (stat.isFile()) {
           fileCount += 1
         }
@@ -458,6 +675,54 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     if (paths.length > 0) results.push({ tool: 'copilot', paths: unique(paths) })
   }
 
+  const jsonlSources: Array<{ tool: Tool; path: string | null; filter?: (path: string) => boolean }> = [
+    { tool: 'gemini', path: probeGemini(ctx) },
+    { tool: 'kimi', path: probeKimi(ctx), filter: (p) => basename(p) === 'wire.jsonl' },
+    { tool: 'codebuddy', path: probeCodeBuddy(ctx) },
+    { tool: 'kiro', path: probeKiro(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
+    { tool: 'grok', path: probeGrok(ctx), filter: (p) => extname(p) === '.jsonl' },
+    { tool: 'antigravity', path: probeAntigravity(ctx) },
+    { tool: 'omp', path: probeOmp(ctx) },
+    { tool: 'pi', path: probePi(ctx) },
+    { tool: 'craft', path: probeCraft(ctx) },
+    { tool: 'droid', path: probeDroid(ctx) },
+  ]
+
+  for (const source of jsonlSources) {
+    if (!source.path || !existsSync(source.path)) continue
+    let paths = findJsonlFiles(source.path)
+    if (source.filter) paths = paths.filter(source.filter)
+    if (paths.length > 0) results.push({ tool: source.tool, paths: unique(paths) })
+  }
+
+  const roocodePath = probeRooCode(ctx)
+  if (roocodePath && existsSync(roocodePath)) {
+    const paths = findJsonFiles(roocodePath).filter((p) => basename(p) === 'ui_messages.json')
+    if (paths.length > 0) results.push({ tool: 'roocode', paths: unique(paths) })
+  }
+
+  const kilocodeTaskPath = probeKiloTasks(ctx)
+  if (kilocodeTaskPath && existsSync(kilocodeTaskPath)) {
+    const paths = findJsonFiles(kilocodeTaskPath).filter((p) => basename(p) === 'ui_messages.json')
+    if (paths.length > 0) results.push({ tool: 'kilocode', paths: unique(paths) })
+  }
+
+  return results
+}
+
+function findJsonFiles(dir: string): string[] {
+  const results: string[] = []
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        results.push(...findJsonFiles(fullPath))
+      } else if (entry.isFile() && extname(entry.name) === '.json') {
+        results.push(fullPath)
+      }
+    }
+  } catch {}
   return results
 }
 
