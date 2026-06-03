@@ -3,10 +3,10 @@ import path from 'node:path'
 import { hostname, platform } from 'node:os'
 import type Database from 'better-sqlite3'
 import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
-import { loadConfig, saveConfig, loadCredential, SOURCE_KEYS } from '../config.js'
-import type { Config, SourcesConfig, SyncConfig } from '../config.js'
+import { loadConfig, saveConfig, loadCredential } from '../config.js'
+import type { Config, SyncConfig } from '../config.js'
 import { extractProject, extractProjectFromCwd } from './project-extraction.js'
-import { getDefaultSourcePaths } from '../commands/parse.js'
+import { discoverTools } from '../discovery.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 import { queryAllQuotas } from '../quota.js'
 
@@ -1126,14 +1126,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         if (req.method === 'GET') {
           const currentCfg = loadConfig() ?? {}
           const osPlatform = platform()
-          const { credentials, priceOverrides, platform: _cfgPlatform, ...rest } = currentCfg
+          const { credentials, priceOverrides, platform: _cfgPlatform, sources: _legacySources, ...rest } = currentCfg
           json(res, {
             device: rest.device ?? null,
             weekStart: rest.weekStart ?? 1,
             dashboardPollInterval: rest.dashboardPollInterval ?? null,
             parseInterval: rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
-            sources: Object.fromEntries(SOURCE_KEYS.map(k => [k, rest.sources?.[k] ?? null])),
             sync: rest.sync ?? null,
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
@@ -1141,7 +1140,6 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             credentialKeys: credentials ? Object.keys(credentials) : [],
             hostname: hostname(),
             platform: osPlatform,
-            defaultPaths: getDefaultSourcePaths(),
           })
           return
         }
@@ -1196,19 +1194,6 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               else existing.retentionDays = Number(update.retentionDays)
             }
 
-            if (update.sources && typeof update.sources === 'object') {
-              const src = update.sources as Record<string, unknown>
-              const s: SourcesConfig = existing.sources ?? {}
-              for (const key of SOURCE_KEYS) {
-                if (key in src) {
-                  if (!src[key]) delete s[key]
-                  else s[key] = String(src[key])
-                }
-              }
-              if (Object.keys(s).length) existing.sources = s
-              else delete existing.sources
-            }
-
             if ('sync' in update) {
               const syncUpdate = update.sync as Record<string, unknown> | null
               if (!syncUpdate?.backend) {
@@ -1247,6 +1232,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           }
           return
         }
+      }
+
+      // ── /api/detected-tools ──────────────────────────────────────
+      if (url.pathname === '/api/detected-tools' && req.method === 'GET') {
+        const tools = discoverTools()
+        json(res, { tools })
+        return
       }
 
       // ── /api/exchange-rate/refresh ────────────────────────────────

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
-import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
-import { join, extname } from 'node:path'
-import { homedir, hostname, platform } from 'node:os'
+import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
+import { join } from 'node:path'
+import { hostname } from 'node:os'
 import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
@@ -9,6 +9,7 @@ import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
 import { loadConfig, AIUSAGE_DIR } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
+import { discoverLogFiles, getDbPath } from '../discovery.js'
 import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
@@ -27,256 +28,8 @@ interface ToolPaths {
   paths: string[]
 }
 
-function unique(paths: string[]): string[] {
-  return [...new Set(paths)]
-}
-
-function findJsonlFiles(dir: string): string[] {
-  const results: string[] = []
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true })
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        results.push(...findJsonlFiles(fullPath))
-      } else if (entry.isFile() && extname(entry.name) === '.jsonl') {
-        results.push(fullPath)
-      }
-    }
-  } catch {}
-  return results
-}
-
-function findQoderSessionSegmentFiles(dir: string): string[] {
-  return findJsonlFiles(dir).filter((filePath) => {
-    const parts = filePath.replace(/\\/g, '/').split('/').filter(Boolean)
-    const sessionsIndex = parts.lastIndexOf('sessions')
-    const segmentsIndex = parts.lastIndexOf('segments')
-    return sessionsIndex >= 0
-      && segmentsIndex > sessionsIndex
-      && segmentsIndex === parts.length - 2
-  })
-}
-
-function windowsUserHomesFromWsl(): string[] {
-  const homes: string[] = []
-  if (!existsSync('/mnt')) return homes
-
-  try {
-    const drives = readdirSync('/mnt', { withFileTypes: true })
-    for (const drive of drives) {
-      if (!drive.isDirectory() || !/^[a-z]$/i.test(drive.name)) continue
-      const usersDir = join('/mnt', drive.name, 'Users')
-      if (!existsSync(usersDir)) continue
-
-      try {
-        const users = readdirSync(usersDir, { withFileTypes: true })
-        for (const user of users) {
-          if (!user.isDirectory()) continue
-          if (['All Users', 'Default', 'Default User', 'Public'].includes(user.name)) continue
-          homes.push(join(usersDir, user.name))
-        }
-      } catch {
-        // Permission errors on individual user dirs are non-fatal; skip and continue.
-      }
-    }
-  } catch {
-    // /mnt may exist but be unreadable; WSL detection is best-effort.
-  }
-
-  return homes
-}
-
-function defaultQoderSessionDirs(home: string): string[] {
-  const windowsHomes = [
-    process.env.USERPROFILE,
-    ...windowsUserHomesFromWsl(),
-  ].filter((value): value is string => !!value)
-
-  const dirs = [
-    join(home, '.qoder', 'logs', 'sessions'),
-    ...windowsHomes.flatMap((windowsHome) => [
-      join(windowsHome, '.qoder', 'logs', 'sessions'),
-      join(windowsHome, 'AppData', 'Local', '.qoder', 'logs', 'sessions'),
-      join(windowsHome, 'AppData', 'Roaming', 'Qoder', 'logs', 'sessions'),
-    ]),
-  ]
-
-  if (process.env.LOCALAPPDATA) {
-    dirs.push(join(process.env.LOCALAPPDATA, '.qoder', 'logs', 'sessions'))
-  }
-  if (process.env.APPDATA) {
-    dirs.push(join(process.env.APPDATA, 'Qoder', 'logs', 'sessions'))
-  }
-
-  return unique(dirs)
-}
-
-function qoderSessionDirs(source: string | undefined, home: string): string[] {
-  if (!source) return defaultQoderSessionDirs(home)
-
-  const normalized = source.replace(/\\/g, '/').replace(/\/+$/, '')
-  if (normalized.endsWith('/logs/sessions') || normalized.endsWith('/sessions') || normalized.endsWith('/segments')) {
-    return [source]
-  }
-  if (normalized.endsWith('/logs')) return [join(source, 'sessions')]
-
-  return [join(source, 'logs', 'sessions')]
-}
-
-export function defaultOpenCodeDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    // Windows: %APPDATA%\opencode\opencode.db
-    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
-    return join(appData, 'opencode', 'opencode.db')
-  }
-  if (plat === 'darwin') {
-    // macOS: ~/Library/Application Support/opencode/opencode.db
-    return join(home, 'Library', 'Application Support', 'opencode', 'opencode.db')
-  }
-  // Linux: $XDG_DATA_HOME/opencode/opencode.db (defaults to ~/.local/share)
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'opencode', 'opencode.db')
-}
-
-export function defaultHermesDbPath(): string {
-  return join(homedir(), '.hermes', 'state.db')
-}
-
-export function defaultQoderDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'darwin') {
-    return join(home, 'Library', 'Application Support', 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
-  }
-  if (plat === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
-    return join(localAppData, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
-  }
-  // Linux: $XDG_DATA_HOME/Qoder/... (defaults to ~/.local/share)
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
-}
-
-export function defaultCursorDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    // Windows: %APPDATA%\Cursor\User\globalStorage\state.vscdb
-    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
-    return join(appData, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
-  }
-  if (plat === 'darwin') {
-    // macOS: ~/Library/Application Support/Cursor/User/globalStorage/state.vscdb
-    return join(home, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb')
-  }
-  // Linux: ~/.config/Cursor/User/globalStorage/state.vscdb
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME ?? join(home, '.config')
-  return join(xdgConfigHome, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
-}
-
-export function defaultKiloDbPath(): string {
-  const home = homedir()
-  const plat = platform()
-  if (plat === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
-    const candidates = [
-      join(localAppData, 'kilo', 'kilo.db'),
-      join(home, '.local', 'share', 'kilo', 'kilo.db'),
-    ]
-    return candidates.find((path) => existsSync(path)) ?? candidates[0]
-  }
-  if (plat === 'darwin') {
-    const candidates = [
-      join(home, 'Library', 'Application Support', 'kilo', 'kilo.db'),
-      join(home, '.local', 'share', 'kilo', 'kilo.db'),
-    ]
-    return candidates.find((path) => existsSync(path)) ?? candidates[0]
-  }
-  const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
-  return join(xdgDataHome, 'kilo', 'kilo.db')
-}
-
-function discoverLogFiles(sources?: import('../config.js').SourcesConfig): ToolPaths[] {
-  const home = homedir()
-  const results: ToolPaths[] = []
-
-  // Claude Code: ~/.claude/projects/**/*.jsonl (recursive, includes subagents)
-  const claudeDir = sources?.['claude-code'] ?? join(home, '.claude', 'projects')
-  if (existsSync(claudeDir)) {
-    const claudePaths = findJsonlFiles(claudeDir)
-    if (claudePaths.length > 0) {
-      results.push({ tool: 'claude-code', paths: claudePaths })
-    }
-  }
-
-  // Codex: ~/.codex/sessions/**/*.jsonl (recursive)
-  const codexDir = sources?.['codex'] ?? join(home, '.codex', 'sessions')
-  if (existsSync(codexDir)) {
-    const codexPaths = findJsonlFiles(codexDir)
-    if (codexPaths.length > 0) {
-      results.push({ tool: 'codex', paths: codexPaths })
-    }
-  }
-
-  // OpenClaw: ~/.openclaw/agents/*/sessions/*.jsonl (all agents, skip checkpoint files)
-  const openclawBase = sources?.['openclaw'] ?? join(home, '.openclaw', 'agents')
-  if (existsSync(openclawBase)) {
-    // If user provided a custom path, treat it directly as the sessions dir
-    // Otherwise scan all agents under ~/.openclaw/agents/*/sessions/
-    let openclawPaths: string[]
-    if (sources?.['openclaw']) {
-      openclawPaths = findJsonlFiles(openclawBase).filter(p => !p.includes('.checkpoint.'))
-    } else {
-      openclawPaths = []
-      try {
-        const agentEntries = readdirSync(openclawBase, { withFileTypes: true })
-        for (const agentEntry of agentEntries) {
-          if (!agentEntry.isDirectory()) continue
-          const sessionsDir = join(openclawBase, agentEntry.name, 'sessions')
-          if (existsSync(sessionsDir)) {
-            openclawPaths.push(...findJsonlFiles(sessionsDir).filter(p => !p.includes('.checkpoint.')))
-          }
-        }
-      } catch {}
-    }
-    if (openclawPaths.length > 0) {
-      results.push({ tool: 'openclaw', paths: openclawPaths })
-    }
-  }
-
-  // Qoder: structured session logs only. Desktop context-usage snapshots and transcripts
-  // are not per-request token records, so they are intentionally ignored.
-  const qoderPaths = unique(
-    qoderSessionDirs(sources?.['qoder'], home)
-      .filter((dir) => existsSync(dir))
-      .flatMap((dir) => findQoderSessionSegmentFiles(dir))
-  )
-  if (qoderPaths.length > 0) {
-    results.push({ tool: 'qoder', paths: qoderPaths })
-  }
-
-  // GitHub Copilot: OTEL JSONL files from ~/.copilot/otel/*.jsonl
-  // Requires COPILOT_OTEL_ENABLED=true + COPILOT_OTEL_EXPORTER_TYPE=file (Copilot CLI v1.0.4+)
-  const copilotOtelDir = sources?.['copilot'] ?? join(home, '.copilot', 'otel')
-  const copilotPaths: string[] = []
-  if (existsSync(copilotOtelDir)) {
-    copilotPaths.push(...findJsonlFiles(copilotOtelDir))
-  }
-  // Also check $COPILOT_OTEL_FILE_EXPORTER_PATH
-  const envPath = process.env.COPILOT_OTEL_FILE_EXPORTER_PATH
-  if (envPath && existsSync(envPath) && !copilotPaths.includes(envPath)) {
-    copilotPaths.push(envPath)
-  }
-  const uniqueCopilotPaths = unique(copilotPaths)
-  if (uniqueCopilotPaths.length > 0) {
-    results.push({ tool: 'copilot', paths: uniqueCopilotPaths })
-  }
-
-  return results
-}
+// Re-export for backward compatibility with other modules that import from here
+export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath } from '../discovery.js'
 
 function extractSessionId(filePath: string, tool: Tool): string {
   if (tool === 'claude-code') {
@@ -323,7 +76,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   const watermarkPath = join(AIUSAGE_DIR, 'watermark.json')
   const wm = new WatermarkManager(watermarkPath)
 
-  const toolPaths = discoverLogFiles(config?.sources)
+  const toolPaths = discoverLogFiles()
   const aggregator = new Aggregator()
 
   let parsedCount = 0
@@ -448,7 +201,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // OpenCode: SQLite database
-  const openCodeDbPath = options?.openCodeDbPath ?? config?.sources?.['opencode'] ?? defaultOpenCodeDbPath()
+  const openCodeDbPath = options?.openCodeDbPath ?? getDbPath('opencode') ?? ''
   if ((!filterTool || filterTool === 'opencode') && existsSync(openCodeDbPath)) {
     try {
       const openCodeDb = new Database(openCodeDbPath, { readonly: true })
@@ -482,7 +235,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Hermes: SQLite database
-  const hermesDbPath = options?.hermesDbPath ?? config?.sources?.['hermes'] ?? defaultHermesDbPath()
+  const hermesDbPath = options?.hermesDbPath ?? getDbPath('hermes') ?? ''
   if ((!filterTool || filterTool === 'hermes') && existsSync(hermesDbPath)) {
     try {
       const hermesDb = new Database(hermesDbPath, { readonly: true })
@@ -516,7 +269,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Qoder: SQLite database (Mac/Linux/Windows desktop app)
-  const qoderDbPath = options?.qoderDbPath ?? config?.sources?.['qoder-db'] ?? defaultQoderDbPath()
+  const qoderDbPath = options?.qoderDbPath ?? getDbPath('qoder-db') ?? ''
   if ((!filterTool || filterTool === 'qoder') && existsSync(qoderDbPath)) {
     try {
       const qoderDb = new Database(qoderDbPath, { readonly: true })
@@ -550,7 +303,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Cursor: SQLite database (state.vscdb)
-  const cursorDbPath = options?.cursorDbPath ?? config?.sources?.['cursor'] ?? defaultCursorDbPath()
+  const cursorDbPath = options?.cursorDbPath ?? getDbPath('cursor') ?? ''
   if ((!filterTool || filterTool === 'cursor') && existsSync(cursorDbPath)) {
     try {
       const cursorDb = new Database(cursorDbPath, { readonly: true })
@@ -583,7 +336,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Kilo: SQLite database (new Kilo local storage)
-  const kiloDbPath = config?.sources?.['kilocode-db'] ?? defaultKiloDbPath()
+  const kiloDbPath = getDbPath('kilocode-db') ?? ''
   if ((!filterTool || filterTool === 'kilocode') && existsSync(kiloDbPath)) {
     try {
       const kiloDb = new Database(kiloDbPath, { readonly: true })
@@ -879,18 +632,3 @@ function deriveSessionId(tool: Tool, sourceFile: string): string {
   return fileName.replace(/\.jsonl$/, '')
 }
 
-export function getDefaultSourcePaths(): Record<string, string> {
-  const home = homedir()
-  return {
-    'claude-code': join(home, '.claude', 'projects'),
-    'codex':       join(home, '.codex', 'sessions'),
-    'openclaw':    join(home, '.openclaw', 'agents'),
-    'opencode':    defaultOpenCodeDbPath(),
-    'hermes':      defaultHermesDbPath(),
-    'qoder':       join(home, '.qoder', 'logs', 'sessions'),
-    'qoder-db':    defaultQoderDbPath(),
-    'cursor':      defaultCursorDbPath(),
-    'kilocode-db': defaultKiloDbPath(),
-    'copilot':     join(home, '.copilot', 'otel'),
-  }
-}

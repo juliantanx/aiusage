@@ -60,7 +60,7 @@ describe('GET /api/config', () => {
     expect(data.device).toBeNull()
     expect(data.retentionDays).toBeNull()
     expect(data.credentialKeys).toEqual([])
-    expect(data.sources).toEqual({ 'claude-code': null, codex: null, openclaw: null, opencode: null, hermes: null, qoder: null, 'qoder-db': null, cursor: null, 'kilocode-db': null, copilot: null })
+    expect(data).not.toHaveProperty('sources')
     expect(data.sync).toBeNull()
   })
 
@@ -71,7 +71,6 @@ describe('GET /api/config', () => {
       retentionDays: 30,
       credentials: { GITHUB_TOKEN: 'super-secret' },
       sync: { backend: 'github', repo: 'user/repo', credentialRef: 'GITHUB_TOKEN' },
-      sources: { 'claude-code': '/custom/path' },
     } as any)
     const res = await fetch(`${baseUrl}/api/config`)
     const data = await res.json()
@@ -81,9 +80,7 @@ describe('GET /api/config', () => {
     expect(data.credentialKeys).toEqual(['GITHUB_TOKEN'])
     expect(data).not.toHaveProperty('credentials')
     expect(data.sync.repo).toBe('user/repo')
-    expect(data.sources['claude-code']).toBe('/custom/path')
-    expect(data.sources.codex).toBeNull()
-    expect(data.sources['kilocode-db']).toBeNull()
+    expect(data).not.toHaveProperty('sources')
   })
 })
 

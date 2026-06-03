@@ -111,6 +111,10 @@ export async function fetchConfig() {
   return apiFetch('/api/config')
 }
 
+export async function fetchDetectedTools() {
+  return apiFetch('/api/detected-tools')
+}
+
 export async function fetchQuotas() {
   return apiFetch('/api/quotas')
 }
