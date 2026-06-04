@@ -873,27 +873,34 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool)
 
-        // Projects are derived from source_file which only exists in local records.
-        // synced_records has no source_file column, so other-device project data is unavailable.
-        if (df.where && !df.useUnion) {
-          json(res, { projects: [] })
-          return
-        }
+        let rows: any[]
 
-        const rows = db.prepare(`
-          SELECT source_file, cwd,
-                 COUNT(*) AS sessionCount,
-                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
-                 SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-          GROUP BY source_file ORDER BY totalTokens DESC
-        `).all({ ...dr.params, ...tf.params }) as any[]
+        if (df.where && !df.useUnion) {
+          // Specific other device: query synced_records which now carry source_file and cwd
+          rows = db.prepare(`
+            SELECT source_file, cwd,
+                   COUNT(*) AS sessionCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS cost
+            FROM synced_records WHERE 1=1 ${df.where} ${tf.where}
+            GROUP BY source_file ORDER BY totalTokens DESC
+          `).all({ ...df.params, ...tf.params }) as any[]
+        } else {
+          rows = db.prepare(`
+            SELECT source_file, cwd,
+                   COUNT(*) AS sessionCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS cost
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+            GROUP BY source_file ORDER BY totalTokens DESC
+          `).all({ ...dr.params, ...tf.params }) as any[]
+        }
 
         // Build a cwd inference map for Claude Code paths: encoded project dir → cwd.
         // Records without cwd can inherit it from another session in the same project directory.
         const cwdByEncodedDir: Record<string, string> = {}
         for (const row of rows) {
-          if (row.cwd) {
+          if (row.cwd && row.source_file) {
             const m = (row.source_file as string).replace(/\\/g, '/').match(/\.claude\/projects\/([^/]+)/)
             if (m && !cwdByEncodedDir[m[1]]) cwdByEncodedDir[m[1]] = row.cwd
           }
@@ -902,6 +909,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         // Aggregate by project
         const projectMap: Record<string, { sessions: number; tokens: number; cost: number; fullPath: string }> = {}
         for (const row of rows) {
+          if (!row.source_file) continue
           let effectiveCwd: string = row.cwd || ''
           if (!effectiveCwd) {
             const m = (row.source_file as string).replace(/\\/g, '/').match(/\.claude\/projects\/([^/]+)/)

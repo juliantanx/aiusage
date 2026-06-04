@@ -75,6 +75,8 @@ export interface SyncRecord {
   deviceInstanceId: string
   platform?: string                    // 'win32' | 'darwin' | 'linux'
   updatedAt: number
+  sourceFile?: string                  // 原始 source_file，用于跨设备项目统计
+  cwd?: string                         // 工作目录，用于跨设备项目统计
 }
 
 export interface SyncTombstone {

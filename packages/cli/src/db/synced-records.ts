@@ -8,11 +8,13 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
     INSERT INTO synced_records (
       id, ts, tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
-      cost, cost_source, session_key, device, device_instance_id, platform, updated_at
+      cost, cost_source, session_key, device, device_instance_id, platform, updated_at,
+      source_file, cwd
     ) VALUES (
       @id, @ts, @tool, @model, @provider, @inputTokens, @outputTokens,
       @cacheReadTokens, @cacheWriteTokens, @thinkingTokens,
-      @cost, @costSource, @sessionKey, @device, @deviceInstanceId, @platform, @updatedAt
+      @cost, @costSource, @sessionKey, @device, @deviceInstanceId, @platform, @updatedAt,
+      @sourceFile, @cwd
     )
     ON CONFLICT(id) DO UPDATE SET
       ts = excluded.ts,
@@ -30,7 +32,9 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
       device = excluded.device,
       device_instance_id = excluded.device_instance_id,
       platform = excluded.platform,
-      updated_at = excluded.updated_at
+      updated_at = excluded.updated_at,
+      source_file = excluded.source_file,
+      cwd = excluded.cwd
     WHERE excluded.updated_at > synced_records.updated_at
   `).run({
     id: record.id,
@@ -50,6 +54,8 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
     deviceInstanceId: record.deviceInstanceId,
     platform: record.platform ?? '',
     updatedAt: record.updatedAt,
+    sourceFile: record.sourceFile ?? '',
+    cwd: record.cwd ?? '',
   })
 }
 
@@ -90,6 +96,9 @@ export function mergeSyncedRecordsIntoRecords(db: Database.Database): number {
 
   const tx = db.transaction((rows: Record<string, unknown>[]) => {
     for (const row of rows) {
+      const sourceFile = (typeof row.source_file === 'string' && row.source_file)
+        ? row.source_file
+        : `synced/${row.device_instance_id}`
       insertStmt.run({
         id: row.id,
         ts: row.ts,
@@ -107,9 +116,10 @@ export function mergeSyncedRecordsIntoRecords(db: Database.Database): number {
         cost: row.cost,
         costSource: row.cost_source,
         sessionId: row.session_key,
-        sourceFile: `synced/${row.device_instance_id}`,
+        sourceFile,
         device: row.device,
         deviceInstanceId: row.device_instance_id,
+        cwd: (typeof row.cwd === 'string' ? row.cwd : '') || '',
       })
     }
   })
@@ -137,5 +147,7 @@ function mapRowToSyncRecord(row: Record<string, unknown>): SyncRecord {
     deviceInstanceId: row.device_instance_id as string,
     platform: row.platform as string | undefined,
     updatedAt: row.updated_at as number,
+    sourceFile: (row.source_file as string) || undefined,
+    cwd: (row.cwd as string) || undefined,
   }
 }
