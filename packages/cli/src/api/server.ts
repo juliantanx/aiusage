@@ -9,6 +9,14 @@ import { extractProject, extractProjectFromCwd } from './project-extraction.js'
 import { discoverTools } from '../discovery.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 import { queryAllQuotas } from '../quota.js'
+import {
+  buildAuthCookie,
+  buildClearAuthCookie,
+  getDashboardPassword,
+  isAuthenticated,
+  shouldProtectApiPath,
+  verifyPassword,
+} from '../auth.js'
 
 function recalcCosts(db: Database.Database): number {
   const BATCH_SIZE = 1000
@@ -87,6 +95,12 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(data))
+}
+
+async function readJsonBody(req: http.IncomingMessage): Promise<any> {
+  let body = ''
+  for await (const chunk of req) body += chunk
+  return body ? JSON.parse(body) : {}
 }
 
 
@@ -178,6 +192,7 @@ function getDeviceFilter(
 export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
   const cfg = loadConfig()
   let weekStart: 0 | 1 = (cfg?.weekStart ?? 1) as 0 | 1
+  const dashboardPassword = getDashboardPassword()
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
@@ -189,6 +204,43 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     if (req.method === 'OPTIONS') {
       res.writeHead(204)
       res.end()
+      return
+    }
+
+    if (url.pathname === '/api/auth/status' && req.method === 'GET') {
+      json(res, {
+        enabled: dashboardPassword != null,
+        authenticated: isAuthenticated(dashboardPassword, req.headers.cookie),
+      })
+      return
+    }
+
+    if (url.pathname === '/api/auth/login' && req.method === 'POST') {
+      try {
+        const body = await readJsonBody(req)
+        if (!verifyPassword(dashboardPassword, typeof body.password === 'string' ? body.password : null)) {
+          json(res, { error: { code: 'UNAUTHORIZED', message: 'Invalid password' } }, 401)
+          return
+        }
+
+        if (dashboardPassword) {
+          res.setHeader('Set-Cookie', buildAuthCookie(dashboardPassword))
+        }
+        json(res, { ok: true })
+      } catch {
+        json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
+      }
+      return
+    }
+
+    if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
+      res.setHeader('Set-Cookie', buildClearAuthCookie())
+      json(res, { ok: true })
+      return
+    }
+
+    if (dashboardPassword && shouldProtectApiPath(url.pathname) && !isAuthenticated(dashboardPassword, req.headers.cookie)) {
+      json(res, { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, 401)
       return
     }
 

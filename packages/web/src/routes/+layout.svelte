@@ -3,7 +3,7 @@
   import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
-  import { triggerSync, fetchSyncStatus, fetchConfig } from '$lib/api.js'
+  import { triggerSync, fetchSyncStatus, fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   const NAV_GROUPS = [
@@ -46,6 +46,44 @@
   let syncing = false
   let syncResult = ''
   let syncPollTimer = null
+  let authLoading = true
+  let authEnabled = false
+  let authenticated = false
+  let password = ''
+  let authError = ''
+  let authSubmitting = false
+
+  $: isHomeRoute = $page.url.pathname === '/'
+  $: shouldShowLogin = authEnabled && !authenticated && !isHomeRoute
+
+  async function loadAuthStatus() {
+    try {
+      const status = await fetchAuthStatus()
+      authEnabled = Boolean(status.enabled)
+      authenticated = Boolean(status.authenticated)
+    } catch {
+      authEnabled = false
+      authenticated = false
+    } finally {
+      authLoading = false
+    }
+  }
+
+  async function handleLogin() {
+    authError = ''
+    authSubmitting = true
+    try {
+      await login(password)
+      authenticated = true
+      password = ''
+      loadSyncStatus()
+      fetchConfig().then(applyConfig).catch(() => {})
+    } catch (err) {
+      authError = err instanceof Error ? err.message : 'Login failed'
+    } finally {
+      authSubmitting = false
+    }
+  }
 
   async function loadSyncStatus() {
     try {
@@ -112,15 +150,18 @@
     mobileOpen = !mobileOpen
   }
 
+  function applyConfig(cfg) {
+    if (cfg.displayCurrency) displayCurrency.set(cfg.displayCurrency)
+    if (cfg.exchangeRateCache?.CNY_USD) exchangeRate.set(cfg.exchangeRateCache.CNY_USD)
+    if (cfg.exchangeRate) exchangeRate.set(cfg.exchangeRate)
+  }
+
   onMount(() => {
     initTheme()
+    loadAuthStatus()
     loadSyncStatus()
     // Initialize currency stores from config
-    fetchConfig().then(cfg => {
-      if (cfg.displayCurrency) displayCurrency.set(cfg.displayCurrency)
-      if (cfg.exchangeRateCache?.CNY_USD) exchangeRate.set(cfg.exchangeRateCache.CNY_USD)
-      if (cfg.exchangeRate) exchangeRate.set(cfg.exchangeRate)  // manual override takes precedence
-    }).catch(() => {})
+    fetchConfig().then(applyConfig).catch(() => {})
     if (typeof window !== 'undefined') {
       collapsed = localStorage.getItem(SIDEBAR_KEY) === 'true'
     }
@@ -133,12 +174,51 @@
   $: $page, mobileOpen = false
 </script>
 
-{#if mobileOpen}
+{#if mobileOpen && !shouldShowLogin}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="mobile-backdrop" on:click={toggleMobile}></div>
 {/if}
 
+{#if shouldShowLogin}
+  <main class="auth-page">
+    <section class="auth-card">
+      <a href="/" class="brand auth-brand">
+        <svg class="brand-logo" width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
+        <span class="brand-name">AIUsage</span>
+      </a>
+      <h1>Dashboard locked</h1>
+      <p>Enter the dashboard password to view this page.</p>
+      <form on:submit|preventDefault={handleLogin}>
+        <input
+          type="password"
+          bind:value={password}
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus
+        />
+        <button type="submit" disabled={authSubmitting || !password}>
+          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+        </button>
+      </form>
+      {#if authError}
+        <div class="auth-error">{authError}</div>
+      {/if}
+      <a class="auth-home" href="/">Back to public home</a>
+    </section>
+  </main>
+{:else if authLoading && !isHomeRoute}
+  <main class="auth-page">
+    <section class="auth-card">
+      <div class="auth-loading">Checking access...</div>
+    </section>
+  </main>
+{:else}
 <div class="app" class:collapsed>
 
   <aside class="sidebar" class:open={mobileOpen}>
@@ -260,6 +340,7 @@
   </div>
 
 </div>
+{/if}
 
 <style>
   /* ── Reset & base ─────────────────────────────────────────────────────── */
@@ -366,6 +447,103 @@
   .app {
     display: flex;
     min-height: 100vh;
+  }
+
+  .auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background:
+      radial-gradient(circle at top left, var(--accent-dim), transparent 30rem),
+      var(--bg);
+  }
+
+  .auth-card {
+    width: min(100%, 380px);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem;
+  }
+
+  .auth-brand {
+    width: fit-content;
+    padding: 0;
+    margin-bottom: 1.25rem;
+  }
+
+  .auth-card h1 {
+    font-size: 1.45rem;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.35rem;
+  }
+
+  .auth-card p {
+    color: var(--text-secondary);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .auth-card form {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .auth-card input {
+    width: 100%;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border-medium);
+    background: var(--raised);
+    color: var(--text);
+    padding: 0 0.9rem;
+    font: inherit;
+    outline: none;
+  }
+
+  .auth-card input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .auth-card button {
+    height: 2.75rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: var(--accent);
+    color: white;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .auth-card button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .auth-error {
+    margin-top: 0.9rem;
+    color: var(--rose);
+    font-size: 0.9rem;
+  }
+
+  .auth-home {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .auth-home:hover {
+    color: var(--accent);
+  }
+
+  .auth-loading {
+    color: var(--text-secondary);
   }
 
   /* ── Sidebar ──────────────────────────────────────────────────────────── */

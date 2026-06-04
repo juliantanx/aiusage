@@ -89,7 +89,54 @@ describe('API Server', () => {
     })
   })
 
+  it('requires dashboard authentication for protected API routes when password is configured', async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    process.env.AIUSAGE_DASHBOARD_PASSWORD = 'secret'
+    server = createApiServer(db)
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        baseUrl = `http://127.0.0.1:${address.port}`
+        resolve()
+      })
+    })
+
+    const protectedRes = await fetch(`${baseUrl}/api/tokens?range=day`)
+    expect(protectedRes.status).toBe(401)
+
+    const publicRes = await fetch(`${baseUrl}/api/summary?range=day`)
+    expect(publicRes.ok).toBe(true)
+  })
+
+  it('allows protected API routes after dashboard login', async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    process.env.AIUSAGE_DASHBOARD_PASSWORD = 'secret'
+    server = createApiServer(db)
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        baseUrl = `http://127.0.0.1:${address.port}`
+        resolve()
+      })
+    })
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'secret' }),
+    })
+    expect(loginRes.ok).toBe(true)
+    const cookie = loginRes.headers.get('set-cookie')?.split(';')[0]
+    expect(cookie).toBeTruthy()
+
+    const protectedRes = await fetch(`${baseUrl}/api/tokens?range=day`, {
+      headers: { Cookie: cookie! },
+    })
+    expect(protectedRes.ok).toBe(true)
+  })
+
   afterEach(async () => {
+    delete process.env.AIUSAGE_DASHBOARD_PASSWORD
     if (server?.listening) {
       server.closeIdleConnections?.()
       server.closeAllConnections?.()
