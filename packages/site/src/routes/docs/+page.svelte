@@ -81,6 +81,7 @@
       ]
     },
     { id: 'uploads-page', en: 'Upload Status', zh: '上传状态', children: [] },
+    { id: 'admin-page', en: 'Admin Dashboard', zh: '管理后台', children: [] },
     { id: 'cli', en: 'CLI Reference', zh: 'CLI 命令',
       children: [
         { id: 'cli-parse', en: 'parse', zh: 'parse' },
@@ -792,20 +793,29 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     <section id="sync">
       <div class="sec-head">
         <span class="sec-idx">13</span>
-        <h2>{zh ? '多设备同步' : 'Sync'}</h2>
+        <h2>{zh ? ‘多设备同步’ : ‘Sync’}</h2>
       </div>
       <p>{zh
-        ? '同步功能会把本机数据上传到远端，再拉取其他设备的数据并合并。你可以通过侧边栏 Sync 按钮手动触发，也可以先用 init 命令或设置页完成后端配置。'
-        : 'Sync uploads this device’s data, pulls data from other devices, and merges the results. You can trigger it from the sidebar Sync button after configuring the backend via init or the Settings page.'
+        ? ‘同步功能会把本机数据上传到远端，再拉取其他设备的数据并合并。你可以通过侧边栏 Sync 按钮手动触发，也可以先用 init 命令或设置页完成后端配置。’
+        : ‘Sync uploads this device’s data, pulls data from other devices, and merges the results. You can trigger it from the sidebar Sync button after configuring the backend via init or the Settings page.’
       }</p>
       <ul>
-        <li><strong>GitHub</strong> — {zh ? '推送到 GitHub 仓库' : 'Push to a GitHub repository'}</li>
-        <li><strong>S3 / {zh ? '兼容存储' : 'Compatible'}</strong> — {zh ? '推送到 Amazon S3 或任何 S3 兼容存储（Cloudflare R2、MinIO 等）' : 'Push to Amazon S3 or any S3-compatible storage (Cloudflare R2, MinIO, etc.)'}</li>
+        <li><strong>{zh ? ‘官方同步（推荐）’ : ‘Official Cloud (Recommended)’}</strong> — {zh ? ‘使用 AIUsage 账号直接同步，无需配置 GitHub 或 S3。需要先 aiusage login 授权设备。’ : ‘Sync directly via your AIUsage account — no GitHub or S3 setup needed. Requires aiusage login to authorize your device.’}</li>
+        <li><strong>GitHub</strong> — {zh ? ‘推送到 GitHub 仓库’ : ‘Push to a GitHub repository’}</li>
+        <li><strong>S3 / {zh ? ‘兼容存储’ : ‘Compatible’}</strong> — {zh ? ‘推送到 Amazon S3 或任何 S3 兼容存储（Cloudflare R2、MinIO 等）’ : ‘Push to Amazon S3 or any S3-compatible storage (Cloudflare R2, MinIO, etc.)’}</li>
       </ul>
-      <CodeBlock lang="Terminal" copyText="aiusage sync">
-        <span slot="lines"><span>1</span></span>
-        <span class="tk-kw">aiusage</span> sync
+      <CodeBlock lang="Terminal" copyText={‘aiusage login\naiusage init --backend cloud\naiusage sync’}>
+        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
+        <span class="tk-kw">aiusage</span> login  <span class="tk-cmt"># authorize device</span>
+<span class="tk-kw">aiusage</span> init --backend cloud  <span class="tk-cmt"># configure official sync</span>
+<span class="tk-kw">aiusage</span> sync  <span class="tk-cmt"># push/pull</span>
       </CodeBlock>
+      <Callout type="info">
+        {zh
+          ? ‘官方同步使用 HMAC 签名认证，数据加密传输。支持增量同步、tombstone 删除传播和 generation 机制防止旧设备覆盖已清空的数据。’
+          : ‘Official sync uses HMAC-signed authentication with encrypted transport. Supports incremental sync, tombstone propagation, and a generation mechanism to prevent stale devices from overwriting cleared data.’
+        }
+      </Callout>
     </section>
 
     <!-- ══════ Export ══════ -->
@@ -976,6 +986,10 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         ? '上传内容仅包含排名周期内的聚合 Token 总量和必要元数据，不包含 prompt、completion、源码、文件路径或本地费用估算。'
         : 'Uploads contain only aggregate token totals for ranking periods plus required metadata. They do not include prompts, completions, source code, file paths, or local cost estimates.'
       }</p>
+      <p>{zh
+        ? '上传后系统会自动进行风控评估。以下情况会被自动标记为 flagged 并进入管理员审核队列：单次上传超过 100M token、breakdown 一致性偏差超过 1%、未知模型占比超过 80%、同设备同周期 24 小时内重复上传超过 5 次、token 总量超过用户 30 天平均值 10 倍。'
+        : 'After upload, the system automatically runs risk assessment. Snapshots are auto-flagged for admin review if: single upload exceeds 100M tokens, breakdown consistency deviates >1%, unknown models account for >80% of tokens, same device/period uploaded >5 times in 24h, or token total exceeds the user\'s 30-day average by 10x.'
+      }</p>
     </section>
 
     <section id="lb-anonymous">
@@ -1002,9 +1016,34 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </ul>
     </section>
 
-    <section id="cli">
+    <!-- ══════ Admin Dashboard ══════ -->
+    <section id="admin-page">
       <div class="sec-head">
         <span class="sec-idx">19</span>
+        <h2>{zh ? '管理后台' : 'Admin Dashboard'}</h2>
+      </div>
+      <p>{zh
+        ? '管理员登录后访问 /admin 页面，可管理上传审核、用户、定价表和审计日志。需要 admin 角色。'
+        : 'Admins can access /admin to manage upload moderation, users, pricing tables, and audit logs. Requires the admin role.'
+      }</p>
+      <ul>
+        <li><strong>{zh ? '上传审核' : 'Uploads'}</strong> — {zh ? '查看 flagged 上传，执行 approve / reject / hide 操作' : 'Review flagged uploads with approve / reject / hide actions'}</li>
+        <li><strong>{zh ? '用户管理' : 'Users'}</strong> — {zh ? '搜索用户、封禁 / 解封、设置角色（admin / user）' : 'Search users, ban / unban, set role (admin / user)'}</li>
+        <li><strong>{zh ? '定价表' : 'Pricing'}</strong> — {zh ? '从 core seed 定价表、发布 / 归档版本、触发榜单重算' : 'Seed pricing from core, publish / archive versions, trigger leaderboard recompute'}</li>
+        <li><strong>{zh ? '审计日志' : 'Audit Logs'}</strong> — {zh ? '查看所有管理员操作记录' : 'View all admin action history'}</li>
+        <li><strong>{zh ? '数据维护' : 'Maintenance'}</strong> — {zh ? '清理过期 nonces、旧批次、tombstone 记录、过期授权请求等' : 'Clean expired nonces, old batches, tombstoned records, expired auth requests, etc.'}</li>
+      </ul>
+      <Callout type="info">
+        {zh
+          ? '上传快照会被自动风控规则评估：token 异常（>100M）、breakdown 一致性偏差、未知模型比例过高、重复上传、token 峰值异常等情况会自动标记为 flagged，进入管理员审核队列。'
+          : 'Upload snapshots are automatically evaluated by risk control rules: token anomalies (>100M), breakdown consistency deviation, high unknown model ratio, repeat uploads, and token spike anomalies are auto-flagged for admin review.'
+        }
+      </Callout>
+    </section>
+
+    <section id="cli">
+      <div class="sec-head">
+        <span class="sec-idx">20</span>
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
@@ -1127,10 +1166,10 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       <DocsTable
         headers={zh ? ['命令', '说明'] : ['Command', 'Description']}
         rows={[
-          ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、对象数量、记录数、数据库大小及同步状态' : 'Show version, device name, DB path, schema version, object counts, record count, DB size, and sync status'],
-          ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步' : 'Push, pull, and merge data with the remote backend'],
+          ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、对象数量、记录数、数据库大小、同步后端和同步状态' : 'Show version, device name, DB path, schema version, object counts, record count, DB size, sync backend, and sync status'],
+          ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步（支持 cloud / GitHub / S3）' : 'Push, pull, and merge data with the remote backend (cloud / GitHub / S3)'],
           ['<code>recalc</code>', zh ? '按最新定价重新计算费用' : 'Recalculate costs with latest pricing'],
-          ['<code>init</code>', zh ? '初始化同步后端（支持 GitHub / S3）' : 'Initialize sync backend (GitHub or S3)'],
+          ['<code>init</code>', zh ? '初始化同步后端（支持 cloud / GitHub / S3）' : 'Initialize sync backend (cloud / GitHub / S3)'],
           ['<code>widget</code>', zh ? '启动桌面托盘 Widget' : 'Launch the desktop tray widget'],
           ['<code>pm2-setup</code>', zh ? '生成 PM2 ecosystem.config.cjs' : 'Generate PM2 ecosystem.config.cjs'],
           ['<code>pm2-start</code>', zh ? '生成配置并启动 PM2 后台服务' : 'Generate config and start PM2 background services'],

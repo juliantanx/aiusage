@@ -40,7 +40,7 @@ Open `http://localhost:3847` to explore the dashboard.
 Your AI coding tools each log usage separately — different formats, different machines, no shared view. aiusage pulls it all into one local dashboard:
 
 - **One dashboard** for tokens, cost, model mix, and tool-call activity
-- **Multi-machine sync** via GitHub, S3, or R2 — entirely optional
+- **Multi-machine sync** via official cloud sync, GitHub, S3, or R2 — entirely optional
 - **Your data stays local** by default
 
 ## Public Leaderboard
