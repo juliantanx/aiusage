@@ -253,6 +253,9 @@
         </svg>
         <span>AIUsage</span>
       </button>
+      <button class="public-lang" type="button" on:click={toggleLang} title={$lang === 'en' ? '中文' : 'EN'}>
+        {$lang === 'en' ? '中' : 'EN'}
+      </button>
     </header>
 
     <main class="public-page-content">
@@ -538,6 +541,8 @@
     margin: 0 auto 1.25rem;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
   }
 
   .public-page-content {
@@ -567,6 +572,29 @@
   }
 
   .public-unlock:hover {
+    border-color: var(--border-medium);
+    color: var(--accent);
+  }
+
+  .public-lang {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-sm);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .public-lang:hover {
     border-color: var(--border-medium);
     color: var(--accent);
   }
@@ -1137,6 +1165,11 @@
       height: 2.25rem;
       padding: 0 0.75rem;
       font-size: 0.8125rem;
+    }
+    .public-lang {
+      min-width: 2.25rem;
+      height: 2.25rem;
+      padding: 0 0.625rem;
     }
 
     /* Global mobile font size minimums */
