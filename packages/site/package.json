@@ -7,6 +7,7 @@
     "dev": "vite dev",
     "build": "svelte-kit sync && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "db:migrate": "tsx src/lib/server/db/migrate.ts",
     "db:seed": "tsx src/lib/server/db/seed.ts"
   },
@@ -21,7 +22,8 @@
     "svelte": "~4.2.0",
     "tsx": "^4.0.0",
     "typescript": "~5.7.0",
-    "vite": "~5.4.0"
+    "vite": "~5.4.0",
+    "vitest": "^3.2.0"
   },
   "dependencies": {
     "@aiusage/core": "workspace:*",

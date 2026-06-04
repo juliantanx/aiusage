@@ -47,15 +47,15 @@ export async function runLeaderboardStatus(): Promise<void> {
     console.log('─'.repeat(80))
     console.log(`Total: ${status.snapshots.length} uploads (${accepted} accepted, ${flagged} flagged, ${rejected} rejected)`)
 
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof LeaderboardApiError) {
       console.error(`\n✗ Failed to fetch status: ${error.message}`)
-
       if (error.code === 'device_not_found' || error.code === 'device_revoked') {
         console.error('Please run `aiusage login` to re-authenticate.')
       }
     } else {
-      console.error(`\n✗ Failed to fetch status: ${error}`)
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`\n✗ Failed to fetch status: ${message}`)
     }
     process.exit(1)
   }

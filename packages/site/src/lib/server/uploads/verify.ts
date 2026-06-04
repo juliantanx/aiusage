@@ -2,7 +2,7 @@ import { sql } from '../db/pool.js'
 import { decryptDeviceSecret, sha256, buildCanonicalString, hashIp, computeHmac } from '../crypto/hmac.js'
 import { calculateDefaultCost, resolveDefaultPrice } from '@aiusage/core'
 import { nanoid } from 'nanoid'
-import { createHmac } from 'node:crypto'
+import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
 
 const CORE_PRICING_VERSION = 'core_v1'
 
@@ -122,13 +122,15 @@ function zeroTotals(): TokenTotals {
   }
 }
 
-function addTotals(target: TokenTotals, source: TokenTotals): void {
-  target.input_tokens += source.input_tokens
-  target.output_tokens += source.output_tokens
-  target.cache_read_tokens += source.cache_read_tokens
-  target.cache_write_tokens += source.cache_write_tokens
-  target.thinking_tokens += source.thinking_tokens
-  target.total_tokens += source.total_tokens
+function mergeTotals(a: TokenTotals, b: TokenTotals): TokenTotals {
+  return {
+    input_tokens: a.input_tokens + b.input_tokens,
+    output_tokens: a.output_tokens + b.output_tokens,
+    cache_read_tokens: a.cache_read_tokens + b.cache_read_tokens,
+    cache_write_tokens: a.cache_write_tokens + b.cache_write_tokens,
+    thinking_tokens: a.thinking_tokens + b.thinking_tokens,
+    total_tokens: a.total_tokens + b.total_tokens,
+  }
 }
 
 function totalsEqual(a: TokenTotals, b: TokenTotals): boolean {
@@ -236,21 +238,17 @@ function validateBreakdownConsistency(snapshot: UploadSnapshot): { valid: boolea
     return { valid: false, error: 'Snapshot totals do not match all-scope breakdown', error_code: 'invalid_breakdowns' }
   }
 
-  const toolModelTotal = zeroTotals()
+  let toolModelTotal = zeroTotals()
   const byTool = new Map<string, TokenTotals>()
   const byModel = new Map<string, TokenTotals>()
 
   for (const row of snapshot.breakdowns) {
     if (row.scope_type !== 'tool_model') continue
-    addTotals(toolModelTotal, totalsFrom(row))
+    const rowTotals = totalsFrom(row)
+    toolModelTotal = mergeTotals(toolModelTotal, rowTotals)
 
-    const toolTotals = byTool.get(row.tool!) ?? zeroTotals()
-    addTotals(toolTotals, totalsFrom(row))
-    byTool.set(row.tool!, toolTotals)
-
-    const modelTotals = byModel.get(row.model!) ?? zeroTotals()
-    addTotals(modelTotals, totalsFrom(row))
-    byModel.set(row.model!, modelTotals)
+    byTool.set(row.tool!, mergeTotals(byTool.get(row.tool!) ?? zeroTotals(), rowTotals))
+    byModel.set(row.model!, mergeTotals(byModel.get(row.model!) ?? zeroTotals(), rowTotals))
   }
 
   if (!totalsEqual(toolModelTotal, totalsFrom(snapshot))) {
@@ -395,11 +393,7 @@ function computeHmacForVerify(data: string, secret: string): string {
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
-  return result === 0
+  return cryptoTimingSafeEqual(Buffer.from(a), Buffer.from(b))
 }
 
 export function validatePeriodBoundary(snap: UploadSnapshot): boolean {

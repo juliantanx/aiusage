@@ -84,35 +84,17 @@ export const PUT: RequestHandler = async (event) => {
     return json({ message: 'No changes' })
   }
 
-  const setClauses: string[] = []
-  const values: unknown[] = []
-
   if (updates.username !== undefined) {
-    values.push(updates.username)
-    setClauses.push(`username = $${values.length}`)
-    setClauses.push(`username_changed_at = NOW()`)
+    await sql`UPDATE users SET username = ${updates.username}, username_changed_at = NOW(), updated_at = NOW() WHERE id = ${user.id}`
   }
   if (updates.display_name !== undefined) {
-    values.push(updates.display_name)
-    setClauses.push(`display_name = $${values.length}`)
+    await sql`UPDATE users SET display_name = ${updates.display_name}, updated_at = NOW() WHERE id = ${user.id}`
   }
   if (leaderboardVisibility !== undefined) {
-    values.push(leaderboardVisibility)
-    setClauses.push(`leaderboard_visibility = $${values.length}`)
+    await sql`UPDATE users SET leaderboard_visibility = ${leaderboardVisibility}, updated_at = NOW() WHERE id = ${user.id}`
   }
   if (leaderboardAnonymous !== undefined) {
-    values.push(leaderboardAnonymous)
-    setClauses.push(`leaderboard_anonymous = $${values.length}`)
-  }
-
-  values.push(user.id)
-  const idParam = `$${values.length}`
-
-  if (setClauses.length > 0) {
-    await sql.unsafe(
-      `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = ${idParam}`,
-      values
-    )
+    await sql`UPDATE users SET leaderboard_anonymous = ${leaderboardAnonymous}, updated_at = NOW() WHERE id = ${user.id}`
   }
 
   // Reserve old username for 30 days

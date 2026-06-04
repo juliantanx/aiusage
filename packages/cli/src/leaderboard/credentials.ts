@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync, unlinkSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, unlinkSync, existsSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { chmodSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { AIUSAGE_DIR } from '../config.js'
 
 const CREDENTIALS_FILE = join(AIUSAGE_DIR, 'leaderboard-credentials.json')
@@ -16,12 +17,13 @@ export function saveCredentials(creds: DeviceCredentials): void {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
-  writeFileSync(CREDENTIALS_FILE, JSON.stringify(creds, null, 2), 'utf-8')
-  // Restrict file permissions to owner only (Unix-like systems)
+  const tmpFile = `${CREDENTIALS_FILE}.${randomBytes(4).toString('hex')}.tmp`
   try {
-    chmodSync(CREDENTIALS_FILE, 0o600)
-  } catch {
-    // Windows doesn't support chmod in the same way
+    writeFileSync(tmpFile, JSON.stringify(creds, null, 2), { encoding: 'utf-8', mode: 0o600 })
+    renameSync(tmpFile, CREDENTIALS_FILE)
+  } catch (err) {
+    try { unlinkSync(tmpFile) } catch { /* cleanup best-effort */ }
+    throw err
   }
 }
 

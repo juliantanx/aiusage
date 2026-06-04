@@ -88,12 +88,11 @@ export async function runLeaderboardView(options: { period?: string; metric?: st
     printRows(entries, metric, scope)
     console.log('')
     console.log('Viewing is public. Uploading requires: aiusage login && aiusage upload')
-  } catch (error) {
-    if (error instanceof LeaderboardApiError) {
-      console.error(`Failed to fetch leaderboard: ${error.message}`)
-    } else {
-      console.error(`Failed to fetch leaderboard: ${error}`)
-    }
+  } catch (error: unknown) {
+    const message = error instanceof LeaderboardApiError ? error.message
+      : error instanceof Error ? error.message
+      : String(error)
+    console.error(`Failed to fetch leaderboard: ${message}`)
     process.exit(1)
   }
 }

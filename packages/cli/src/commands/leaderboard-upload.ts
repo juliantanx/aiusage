@@ -72,13 +72,15 @@ function zeroTotals(): TokenTotals {
   }
 }
 
-function addTotals(target: TokenTotals, source: TokenTotals): void {
-  target.input_tokens += source.input_tokens
-  target.output_tokens += source.output_tokens
-  target.cache_read_tokens += source.cache_read_tokens
-  target.cache_write_tokens += source.cache_write_tokens
-  target.thinking_tokens += source.thinking_tokens
-  target.total_tokens += source.total_tokens
+function mergeTotals(a: TokenTotals, b: TokenTotals): TokenTotals {
+  return {
+    input_tokens: a.input_tokens + b.input_tokens,
+    output_tokens: a.output_tokens + b.output_tokens,
+    cache_read_tokens: a.cache_read_tokens + b.cache_read_tokens,
+    cache_write_tokens: a.cache_write_tokens + b.cache_write_tokens,
+    thinking_tokens: a.thinking_tokens + b.thinking_tokens,
+    total_tokens: a.total_tokens + b.total_tokens,
+  }
 }
 
 function rowTotals(row: UsageGroup): TokenTotals {
@@ -164,21 +166,16 @@ function buildSnapshot(
     Date.parse(period.period_start),
     Date.parse(period.period_end)
   )
-  const total = zeroTotals()
+  let total = zeroTotals()
   const byTool = new Map<string, TokenTotals>()
   const byModel = new Map<string, TokenTotals>()
 
   for (const group of groups) {
     const totals = rowTotals(group)
-    addTotals(total, totals)
+    total = mergeTotals(total, totals)
 
-    const toolTotals = byTool.get(group.tool) ?? zeroTotals()
-    addTotals(toolTotals, totals)
-    byTool.set(group.tool, toolTotals)
-
-    const modelTotals = byModel.get(group.model) ?? zeroTotals()
-    addTotals(modelTotals, totals)
-    byModel.set(group.model, modelTotals)
+    byTool.set(group.tool, mergeTotals(byTool.get(group.tool) ?? zeroTotals(), totals))
+    byModel.set(group.model, mergeTotals(byModel.get(group.model) ?? zeroTotals(), totals))
   }
 
   const breakdowns: UploadBreakdown[] = [

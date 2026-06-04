@@ -242,11 +242,20 @@
       </div>
 
       {#if error}
-        <div class="state error">{error}</div>
+        <div class="state error">
+          {error}
+          <button class="retry-btn" on:click={() => loadLeaderboard()}>{zh ? '重试' : 'Retry'}</button>
+        </div>
       {:else if loading}
         <div class="state">{zh ? '加载中...' : 'Loading...'}</div>
       {:else if rows.length === 0}
-        <div class="state">{zh ? '暂无公开数据。' : 'No public entries yet.'}</div>
+        <div class="state empty-guide">
+          <p>{zh ? '暂无公开数据。' : 'No public entries yet.'}</p>
+          <p class="guide-text">{zh
+            ? '安装 CLI 并上传你的使用数据即可上榜：'
+            : 'Install the CLI and upload your usage to join:'}</p>
+          <code class="guide-cmd">npx aiusage login && npx aiusage upload</code>
+        </div>
       {:else}
         <div class="lb-table" role="table" aria-label={zh ? 'Token 排行榜' : 'Token leaderboard'}>
           <div class="lb-row header" class:has-scope={activeScope !== 'all'} role="row">
@@ -534,6 +543,9 @@
     font-size: 0.875rem;
   }
   .state.error { color: var(--rose); background: oklch(0.55 0.22 25 / 0.06); }
+  .empty-guide { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+  .guide-text { font-size: 0.8125rem; }
+  .guide-cmd { font-family: var(--mono); font-size: 0.8125rem; background: var(--raised); padding: 0.5rem 1rem; border-radius: 6px; color: var(--accent); user-select: all; }
 
   .load-more {
     display: block;
@@ -567,6 +579,8 @@
     background: var(--raised);
   }
   .role-note strong { color: var(--text); }
+  .retry-btn { margin-top: 0.5rem; padding: 0.375rem 1rem; border: 1px solid var(--border-medium); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-weight: 600; font-size: 0.8125rem; cursor: pointer; }
+  .retry-btn:hover { background: var(--hover); }
 
   @media (max-width: 760px) {
     .lb-page { padding-top: 24px; }
