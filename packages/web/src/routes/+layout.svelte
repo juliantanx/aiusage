@@ -5,6 +5,7 @@
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
   import { triggerSync, fetchSyncStatus, fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
+  import { getAuthShellState } from '$lib/auth-shell.js'
 
   const NAV_GROUPS = [
     {
@@ -52,9 +53,17 @@
   let password = ''
   let authError = ''
   let authSubmitting = false
+  let unlockOpen = false
 
   $: isHomeRoute = $page.url.pathname === '/'
-  $: shouldShowLogin = authEnabled && !authenticated && !isHomeRoute
+  $: shellState = getAuthShellState({
+    pathname: $page.url.pathname,
+    authEnabled,
+    authenticated,
+    authLoading,
+  })
+  $: shouldShowLogin = shellState === 'login-page'
+  $: shouldShowPublicHome = shellState === 'public-home'
 
   async function loadAuthStatus() {
     try {
@@ -76,6 +85,7 @@
       await login(password)
       authenticated = true
       password = ''
+      unlockOpen = false
       loadSyncStatus()
       fetchConfig().then(applyConfig).catch(() => {})
     } catch (err) {
@@ -150,6 +160,18 @@
     mobileOpen = !mobileOpen
   }
 
+  function openUnlock() {
+    if (authLoading) return
+    unlockOpen = true
+    authError = ''
+  }
+
+  function closeUnlock() {
+    unlockOpen = false
+    authError = ''
+    password = ''
+  }
+
   function applyConfig(cfg) {
     if (cfg.displayCurrency) displayCurrency.set(cfg.displayCurrency)
     if (cfg.exchangeRateCache?.CNY_USD) exchangeRate.set(cfg.exchangeRateCache.CNY_USD)
@@ -174,7 +196,7 @@
   $: $page, mobileOpen = false
 </script>
 
-{#if mobileOpen && !shouldShowLogin}
+{#if mobileOpen && shellState === 'shell'}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="mobile-backdrop" on:click={toggleMobile}></div>
@@ -195,6 +217,7 @@
       <h1>Dashboard locked</h1>
       <p>Enter the dashboard password to view this page.</p>
       <form on:submit|preventDefault={handleLogin}>
+        <!-- svelte-ignore a11y-autofocus -->
         <input
           type="password"
           bind:value={password}
@@ -212,12 +235,68 @@
       <a class="auth-home" href="/">Back to public home</a>
     </section>
   </main>
-{:else if authLoading && !isHomeRoute}
+{:else if shellState === 'loading'}
   <main class="auth-page">
     <section class="auth-card">
       <div class="auth-loading">Checking access...</div>
     </section>
   </main>
+{:else if shouldShowPublicHome}
+  <div class="public-shell">
+    <header class="public-header">
+      <button class="public-unlock" type="button" on:click={openUnlock} aria-label="Unlock dashboard">
+        <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
+        <span>AIUsage</span>
+      </button>
+    </header>
+
+    <main class="public-page-content">
+      <div class="public-page-inner">
+        <slot />
+      </div>
+    </main>
+  </div>
+
+  {#if unlockOpen}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="auth-modal-backdrop" on:click={closeUnlock}></div>
+    <section class="auth-card auth-modal" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
+      <button class="auth-close" type="button" on:click={closeUnlock} aria-label="Close">×</button>
+      <div class="brand auth-brand">
+        <svg class="brand-logo" width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
+        <span class="brand-name">AIUsage</span>
+      </div>
+      <h1 id="unlock-title">Unlock dashboard</h1>
+      <p>Enter the dashboard password to show navigation and protected pages.</p>
+      <form on:submit|preventDefault={handleLogin}>
+        <!-- svelte-ignore a11y-autofocus -->
+        <input
+          type="password"
+          bind:value={password}
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus
+        />
+        <button type="submit" disabled={authSubmitting || !password}>
+          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+        </button>
+      </form>
+      {#if authError}
+        <div class="auth-error">{authError}</div>
+      {/if}
+    </section>
+  {/if}
 {:else}
 <div class="app" class:collapsed>
 
@@ -449,6 +528,85 @@
     min-height: 100vh;
   }
 
+  .public-shell {
+    min-height: 100vh;
+    padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 2.5rem;
+  }
+
+  .public-header {
+    max-width: 1180px;
+    margin: 0 auto 1.25rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .public-page-content {
+    min-height: calc(100vh - 5.25rem);
+  }
+
+  .public-page-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .public-unlock {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 0.85rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .public-unlock:hover {
+    border-color: var(--border-medium);
+    color: var(--accent);
+  }
+
+  .auth-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: var(--overlay);
+    backdrop-filter: blur(8px);
+  }
+
+  .auth-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 510;
+    transform: translate(-50%, -50%);
+  }
+
+  .auth-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--raised);
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .auth-close:hover {
+    color: var(--text);
+    border-color: var(--border-medium);
+  }
+
   .auth-page {
     min-height: 100vh;
     display: grid;
@@ -522,6 +680,27 @@
   .auth-card button:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  .auth-card .auth-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--raised);
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .auth-card .auth-close:hover {
+    color: var(--text);
+    border-color: var(--border-medium);
   }
 
   .auth-error {
@@ -947,6 +1126,17 @@
     }
     .page-content {
       padding: 1.25rem 1rem;
+    }
+    .public-shell {
+      padding: 1rem 0.875rem 1.5rem;
+    }
+    .public-header {
+      margin-bottom: 1rem;
+    }
+    .public-unlock {
+      height: 2.25rem;
+      padding: 0 0.75rem;
+      font-size: 0.8125rem;
     }
 
     /* Global mobile font size minimums */
