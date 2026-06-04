@@ -375,5 +375,31 @@ const migrations = [
       // Indexes for cloud_device_instances
       await tx`CREATE INDEX IF NOT EXISTS idx_cloud_device_instances_user ON cloud_device_instances(user_id)`
     }
+  },
+  {
+    version: 6,
+    name: 'user_settings_tables',
+    up: async (tx: ReturnType<typeof sql>) => {
+      // user_sync_settings: per-user sync preferences (§9.1)
+      await tx`CREATE TABLE IF NOT EXISTS user_sync_settings (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        cloud_sync_enabled BOOLEAN DEFAULT FALSE,
+        default_sync_backend TEXT DEFAULT 'cloud',
+        retention_days INTEGER,
+        aggregate_retention_policy TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      // user_leaderboard_settings: per-user leaderboard preferences (§9.2)
+      // Note: leaderboard_visibility and leaderboard_anonymous already exist on users table.
+      // This table stores extended settings for future use.
+      await tx`CREATE TABLE IF NOT EXISTS user_leaderboard_settings (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        auto_upload_enabled BOOLEAN DEFAULT FALSE,
+        upload_period_types TEXT[] DEFAULT ARRAY['daily', 'weekly', 'monthly', 'yearly', 'all_time']::TEXT[],
+        last_auto_upload_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+    }
   }
 ]

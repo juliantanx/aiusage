@@ -1,10 +1,12 @@
 import { sql } from '../db/pool.js'
 import { nanoid } from 'nanoid'
 import { DEFAULT_PRICE_TABLE, type PriceEntry } from '@aiusage/core'
+import { invalidateLeaderboardCache } from '../leaderboard/query.js'
 
 export async function banUser(adminUserId: string, targetUserId: string, reason: string): Promise<void> {
   await sql`UPDATE users SET status = 'banned', banned_at = NOW(), ban_reason = ${reason}, updated_at = NOW() WHERE id = ${targetUserId}`
   await logAdminAction(adminUserId, 'ban_user', 'users', targetUserId, reason)
+  invalidateLeaderboardCache()
 }
 
 export async function unbanUser(adminUserId: string, targetUserId: string): Promise<void> {
@@ -19,6 +21,7 @@ export async function approveSnapshot(adminUserId: string, snapshotId: string, n
 
   await sql`UPDATE upload_snapshots SET review_status = 'approved', reviewed_by = ${adminUserId}, reviewed_at = NOW(), review_note = ${note || null} WHERE id = ${snapshotId}`
   await logAdminAction(adminUserId, 'approve_snapshot', 'upload_snapshots', snapshotId, note || 'Snapshot approved')
+  invalidateLeaderboardCache()
 }
 
 export async function rejectSnapshot(adminUserId: string, snapshotId: string, note?: string): Promise<void> {
@@ -37,6 +40,7 @@ export async function rejectSnapshot(adminUserId: string, snapshotId: string, no
     `
   }
   await logAdminAction(adminUserId, 'reject_snapshot', 'upload_snapshots', snapshotId, note || 'Snapshot rejected')
+  invalidateLeaderboardCache()
 }
 
 export async function hideSnapshot(adminUserId: string, snapshotId: string, note?: string): Promise<void> {
@@ -54,11 +58,13 @@ export async function hideSnapshot(adminUserId: string, snapshotId: string, note
     `
   }
   await logAdminAction(adminUserId, 'hide_snapshot', 'upload_snapshots', snapshotId, note || 'Snapshot hidden')
+  invalidateLeaderboardCache()
 }
 
 export async function hideLeaderboardEntry(adminUserId: string, entryId: string): Promise<void> {
   await sql`UPDATE leaderboard_metrics SET visibility = 'hidden', updated_at = NOW() WHERE id = ${entryId}`
   await logAdminAction(adminUserId, 'hide_metric', 'leaderboard_metrics', entryId, 'Metric hidden')
+  invalidateLeaderboardCache()
 }
 
 export async function restoreLeaderboardEntry(adminUserId: string, entryId: string): Promise<void> {
@@ -76,6 +82,7 @@ export async function restoreLeaderboardEntry(adminUserId: string, entryId: stri
 
   await sql`UPDATE leaderboard_metrics SET visibility = 'public', updated_at = NOW() WHERE id = ${entryId}`
   await logAdminAction(adminUserId, 'restore_metric', 'leaderboard_metrics', entryId, 'Metric restored')
+  invalidateLeaderboardCache()
 }
 
 export async function setUserRole(adminUserId: string, targetUserId: string, role: string): Promise<void> {

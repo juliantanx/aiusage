@@ -1559,6 +1559,40 @@ admin_audit_logs
 - 支持按 period_type、period_start/end、user_id 筛选重算范围。
 - 官方价格表 draft/publish/archive 工作流已在阶段 1 实现。
 
+### 补充实现（v1.5.0）
+
+以下为各章节补充实现的细节：
+
+**§9 用户设置（独立表）：**
+- `user_sync_settings` 表已创建（migration v6），支持 cloud_sync_enabled、default_sync_backend、retention_days 等字段。
+- `user_leaderboard_settings` 表已创建，支持 auto_upload_enabled、upload_period_types、last_auto_upload_at 等字段。
+
+**§11 性能优化：**
+- 本地 SQLite 新增复合索引（migration v8）：records(tool,ts)、records(model,ts)、records(device_instance_id,ts)、records(session_id,ts)，以及 synced_records 对应索引。
+- 服务端 `queryLeaderboard` 新增 60 秒 TTL 内存缓存，管理员操作（hide/reject/restore/ban/recompute）自动失效。
+- 本地 API 新增 `fetchBootstrap` 函数和 stale-while-revalidate 缓存策略。
+- `apiFetch` 支持 AbortController signal 参数和请求去重。
+
+**§12.3 自动风控规则：**
+- `assessRisk()` 函数集成到 `processUpload()` 中，包含 5 条自动规则：
+  1. Token 异常：单次 >100M token 标记 flagged
+  2. Breakdown 一致性：all-scope 与 tool_model 总和偏差 >1% 标记 flagged
+  3. 未知模型比例：>80% token 来自未收录模型标记 flagged
+  4. 重复上传：同设备同周期 24h 内 >5 次标记 flagged
+  5. Token 峰值：超过用户 30 天平均值 10 倍标记 flagged
+- flagged snapshot 的 leaderboard_metrics visibility 设为 'flagged'（不公开）。
+- upload_requests 状态同步更新为 'flagged'。
+
+**§12.4 云同步数据维护：**
+- `POST /api/admin/maintenance/cleanup` 端点已实现，支持：
+  - 清理过期 upload nonces（>10 分钟）
+  - 清理旧 sync batches（>30 天）
+  - 物理删除已 tombstone >90 天的 cloud_usage_records
+  - 清理旧 generation 记录
+  - 清理过期 device_auth_requests
+  - 清理过期 reserved_usernames
+- 所有清理操作写入 admin_audit_logs。
+
 ## 14. 迁移策略
 
 当前没有必须兼容的历史云端数据时，可以采用干净 v1 设计：

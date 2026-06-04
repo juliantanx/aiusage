@@ -462,6 +462,95 @@ function buildCostMap(snapshot: UploadSnapshot): CostMapResult {
   return { costs, unknownModels }
 }
 
+interface RiskAssessment {
+  status: 'accepted' | 'flagged'
+  reasonCode?: string
+  reasonMessage?: string
+}
+
+async function assessRisk(
+  tx: ReturnType<typeof sql>,
+  userId: string,
+  deviceId: string,
+  snapshot: UploadSnapshot
+): Promise<RiskAssessment> {
+  // Rule 1: Token anomaly — single snapshot total > 100M tokens
+  if (snapshot.total_tokens > 100_000_000) {
+    return {
+      status: 'flagged',
+      reasonCode: 'token_anomaly',
+      reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) exceeds 100M threshold`
+    }
+  }
+
+  // Rule 2: Breakdown consistency — all-scope total must equal sum of breakdowns
+  const allBd = snapshot.breakdowns.find(b => b.scope_type === 'all')
+  if (allBd) {
+    const toolModelTotal = snapshot.breakdowns
+      .filter(b => b.scope_type === 'tool_model')
+      .reduce((sum, b) => sum + b.total_tokens, 0)
+    if (toolModelTotal > 0 && Math.abs(allBd.total_tokens - toolModelTotal) > allBd.total_tokens * 0.01) {
+      return {
+        status: 'flagged',
+        reasonCode: 'breakdown_inconsistent',
+        reasonMessage: `All-scope total (${allBd.total_tokens}) differs from tool_model sum (${toolModelTotal}) by >1%`
+      }
+    }
+  }
+
+  // Rule 3: Unknown model ratio — >80% of tokens from unknown models in cost breakdown
+  const { unknownModels } = buildCostMap(snapshot)
+  if (unknownModels.size > 0) {
+    const toolModelBds = snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')
+    const totalToolModel = toolModelBds.reduce((sum, b) => sum + b.total_tokens, 0)
+    const unknownTokens = toolModelBds
+      .filter(b => b.model && unknownModels.has(b.model))
+      .reduce((sum, b) => sum + b.total_tokens, 0)
+    if (totalToolModel > 0 && unknownTokens / totalToolModel > 0.8) {
+      return {
+        status: 'flagged',
+        reasonCode: 'unknown_model_ratio',
+        reasonMessage: `${Math.round(unknownTokens / totalToolModel * 100)}% of tokens from models not in official price table`
+      }
+    }
+  }
+
+  // Rule 4: Repeat uploads — same device uploaded same period > 5 times in 24h
+  const repeatCount = await tx`
+    SELECT COUNT(*) as cnt FROM upload_snapshots
+    WHERE device_id = ${deviceId}
+      AND period_type = ${snapshot.period_type}
+      AND period_start = ${snapshot.period_start}
+      AND created_at > NOW() - INTERVAL '24 hours'
+  `
+  if (Number((repeatCount[0] as { cnt: bigint }).cnt) >= 5) {
+    return {
+      status: 'flagged',
+      reasonCode: 'repeat_upload',
+      reasonMessage: `Same period uploaded ${Number((repeatCount[0] as { cnt: bigint }).cnt)} times in 24h`
+    }
+  }
+
+  // Rule 5: Massive growth — total_tokens > 10x user's historical average for this period type
+  const userAvg = await tx`
+    SELECT COALESCE(AVG(total_tokens), 0) as avg_tokens FROM upload_snapshots
+    WHERE user_id = ${userId}
+      AND period_type = ${snapshot.period_type}
+      AND status = 'accepted'
+      AND created_at > NOW() - INTERVAL '30 days'
+  `
+  const avgTokens = Number((userAvg[0] as { avg_tokens: number }).avg_tokens)
+  if (avgTokens > 1000 && snapshot.total_tokens > avgTokens * 10) {
+    return {
+      status: 'flagged',
+      reasonCode: 'token_spike',
+      reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) is ${Math.round(snapshot.total_tokens / avgTokens)}x the 30-day average (${avgTokens.toLocaleString()})`
+    }
+  }
+
+  return { status: 'accepted' }
+}
+
 export async function processUpload(
   userId: string,
   deviceId: string,
@@ -493,11 +582,7 @@ export async function processUpload(
   const requestId = nanoid()
   const payloadHash = sha256(JSON.stringify(request))
   const ipHash = hashIp(ip)
-  const snapshotResults: SnapshotResult[] = request.snapshots.map(s => ({
-    period_type: s.period_type,
-    period_start: s.period_start,
-    status: 'accepted',
-  }))
+  const snapshotResults: SnapshotResult[] = []
 
   await sql.begin(async (tx) => {
     await tx`
@@ -506,17 +591,32 @@ export async function processUpload(
     `
 
     for (const snapshot of request.snapshots) {
+      // Run risk assessment
+      const risk = await assessRisk(tx, userId, deviceId, snapshot)
+      const snapshotStatus = risk.status
+
       const snapshotId = nanoid()
       await tx`
-        INSERT INTO upload_snapshots (id, upload_request_id, user_id, device_id, period_type, period_start, period_end, total_tokens, token_snapshot_hash, status)
-        VALUES (${snapshotId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end}, ${snapshot.total_tokens}, ${snapshot.token_snapshot_hash}, 'accepted')
+        INSERT INTO upload_snapshots (id, upload_request_id, user_id, device_id, period_type, period_start, period_end, total_tokens, token_snapshot_hash, status, reason_code, reason_message)
+        VALUES (${snapshotId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end}, ${snapshot.total_tokens}, ${snapshot.token_snapshot_hash}, ${snapshotStatus}, ${risk.reasonCode ?? null}, ${risk.reasonMessage ?? null})
       `
+
+      snapshotResults.push({
+        period_type: snapshot.period_type,
+        period_start: snapshot.period_start,
+        status: snapshotStatus,
+        reason_code: risk.reasonCode,
+        reason_message: risk.reasonMessage,
+      })
 
       // Get current pricing version: prefer published official table, fallback to core
       const publishedTable = await tx`
         SELECT version FROM official_price_tables WHERE status = 'published' ORDER BY published_at DESC LIMIT 1
       `
       const pricingVersion = publishedTable[0] ? (publishedTable[0] as { version: string }).version : CORE_PRICING_VERSION
+
+      // Flagged snapshots get 'flagged' visibility; accepted get 'public'
+      const metricVisibility = snapshotStatus === 'flagged' ? 'flagged' : 'public'
 
       const { costs, unknownModels } = buildCostMap(snapshot)
       for (const row of snapshot.breakdowns) {
@@ -539,7 +639,7 @@ export async function processUpload(
           VALUES (
             ${metricId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end},
             ${row.scope_type}, ${row.tool}, ${row.model}, ${row.input_tokens}, ${row.output_tokens}, ${row.cache_read_tokens}, ${row.cache_write_tokens},
-            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, 'public', ${pricingVersion}, ${hasUnknownCost}
+            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, ${metricVisibility}, ${pricingVersion}, ${hasUnknownCost}
           )
           ON CONFLICT (user_id, period_type, period_start, scope_type, (COALESCE(tool, '')), (COALESCE(model, '')))
           DO UPDATE SET
@@ -553,16 +653,31 @@ export async function processUpload(
             thinking_tokens = ${row.thinking_tokens},
             total_tokens = ${row.total_tokens},
             total_cost_usd = ${cost},
-            visibility = 'public',
+            visibility = ${metricVisibility},
             pricing_version = ${pricingVersion},
             has_unknown_cost = ${hasUnknownCost},
             updated_at = NOW()
         `
       }
     }
+
+    // Update request status if any snapshot was flagged
+    const hasFlagged = snapshotResults.some(s => s.status === 'flagged')
+    if (hasFlagged) {
+      await tx`
+        UPDATE upload_requests SET status = 'flagged', result_summary = ${JSON.stringify(snapshotResults)}::jsonb
+        WHERE id = ${requestId}
+      `
+    } else {
+      await tx`
+        UPDATE upload_requests SET result_summary = ${JSON.stringify(snapshotResults)}::jsonb
+        WHERE id = ${requestId}
+      `
+    }
   })
 
-  return { status: 'accepted', snapshots: snapshotResults }
+  const overallStatus = snapshotResults.some(s => s.status === 'flagged') ? 'flagged' : 'accepted'
+  return { status: overallStatus, snapshots: snapshotResults }
 }
 
 export { MAX_PAYLOAD_SIZE }

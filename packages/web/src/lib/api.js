@@ -7,17 +7,55 @@ function buildUrl(base, params) {
   return query ? `${base}?${query}` : base
 }
 
-async function apiFetch(url) {
-  const response = await fetch(url)
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
-    throw new Error(error.error?.message || `HTTP ${response.status}`)
+// Stale-while-revalidate cache (§11.4)
+const swrCache = new Map()
+const inflightRequests = new Map()
+
+async function apiFetch(url, { signal, swr = false } = {}) {
+  // Stale-while-revalidate: return cached data immediately, refresh in background
+  if (swr && swrCache.has(url)) {
+    const cached = swrCache.get(url)
+    // Revalidate in background if stale (> 5s)
+    if (Date.now() - cached.fetchedAt > 5000 && !inflightRequests.has(url)) {
+      const promise = fetch(url, { signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) swrCache.set(url, { data, fetchedAt: Date.now() }) })
+        .catch(() => {})
+        .finally(() => inflightRequests.delete(url))
+      inflightRequests.set(url, promise)
+    }
+    return cached.data
   }
-  return response.json()
+
+  // Deduplicate in-flight requests
+  if (inflightRequests.has(url)) {
+    return inflightRequests.get(url)
+  }
+
+  const promise = fetch(url, { signal })
+    .then(async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+        throw new Error(error.error?.message || `HTTP ${response.status}`)
+      }
+      return response.json()
+    })
+    .then(data => {
+      if (swr) swrCache.set(url, { data, fetchedAt: Date.now() })
+      return data
+    })
+    .finally(() => inflightRequests.delete(url))
+
+  inflightRequests.set(url, promise)
+  return promise
 }
 
-export async function fetchSummary(params) {
-  return apiFetch(buildUrl('/api/summary', params))
+export async function fetchSummary(params, { signal, swr = true } = {}) {
+  return apiFetch(buildUrl('/api/summary', params), { signal, swr })
+}
+
+export async function fetchBootstrap(params = {}) {
+  return apiFetch(buildUrl('/api/bootstrap', params))
 }
 
 export async function fetchTokens(params) {

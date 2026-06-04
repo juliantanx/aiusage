@@ -29,6 +29,23 @@ export interface LeaderboardResponse {
 }
 
 const PAGE_SIZE = 50
+const CACHE_TTL_MS = 60_000 // 60 seconds
+
+// In-memory TTL cache for leaderboard queries (§11.5)
+interface CacheEntry {
+  data: LeaderboardResponse
+  expiresAt: number
+}
+
+const cache = new Map<string, CacheEntry>()
+
+function cacheKey(options: { periodType: string; periodStart: string; metric: string; scope: string; tool: string | null; model: string | null; cursor: string | null }): string {
+  return `${options.periodType}:${options.periodStart}:${options.metric}:${options.scope}:${options.tool ?? ''}:${options.model ?? ''}:${options.cursor ?? '0'}`
+}
+
+export function invalidateLeaderboardCache(): void {
+  cache.clear()
+}
 
 export async function queryLeaderboard(options: {
   periodType: string
@@ -44,6 +61,15 @@ export async function queryLeaderboard(options: {
     ? sql`lm.total_cost_usd DESC`
     : sql`lm.total_tokens DESC`
   const cursorRank = options.cursor ? decodeCursor(options.cursor) : 0
+
+  // Check cache (only for first page without cursor)
+  const key = cacheKey(options)
+  if (!options.cursor) {
+    const cached = cache.get(key)
+    if (cached && cached.expiresAt > Date.now()) {
+      return { ...cached.data, current_user: null } // Re-fetch current_user separately
+    }
+  }
 
   const entries = await sql`
     WITH ranked AS (
@@ -150,7 +176,7 @@ export async function queryLeaderboard(options: {
     }
   }
 
-  return {
+  const result: LeaderboardResponse = {
     entries: page.map(row => toRankingEntry(row)),
     next_cursor: nextCursor,
     current_user: currentUser,
@@ -161,6 +187,13 @@ export async function queryLeaderboard(options: {
     tool: options.tool,
     model: options.model,
   }
+
+  // Cache first-page results
+  if (!options.cursor) {
+    cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })
+  }
+
+  return result
 }
 
 function toRankingEntry(row: RankingEntry & { rn: string }): RankingEntry {
