@@ -103,6 +103,39 @@ function buildBreakdown(
   return { scope_type, tool, model, ...totals }
 }
 
+function normalizeBreakdowns(breakdowns: UploadBreakdown[]): UploadBreakdown[] {
+  return [...breakdowns].sort((a, b) =>
+    a.scope_type.localeCompare(b.scope_type) ||
+    String(a.tool ?? '').localeCompare(String(b.tool ?? '')) ||
+    String(a.model ?? '').localeCompare(String(b.model ?? ''))
+  )
+}
+
+function canonicalSnapshot(snapshot: Omit<UploadSnapshot, 'token_snapshot_hash'>): Omit<UploadSnapshot, 'token_snapshot_hash'> {
+  return {
+    period_type: snapshot.period_type,
+    period_start: snapshot.period_start,
+    period_end: snapshot.period_end,
+    total_tokens: snapshot.total_tokens,
+    input_tokens: snapshot.input_tokens,
+    output_tokens: snapshot.output_tokens,
+    cache_read_tokens: snapshot.cache_read_tokens,
+    cache_write_tokens: snapshot.cache_write_tokens,
+    thinking_tokens: snapshot.thinking_tokens,
+    breakdowns: normalizeBreakdowns(snapshot.breakdowns).map(b => ({
+      scope_type: b.scope_type,
+      tool: b.tool,
+      model: b.model,
+      total_tokens: b.total_tokens,
+      input_tokens: b.input_tokens,
+      output_tokens: b.output_tokens,
+      cache_read_tokens: b.cache_read_tokens,
+      cache_write_tokens: b.cache_write_tokens,
+      thinking_tokens: b.thinking_tokens,
+    })),
+  }
+}
+
 function getPeriodUsageGroups(
   db: Database.Database,
   currentDeviceInstanceId: string | undefined,
@@ -123,11 +156,23 @@ function getPeriodUsageGroups(
              SUM(thinking_tokens) AS thinking_tokens,
              SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS total_tokens
       FROM (
-        SELECT tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens
+        SELECT COALESCE(NULLIF(tool, ''), 'unknown') AS tool,
+               COALESCE(NULLIF(model, ''), 'unknown') AS model,
+               CASE WHEN input_tokens > 0 THEN input_tokens ELSE 0 END AS input_tokens,
+               CASE WHEN output_tokens > 0 THEN output_tokens ELSE 0 END AS output_tokens,
+               CASE WHEN cache_read_tokens > 0 THEN cache_read_tokens ELSE 0 END AS cache_read_tokens,
+               CASE WHEN cache_write_tokens > 0 THEN cache_write_tokens ELSE 0 END AS cache_write_tokens,
+               CASE WHEN thinking_tokens > 0 THEN thinking_tokens ELSE 0 END AS thinking_tokens
         FROM records
         WHERE 1=1 ${localOnlyFilter} ${timeWhere}
         UNION ALL
-        SELECT tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens
+        SELECT COALESCE(NULLIF(tool, ''), 'unknown') AS tool,
+               COALESCE(NULLIF(model, ''), 'unknown') AS model,
+               CASE WHEN input_tokens > 0 THEN input_tokens ELSE 0 END AS input_tokens,
+               CASE WHEN output_tokens > 0 THEN output_tokens ELSE 0 END AS output_tokens,
+               CASE WHEN cache_read_tokens > 0 THEN cache_read_tokens ELSE 0 END AS cache_read_tokens,
+               CASE WHEN cache_write_tokens > 0 THEN cache_write_tokens ELSE 0 END AS cache_write_tokens,
+               CASE WHEN thinking_tokens > 0 THEN thinking_tokens ELSE 0 END AS thinking_tokens
         FROM synced_records
         WHERE device_instance_id != @currentId ${timeWhere}
       )
@@ -137,13 +182,20 @@ function getPeriodUsageGroups(
   }
 
   return db.prepare(`
-    SELECT tool, model,
-           SUM(input_tokens) AS input_tokens,
-           SUM(output_tokens) AS output_tokens,
-           SUM(cache_read_tokens) AS cache_read_tokens,
-           SUM(cache_write_tokens) AS cache_write_tokens,
-           SUM(thinking_tokens) AS thinking_tokens,
-           SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS total_tokens
+    SELECT COALESCE(NULLIF(tool, ''), 'unknown') AS tool,
+           COALESCE(NULLIF(model, ''), 'unknown') AS model,
+           SUM(CASE WHEN input_tokens > 0 THEN input_tokens ELSE 0 END) AS input_tokens,
+           SUM(CASE WHEN output_tokens > 0 THEN output_tokens ELSE 0 END) AS output_tokens,
+           SUM(CASE WHEN cache_read_tokens > 0 THEN cache_read_tokens ELSE 0 END) AS cache_read_tokens,
+           SUM(CASE WHEN cache_write_tokens > 0 THEN cache_write_tokens ELSE 0 END) AS cache_write_tokens,
+           SUM(CASE WHEN thinking_tokens > 0 THEN thinking_tokens ELSE 0 END) AS thinking_tokens,
+           SUM(
+             (CASE WHEN input_tokens > 0 THEN input_tokens ELSE 0 END) +
+             (CASE WHEN output_tokens > 0 THEN output_tokens ELSE 0 END) +
+             (CASE WHEN cache_read_tokens > 0 THEN cache_read_tokens ELSE 0 END) +
+             (CASE WHEN cache_write_tokens > 0 THEN cache_write_tokens ELSE 0 END) +
+             (CASE WHEN thinking_tokens > 0 THEN thinking_tokens ELSE 0 END)
+           ) AS total_tokens
     FROM records
     WHERE 1=1 ${timeWhere}
     GROUP BY tool, model
@@ -152,7 +204,7 @@ function getPeriodUsageGroups(
 }
 
 function buildSnapshotHash(snapshot: Omit<UploadSnapshot, 'token_snapshot_hash'>): string {
-  return 'sha256:' + sha256(JSON.stringify(snapshot))
+  return 'sha256:' + sha256(JSON.stringify(canonicalSnapshot(snapshot)))
 }
 
 function buildSnapshot(
@@ -174,8 +226,10 @@ function buildSnapshot(
     const totals = rowTotals(group)
     total = mergeTotals(total, totals)
 
-    byTool.set(group.tool, mergeTotals(byTool.get(group.tool) ?? zeroTotals(), totals))
-    byModel.set(group.model, mergeTotals(byModel.get(group.model) ?? zeroTotals(), totals))
+    const toolKey = group.tool || ''
+    const modelKey = group.model || ''
+    if (toolKey) byTool.set(toolKey, mergeTotals(byTool.get(toolKey) ?? zeroTotals(), totals))
+    if (modelKey) byModel.set(modelKey, mergeTotals(byModel.get(modelKey) ?? zeroTotals(), totals))
   }
 
   const breakdowns: UploadBreakdown[] = [
@@ -183,16 +237,12 @@ function buildSnapshot(
     ...Array.from(byTool.entries()).map(([tool, totals]) => buildBreakdown('tool', tool, null, totals)),
     ...Array.from(byModel.entries()).map(([model, totals]) => buildBreakdown('model', null, model, totals)),
     ...groups.map(group => buildBreakdown('tool_model', group.tool, group.model, rowTotals(group))),
-  ].sort((a, b) =>
-    a.scope_type.localeCompare(b.scope_type) ||
-    String(a.tool ?? '').localeCompare(String(b.tool ?? '')) ||
-    String(a.model ?? '').localeCompare(String(b.model ?? ''))
-  )
+  ]
 
   const snapshot = {
     ...period,
     ...total,
-    breakdowns,
+    breakdowns: normalizeBreakdowns(breakdowns),
   }
 
   return {

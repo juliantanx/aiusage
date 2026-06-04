@@ -187,9 +187,9 @@ const migrations = [
     version: 3,
     name: 'leaderboard_metrics',
     up: async (tx: ReturnType<typeof sql>) => {
+      await tx`DROP TABLE IF EXISTS leaderboard_entries`
       await tx`DELETE FROM upload_snapshots`
       await tx`DELETE FROM upload_requests`
-      await tx`DROP TABLE IF EXISTS leaderboard_entries`
       await tx`ALTER TABLE upload_snapshots DROP COLUMN IF EXISTS leaderboard_entry_id`
 
       await tx`CREATE TABLE IF NOT EXISTS leaderboard_metrics (

@@ -19,25 +19,32 @@
   const scopes = [
     { key: 'all', zh: '总榜', en: 'Overall' },
     { key: 'tool', zh: '工具', en: 'Tool' },
-    { key: 'model', zh: '模型', en: 'Model' },
-    { key: 'tool_model', zh: '工具 + 模型', en: 'Tool + model' }
+    { key: 'model', zh: '模型', en: 'Model' }
   ]
 
   let activePeriod = 'daily'
   let activeMetric = 'tokens'
   let activeScope = 'all'
-  let toolFilter = ''
-  let modelFilter = ''
+  let selectedTool = ''
+  let selectedModel = ''
   let data = null
   let loading = true
   let loadingMore = false
   let error = ''
+
+  let availableTools = []
+  let availableModels = []
+  let chipsExpanded = false
 
   $: zh = $lang === 'zh'
   $: user = $page.data.user
   $: rows = data?.entries || []
   $: leaders = rows.slice(0, 3)
   $: valueLabel = activeMetric === 'cost' ? (zh ? '费用' : 'Cost') : 'Tokens'
+  $: activeChips = activeScope === 'tool' ? availableTools : activeScope === 'model' ? availableModels : []
+  $: selectedChip = activeScope === 'tool' ? selectedTool : activeScope === 'model' ? selectedModel : ''
+  $: visibleChips = chipsExpanded ? activeChips : activeChips.slice(0, 12)
+  $: hasMoreChips = activeChips.length > 12
 
   function periodLabel(key) {
     const period = periods.find(p => p.key === key)
@@ -74,7 +81,6 @@
   function scopeValue(entry) {
     if (entry.scope_type === 'tool') return entry.tool || '-'
     if (entry.scope_type === 'model') return entry.model || '-'
-    if (entry.scope_type === 'tool_model') return `${entry.tool || '-'} / ${entry.model || '-'}`
     return zh ? '全部' : 'All'
   }
 
@@ -93,6 +99,45 @@
     return (name || 'A').trim().charAt(0).toUpperCase()
   }
 
+  function defaultChipFor(scope) {
+    if (scope === 'tool') return availableTools[0] || ''
+    if (scope === 'model') return availableModels[0] || ''
+    return ''
+  }
+
+  function ensureScopeSelection(scope) {
+    if (scope === 'tool') {
+      if (!selectedTool || !availableTools.includes(selectedTool)) {
+        selectedTool = defaultChipFor('tool')
+      }
+      selectedModel = ''
+    } else if (scope === 'model') {
+      if (!selectedModel || !availableModels.includes(selectedModel)) {
+        selectedModel = defaultChipFor('model')
+      }
+      selectedTool = ''
+    } else {
+      selectedTool = ''
+      selectedModel = ''
+    }
+  }
+
+  async function loadFilters() {
+    try {
+      const params = new URLSearchParams({
+        period_type: activePeriod,
+        metric: activeMetric
+      })
+      const res = await fetch(`/api/leaderboard/filters?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        availableTools = data.tools || []
+        availableModels = data.models || []
+        ensureScopeSelection(activeScope)
+      }
+    } catch { /* ignore */ }
+  }
+
   async function loadLeaderboard(cursor) {
     const isMore = Boolean(cursor)
     if (isMore) {
@@ -109,8 +154,8 @@
         metric: activeMetric,
         scope: activeScope
       })
-      if ((activeScope === 'tool' || activeScope === 'tool_model') && toolFilter.trim()) params.set('tool', toolFilter.trim())
-      if ((activeScope === 'model' || activeScope === 'tool_model') && modelFilter.trim()) params.set('model', modelFilter.trim())
+      if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
+      if (activeScope === 'model' && selectedModel) params.set('model', selectedModel)
       if (cursor) params.set('cursor', cursor)
       const res = await fetch(`/api/leaderboard?${params}`)
       if (!res.ok) throw new Error('Failed to load')
@@ -129,10 +174,33 @@
   function switchPeriod(period) {
     if (activePeriod === period || loading) return
     activePeriod = period
+    loadFilters().then(() => loadLeaderboard())
+  }
+
+  function switchMetric(metric) {
+    if (activeMetric === metric || loading) return
+    activeMetric = metric
+    loadFilters().then(() => loadLeaderboard())
+  }
+
+  async function switchScope(scope) {
+    if (activeScope === scope) return
+    activeScope = scope
+    chipsExpanded = false
+    ensureScopeSelection(scope)
+    if ((scope === 'tool' && !selectedTool) || (scope === 'model' && !selectedModel)) {
+      await loadFilters()
+    }
+    ensureScopeSelection(scope)
     loadLeaderboard()
   }
 
-  function reloadRanking() {
+  function selectChip(value) {
+    if (activeScope === 'tool') {
+      selectedTool = value
+    } else if (activeScope === 'model') {
+      selectedModel = value
+    }
     loadLeaderboard()
   }
 
@@ -140,7 +208,10 @@
     if (data?.next_cursor) loadLeaderboard(data.next_cursor)
   }
 
-  onMount(() => loadLeaderboard())
+  onMount(() => {
+    loadFilters()
+    loadLeaderboard()
+  })
 </script>
 
 <svelte:head>
@@ -149,59 +220,46 @@
 
 <section class="lb-page">
   <div class="lb-container">
-    <header class="lb-header">
-      <div>
-        <p class="eyebrow">{zh ? '公开浏览' : 'Public view'}</p>
-        <h1>{zh ? 'AIUsage 排行榜' : 'AIUsage Leaderboard'}</h1>
-      </div>
-      <div class="header-actions">
-        {#if user}
-          <a href="/uploads" class="btn secondary">{zh ? '上传状态' : 'Upload status'}</a>
-        {:else}
-          <a href="/login" class="btn primary">{zh ? '登录上传' : 'Sign in to upload'}</a>
-        {/if}
-      </div>
-    </header>
-
     <div class="ranking-controls">
-      <div class="toolbar" aria-label={zh ? '周期选择' : 'Period selector'}>
+      <div class="toolbar" aria-label={zh ? '周期选择' : 'Period'}>
         {#each periods as p}
-          <button class="period-tab" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
+          <button class="pill" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
             {zh ? p.zh : p.en}
           </button>
         {/each}
       </div>
 
-      <label class="control">
-        <span>{zh ? '指标' : 'Metric'}</span>
-        <select bind:value={activeMetric} on:change={reloadRanking}>
-          {#each metrics as metric}
-            <option value={metric.key}>{zh ? metric.zh : metric.en}</option>
+      <div class="control-row">
+        <div class="toolbar compact" aria-label={zh ? '指标选择' : 'Metric'}>
+          {#each metrics as m}
+            <button class="pill" class:active={activeMetric === m.key} on:click={() => switchMetric(m.key)}>
+              {zh ? m.zh : m.en}
+            </button>
           {/each}
-        </select>
-      </label>
+        </div>
 
-      <label class="control">
-        <span>{zh ? '范围' : 'Scope'}</span>
-        <select bind:value={activeScope} on:change={reloadRanking}>
-          {#each scopes as scope}
-            <option value={scope.key}>{zh ? scope.zh : scope.en}</option>
+        <div class="toolbar compact" aria-label={zh ? '范围选择' : 'Scope'}>
+          {#each scopes as s}
+            <button class="pill" class:active={activeScope === s.key} on:click={() => switchScope(s.key)}>
+              {zh ? s.zh : s.en}
+            </button>
           {/each}
-        </select>
-      </label>
+        </div>
+      </div>
 
-      {#if activeScope === 'tool' || activeScope === 'tool_model'}
-        <label class="control filter">
-          <span>{zh ? '工具' : 'Tool'}</span>
-          <input bind:value={toolFilter} on:change={reloadRanking} placeholder={zh ? '可选' : 'Optional'} />
-        </label>
-      {/if}
-
-      {#if activeScope === 'model' || activeScope === 'tool_model'}
-        <label class="control filter">
-          <span>{zh ? '模型' : 'Model'}</span>
-          <input bind:value={modelFilter} on:change={reloadRanking} placeholder={zh ? '可选' : 'Optional'} />
-        </label>
+      {#if activeChips.length > 0}
+        <div class="chip-bar" class:expanded={chipsExpanded}>
+          {#each visibleChips as chip}
+            <button class="chip" class:selected={selectedChip === chip} on:click={() => selectChip(chip)}>
+              {chip}
+            </button>
+          {/each}
+          {#if hasMoreChips}
+            <button class="chip-toggle" on:click={() => chipsExpanded = !chipsExpanded}>
+              {chipsExpanded ? (zh ? '收起' : 'Less') : `+${activeChips.length - 12}`}
+            </button>
+          {/if}
+        </div>
       {/if}
     </div>
 
@@ -234,7 +292,7 @@
       <div class="table-meta">
         <span>{periodLabel(activePeriod)}</span>
         <span>{valueLabel}</span>
-        <span>{scopes.find(s => s.key === activeScope)?.[zh ? 'zh' : 'en']}</span>
+        <span>{scopes.find(s => s.key === activeScope)?.[zh ? 'zh' : 'en']}{selectedChip ? `: ${selectedChip}` : ''}</span>
         {#if data?.period_start}
           <span>{zh ? '周期开始' : 'Period start'}: {formatDate(data.period_start)}</span>
         {/if}
@@ -254,7 +312,7 @@
           <p class="guide-text">{zh
             ? '安装 CLI 并上传你的使用数据即可上榜：'
             : 'Install the CLI and upload your usage to join:'}</p>
-          <code class="guide-cmd">npx aiusage login && npx aiusage upload</code>
+          <code class="guide-cmd">npx @juliantanx/aiusage login && npx @juliantanx/aiusage upload</code>
         </div>
       {:else}
         <div class="lb-table" role="table" aria-label={zh ? 'Token 排行榜' : 'Token leaderboard'}>
@@ -262,7 +320,7 @@
             <span class="col-rank" role="columnheader">#</span>
             <span class="col-user" role="columnheader">{zh ? '用户' : 'User'}</span>
             {#if activeScope !== 'all'}
-              <span class="col-scope" role="columnheader">{zh ? '范围' : 'Scope'}</span>
+              <span class="col-scope" role="columnheader">{activeScope === 'tool' ? (zh ? '工具' : 'Tool') : (zh ? '模型' : 'Model')}</span>
             {/if}
             <span class="col-tokens" role="columnheader">{valueLabel}</span>
             <span class="col-updated" role="columnheader">{zh ? '更新' : 'Updated'}</span>
@@ -299,7 +357,7 @@
 
     <div class="role-note">
       <div>
-        <strong>{zh ? 'CLI' : 'CLI'}</strong>
+        <strong>CLI</strong>
         <span>{zh ? '负责本地统计、登录授权和提交公开总量。' : 'handles local stats, authorization, and total-token submissions.'}</span>
       </div>
       <div>
@@ -311,101 +369,34 @@
 </section>
 
 <style>
-  .lb-page { padding: 40px 0 64px; }
+  .lb-page { padding: 24px 0 64px; }
   .lb-container { width: min(var(--content-width), 1040px); margin: 0 auto; }
 
-  .lb-header {
+  .ranking-controls {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 24px;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
   }
-
-  .eyebrow {
-    margin: 0 0 6px;
-    color: var(--text-muted);
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  h1 {
-    margin: 0;
-    font-size: 2rem;
-    line-height: 1.15;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-
-  .header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .btn {
-    display: inline-flex;
+  .control-row {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    min-height: 32px;
-    padding: 0 12px;
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    font-weight: 650;
-    text-decoration: none;
+    gap: 8px;
+    flex-wrap: wrap;
   }
-  .btn.primary { background: var(--accent); color: oklch(0.99 0.002 85); }
-  .btn.secondary { border: 1px solid var(--border-medium); color: var(--text-secondary); background: transparent; }
-
   .toolbar {
     display: flex;
     gap: 4px;
     width: fit-content;
     max-width: 100%;
     padding: 4px;
-    margin-bottom: 20px;
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     background: var(--raised);
     overflow-x: auto;
   }
-
-  .ranking-controls {
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-  }
-  .ranking-controls .toolbar { margin-bottom: 0; }
-  .control {
-    display: grid;
-    gap: 4px;
-    min-width: 120px;
-  }
-  .control.filter { min-width: 170px; }
-  .control span {
-    color: var(--text-muted);
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .control select,
-  .control input {
-    height: 40px;
-    padding: 0 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    font-size: 0.8125rem;
-  }
-  .control select:focus,
-  .control input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-
-  .period-tab {
+  .toolbar.compact { padding: 3px; }
+  .pill {
     min-height: 30px;
     padding: 0 12px;
     border: 0;
@@ -417,8 +408,46 @@
     white-space: nowrap;
     cursor: pointer;
   }
-  .period-tab:hover { background: var(--surface); color: var(--text); }
-  .period-tab.active { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+  .pill:hover { background: var(--surface); color: var(--text); }
+  .pill.active { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+
+  .chip-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 72px;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+  }
+  .chip-bar.expanded { max-height: none; }
+  .chip {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .chip:hover { background: var(--hover); color: var(--text); border-color: var(--border-medium); }
+  .chip.selected { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .chip-toggle {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px dashed var(--border-medium);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .chip-toggle:hover { color: var(--text); border-color: var(--text-muted); }
 
   .me-row {
     display: grid;
@@ -583,13 +612,11 @@
   .retry-btn:hover { background: var(--hover); }
 
   @media (max-width: 760px) {
-    .lb-page { padding-top: 24px; }
-    .lb-header { align-items: flex-start; flex-direction: column; }
-    .header-actions { justify-content: flex-start; }
+    .lb-page { padding-top: 16px; }
     .leaders { grid-template-columns: 1fr; }
-    .ranking-controls { align-items: stretch; }
+    .control-row { flex-direction: column; align-items: stretch; }
     .toolbar { width: 100%; }
-    .control, .control.filter { min-width: min(100%, 160px); flex: 1 1 150px; }
+    .chip-bar { max-height: 60px; }
     .table-meta { flex-wrap: wrap; gap: 8px 14px; }
     .lb-row { grid-template-columns: 52px minmax(0, 1fr) 92px; padding: 0 12px; }
     .lb-row.has-scope { grid-template-columns: 52px minmax(0, 1fr) 92px; }

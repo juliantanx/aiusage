@@ -793,18 +793,18 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     <section id="sync">
       <div class="sec-head">
         <span class="sec-idx">13</span>
-        <h2>{zh ? ‘多设备同步’ : ‘Sync’}</h2>
+        <h2>{zh ? '多设备同步' : 'Sync'}</h2>
       </div>
       <p>{zh
-        ? ‘同步功能会把本机数据上传到远端，再拉取其他设备的数据并合并。你可以通过侧边栏 Sync 按钮手动触发，也可以先用 init 命令或设置页完成后端配置。’
-        : ‘Sync uploads this device’s data, pulls data from other devices, and merges the results. You can trigger it from the sidebar Sync button after configuring the backend via init or the Settings page.’
+        ? '同步功能会把本机数据上传到远端，再拉取其他设备的数据并合并。你可以通过侧边栏 Sync 按钮手动触发，也可以先用 init 命令或设置页完成后端配置。'
+        : 'Sync uploads this device\'s data, pulls data from other devices, and merges the results. You can trigger it from the sidebar Sync button after configuring the backend via init or the Settings page.'
       }</p>
       <ul>
-        <li><strong>{zh ? ‘官方同步（推荐）’ : ‘Official Cloud (Recommended)’}</strong> — {zh ? ‘使用 AIUsage 账号直接同步，无需配置 GitHub 或 S3。需要先 aiusage login 授权设备。’ : ‘Sync directly via your AIUsage account — no GitHub or S3 setup needed. Requires aiusage login to authorize your device.’}</li>
-        <li><strong>GitHub</strong> — {zh ? ‘推送到 GitHub 仓库’ : ‘Push to a GitHub repository’}</li>
-        <li><strong>S3 / {zh ? ‘兼容存储’ : ‘Compatible’}</strong> — {zh ? ‘推送到 Amazon S3 或任何 S3 兼容存储（Cloudflare R2、MinIO 等）’ : ‘Push to Amazon S3 or any S3-compatible storage (Cloudflare R2, MinIO, etc.)’}</li>
+        <li><strong>{zh ? '官方同步（推荐）' : 'Official Cloud (Recommended)'}</strong> — {zh ? '使用 AIUsage 账号直接同步，无需配置 GitHub 或 S3。需要先 aiusage login 授权设备。' : 'Sync directly via your AIUsage account — no GitHub or S3 setup needed. Requires aiusage login to authorize your device.'}</li>
+        <li><strong>GitHub</strong> — {zh ? '推送到 GitHub 仓库' : 'Push to a GitHub repository'}</li>
+        <li><strong>S3 / {zh ? '兼容存储' : 'Compatible'}</strong> — {zh ? '推送到 Amazon S3 或任何 S3 兼容存储（Cloudflare R2、MinIO 等）' : 'Push to Amazon S3 or any S3-compatible storage (Cloudflare R2, MinIO, etc.)'}</li>
       </ul>
-      <CodeBlock lang="Terminal" copyText={‘aiusage login\naiusage init --backend cloud\naiusage sync’}>
+      <CodeBlock lang="Terminal" copyText={'aiusage login\naiusage init --backend cloud\naiusage sync'}>
         <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
         <span class="tk-kw">aiusage</span> login  <span class="tk-cmt"># authorize device</span>
 <span class="tk-kw">aiusage</span> init --backend cloud  <span class="tk-cmt"># configure official sync</span>
@@ -812,8 +812,8 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </CodeBlock>
       <Callout type="info">
         {zh
-          ? ‘官方同步使用 HMAC 签名认证，数据加密传输。支持增量同步、tombstone 删除传播和 generation 机制防止旧设备覆盖已清空的数据。’
-          : ‘Official sync uses HMAC-signed authentication with encrypted transport. Supports incremental sync, tombstone propagation, and a generation mechanism to prevent stale devices from overwriting cleared data.’
+          ? '官方同步使用 HMAC 签名认证，数据加密传输。支持增量同步、tombstone 删除传播和 generation 机制防止旧设备覆盖已清空的数据。'
+          : 'Official sync uses HMAC-signed authentication with encrypted transport. Supports incremental sync, tombstone propagation, and a generation mechanism to prevent stale devices from overwriting cleared data.'
         }
       </Callout>
     </section>
@@ -987,8 +987,8 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         : 'Uploads contain only aggregate token totals for ranking periods plus required metadata. They do not include prompts, completions, source code, file paths, or local cost estimates.'
       }</p>
       <p>{zh
-        ? '上传后系统会自动进行风控评估。以下情况会被自动标记为 flagged 并进入管理员审核队列：单次上传超过 100M token、breakdown 一致性偏差超过 1%、未知模型占比超过 80%、同设备同周期 24 小时内重复上传超过 5 次、token 总量超过用户 30 天平均值 10 倍。'
-        : 'After upload, the system automatically runs risk assessment. Snapshots are auto-flagged for admin review if: single upload exceeds 100M tokens, breakdown consistency deviates >1%, unknown models account for >80% of tokens, same device/period uploaded >5 times in 24h, or token total exceeds the user\'s 30-day average by 10x.'
+        ? '上传后系统会自动进行风控评估。以下情况会被自动标记为 flagged 并进入管理员审核队列：breakdown 一致性偏差超过 1%、未知模型占比超过 80%、同设备同周期 24 小时内重复上传超过 5 次、token 总量超过用户 30 天平均值 10 倍。'
+        : 'After upload, the system automatically runs risk assessment. Snapshots are auto-flagged for admin review if: breakdown consistency deviates >1%, unknown models account for >80% of tokens, same device/period uploaded >5 times in 24h, or token total exceeds the user\'s 30-day average by 10x.'
       }</p>
     </section>
 
@@ -1035,8 +1035,8 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </ul>
       <Callout type="info">
         {zh
-          ? '上传快照会被自动风控规则评估：token 异常（>100M）、breakdown 一致性偏差、未知模型比例过高、重复上传、token 峰值异常等情况会自动标记为 flagged，进入管理员审核队列。'
-          : 'Upload snapshots are automatically evaluated by risk control rules: token anomalies (>100M), breakdown consistency deviation, high unknown model ratio, repeat uploads, and token spike anomalies are auto-flagged for admin review.'
+          ? '上传快照会被自动风控规则评估：breakdown 一致性偏差、未知模型比例过高、重复上传、token 峰值异常等情况会自动标记为 flagged，进入管理员审核队列。'
+          : 'Upload snapshots are automatically evaluated by risk control rules: breakdown consistency deviation, high unknown model ratio, repeat uploads, and token spike anomalies are auto-flagged for admin review.'
         }
       </Callout>
     </section>

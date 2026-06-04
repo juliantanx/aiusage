@@ -57,7 +57,12 @@ export function clearSessionCookie(event: RequestEvent): void {
 export async function getUserFromEvent(event: RequestEvent): Promise<SessionUser | null> {
   const sid = getSessionCookie(event)
   if (!sid) return null
-  return getSessionUser(sid)
+  try {
+    return await getSessionUser(sid)
+  } catch (err) {
+    console.error('getUserFromEvent DB error:', err)
+    return null
+  }
 }
 
 export async function requireUser(event: RequestEvent): Promise<SessionUser> {

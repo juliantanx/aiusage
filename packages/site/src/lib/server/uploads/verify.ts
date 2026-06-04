@@ -1,5 +1,6 @@
 import { sql } from '../db/pool.js'
 import { decryptDeviceSecret, sha256, buildCanonicalString, hashIp, computeHmac } from '../crypto/hmac.js'
+import { invalidateLeaderboardCache } from '../leaderboard/query.js'
 import { calculateDefaultCost, resolveDefaultPrice } from '@aiusage/core'
 import { nanoid } from 'nanoid'
 import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
@@ -193,30 +194,35 @@ function computeSnapshotHash(snapshot: UploadSnapshot): string {
   return `sha256:${sha256(JSON.stringify(canonicalSnapshot(snapshot)))}`
 }
 
-function validateBreakdownShape(raw: Record<string, unknown>): raw is UploadBreakdown {
-  if (validateAllowedFields(raw, BREAKDOWN_FIELDS, 'breakdown_forbidden_field')) return false
-  if (!ALLOWED_SCOPE_TYPES.includes(raw.scope_type as ScopeType)) return false
-  if (!validateTokenTotals(raw)) return false
+function getBreakdownShapeError(raw: Record<string, unknown>): string | null {
+  const forbidden = validateAllowedFields(raw, BREAKDOWN_FIELDS, 'breakdown_forbidden_field')
+  if (forbidden) return forbidden
+  if (!ALLOWED_SCOPE_TYPES.includes(raw.scope_type as ScopeType)) return `invalid_scope_type:${String(raw.scope_type)}`
+  if (!validateTokenTotals(raw)) return 'invalid_token_totals'
 
   const tool = raw.tool
   const model = raw.model
-  if (tool !== null && typeof tool !== 'string') return false
-  if (model !== null && typeof model !== 'string') return false
-  if (typeof tool === 'string' && tool.trim() === '') return false
-  if (typeof model === 'string' && model.trim() === '') return false
+  if (tool !== null && typeof tool !== 'string') return `invalid_tool_type:${typeof tool}`
+  if (model !== null && typeof model !== 'string') return `invalid_model_type:${typeof model}`
+  if (typeof tool === 'string' && tool.trim() === '') return 'empty_tool'
+  if (typeof model === 'string' && model.trim() === '') return 'empty_model'
 
   switch (raw.scope_type) {
     case 'all':
-      return tool === null && model === null
+      return tool === null && model === null ? null : 'all_scope_requires_null_tool_and_model'
     case 'tool':
-      return typeof tool === 'string' && model === null
+      return typeof tool === 'string' && model === null ? null : 'tool_scope_requires_tool_only'
     case 'model':
-      return tool === null && typeof model === 'string'
+      return tool === null && typeof model === 'string' ? null : 'model_scope_requires_model_only'
     case 'tool_model':
-      return typeof tool === 'string' && typeof model === 'string'
+      return typeof tool === 'string' && typeof model === 'string' ? null : 'tool_model_scope_requires_tool_and_model'
     default:
-      return false
+      return 'invalid_scope_type'
   }
+}
+
+function validateBreakdownShape(raw: Record<string, unknown>): raw is UploadBreakdown {
+  return getBreakdownShapeError(raw) === null
 }
 
 function validateBreakdownConsistency(snapshot: UploadSnapshot): { valid: boolean; error?: string; error_code?: string } {
@@ -313,8 +319,10 @@ export function validatePayload(body: unknown): { valid: boolean; error?: string
       return { valid: false, error: 'Invalid breakdowns', error_code: 'invalid_breakdowns' }
     }
     for (const rawBreakdown of rawSnap.breakdowns) {
-      if (!isObject(rawBreakdown) || !validateBreakdownShape(rawBreakdown)) {
-        return { valid: false, error: 'Invalid breakdown', error_code: 'invalid_breakdowns' }
+      const shapeError = isObject(rawBreakdown) ? getBreakdownShapeError(rawBreakdown) : 'not_an_object'
+      if (shapeError) {
+        const detail = isObject(rawBreakdown) ? `reason=${shapeError} scope=${rawBreakdown.scope_type} tool=${JSON.stringify(rawBreakdown.tool)} model=${JSON.stringify(rawBreakdown.model)} total=${rawBreakdown.total_tokens} sum=${Number(rawBreakdown.input_tokens||0)+Number(rawBreakdown.output_tokens||0)+Number(rawBreakdown.cache_read_tokens||0)+Number(rawBreakdown.cache_write_tokens||0)+Number(rawBreakdown.thinking_tokens||0)}` : 'not an object'
+        return { valid: false, error: `Invalid breakdown: ${detail}`, error_code: 'invalid_breakdowns' }
       }
     }
 
@@ -474,16 +482,7 @@ async function assessRisk(
   deviceId: string,
   snapshot: UploadSnapshot
 ): Promise<RiskAssessment> {
-  // Rule 1: Token anomaly — single snapshot total > 100M tokens
-  if (snapshot.total_tokens > 100_000_000) {
-    return {
-      status: 'flagged',
-      reasonCode: 'token_anomaly',
-      reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) exceeds 100M threshold`
-    }
-  }
-
-  // Rule 2: Breakdown consistency — all-scope total must equal sum of breakdowns
+  // Rule 1: Breakdown consistency — all-scope total must equal sum of breakdowns
   const allBd = snapshot.breakdowns.find(b => b.scope_type === 'all')
   if (allBd) {
     const toolModelTotal = snapshot.breakdowns
@@ -498,7 +497,7 @@ async function assessRisk(
     }
   }
 
-  // Rule 3: Unknown model ratio — >80% of tokens from unknown models in cost breakdown
+  // Rule 2: Unknown model ratio — >80% of tokens from unknown models in cost breakdown
   const { unknownModels } = buildCostMap(snapshot)
   if (unknownModels.size > 0) {
     const toolModelBds = snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')
@@ -515,7 +514,7 @@ async function assessRisk(
     }
   }
 
-  // Rule 4: Repeat uploads — same device uploaded same period > 5 times in 24h
+  // Rule 3: Repeat uploads — same device uploaded same period > 5 times in 24h
   const repeatCount = await tx`
     SELECT COUNT(*) as cnt FROM upload_snapshots
     WHERE device_id = ${deviceId}
@@ -531,7 +530,7 @@ async function assessRisk(
     }
   }
 
-  // Rule 5: Massive growth — total_tokens > 10x user's historical average for this period type
+  // Rule 4: Massive growth — total_tokens > 10x user's historical average for this period type
   const userAvg = await tx`
     SELECT COALESCE(AVG(total_tokens), 0) as avg_tokens FROM upload_snapshots
     WHERE user_id = ${userId}
@@ -659,6 +658,8 @@ export async function processUpload(
             updated_at = NOW()
         `
       }
+
+      invalidateLeaderboardCache()
     }
 
     // Update request status if any snapshot was flagged

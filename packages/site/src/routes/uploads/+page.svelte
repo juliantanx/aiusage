@@ -11,6 +11,18 @@
   let loading = true
   let error = ''
 
+  const periodOrder = ['daily', 'weekly', 'monthly', 'yearly', 'all_time']
+
+  $: groupedUploads = (() => {
+    const groups = new Map()
+    for (const snap of uploads) {
+      const key = snap.period_type
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(snap)
+    }
+    return periodOrder.filter(p => groups.has(p)).map(p => ({ type: p, items: groups.get(p) }))
+  })()
+
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
     return match ? match[1] : ''
@@ -85,19 +97,6 @@
 
 <div class="uploads-page">
   <div class="uploads-container">
-    <header class="page-header">
-      <div>
-        <p class="eyebrow">{zh ? '排行榜' : 'Leaderboard'}</p>
-        <h1>{zh ? '上传状态' : 'Upload Status'}</h1>
-        <p class="header-desc">
-          {zh
-            ? '管理已授权 CLI 设备，查看近期上传状态和审核结果。'
-            : 'Manage authorized CLI devices and review recent upload results.'}
-        </p>
-      </div>
-      <a href="/leaderboard" class="btn secondary">{zh ? '查看排行榜' : 'View leaderboard'}</a>
-    </header>
-
     {#if !user}
       <section class="empty-panel">
         <h2>{zh ? '需要登录' : 'Sign in required'}</h2>
@@ -114,7 +113,7 @@
         <p class="section-desc">{zh ? '这些设备可以向公开排行榜提交聚合 Token 总量。' : 'These devices can submit aggregate token totals to the public leaderboard.'}</p>
 
         {#if devices.length === 0}
-          <p class="muted">{zh ? '暂无已授权设备。运行' : 'No devices authorized yet. Run'} <code>aiusage login</code> {zh ? '来授权设备。' : 'to authorize a device.'}</p>
+          <p class="muted">{zh ? '暂无已授权设备。运行' : 'No devices authorized yet. Run'} <code>npx @juliantanx/aiusage login</code> {zh ? '来授权设备。' : 'to authorize a device.'}</p>
         {:else}
           <div class="device-list">
             {#each devices as device}
@@ -150,22 +149,26 @@
         <p class="section-desc">{zh ? '最近 100 条上传快照及其审核状态。' : 'The latest 100 upload snapshots and review states.'}</p>
 
         {#if uploads.length === 0}
-          <p class="muted">{zh ? '暂无上传记录。运行' : 'No uploads yet. Run'} <code>aiusage upload</code> {zh ? '提交快照。' : 'to submit snapshots.'}</p>
+          <p class="muted">{zh ? '暂无上传记录。运行' : 'No uploads yet. Run'} <code>npx @juliantanx/aiusage upload</code> {zh ? '提交快照。' : 'to submit snapshots.'}</p>
         {:else}
-          <div class="upload-list">
-            {#each uploads as snap}
-              <div class="upload-row">
-                <span class="upload-period">{periodLabel(snap.period_type)}</span>
-                <span class="upload-tokens">{Number(snap.total_tokens).toLocaleString()} tokens</span>
-                <span class="upload-device">{snap.device_name}</span>
-                <span class="upload-date">{formatDate(snap.created_at)}</span>
-                <span class="upload-status status-{snap.status}">{snap.status}</span>
-                {#if snap.reason_message}
-                  <span class="upload-reason">{snap.reason_message}</span>
-                {/if}
+          {#each groupedUploads as group}
+            <div class="period-group">
+              <h3 class="period-group-title">{periodLabel(group.type)}</h3>
+              <div class="upload-list">
+                {#each group.items as snap}
+                  <div class="upload-row">
+                    <span class="upload-tokens">{Number(snap.total_tokens).toLocaleString()} tokens</span>
+                    <span class="upload-device">{snap.device_name}</span>
+                    <span class="upload-date">{formatDate(snap.created_at)}</span>
+                    <span class="upload-status status-{snap.status}">{snap.status}</span>
+                    {#if snap.reason_message}
+                      <span class="upload-reason">{snap.reason_message}</span>
+                    {/if}
+                  </div>
+                {/each}
               </div>
-            {/each}
-          </div>
+            </div>
+          {/each}
         {/if}
       </section>
     {/if}
@@ -173,12 +176,8 @@
 </div>
 
 <style>
-  .uploads-page { padding: 40px 0 64px; }
+  .uploads-page { padding: 24px 0 64px; }
   .uploads-container { width: min(var(--content-width), 960px); margin: 0 auto; }
-  .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 32px; }
-  .eyebrow { margin: 0 0 6px; color: var(--text-muted); font-size: 0.6875rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
-  h1 { margin: 0; font-size: 2rem; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; }
-  .header-desc { max-width: 58ch; margin: 10px 0 0; color: var(--text-muted); font-size: 0.875rem; line-height: 1.5; }
   .uploads-section { margin-bottom: 40px; }
   .uploads-section h2, .empty-panel h2 { margin: 0 0 6px; font-size: 1.125rem; font-weight: 650; }
   .section-desc, .muted, .empty-panel p { color: var(--text-muted); font-size: 0.875rem; line-height: 1.5; }
@@ -202,17 +201,17 @@
   .status-flagged { background: var(--amber-dim); color: var(--amber); }
   .btn-revoke { margin-top: 14px; font-size: 0.8125rem; font-weight: 650; color: var(--rose); background: transparent; border: 1px solid var(--rose); border-radius: 6px; padding: 0.375rem 0.875rem; cursor: pointer; transition: background 0.15s; }
   .btn-revoke:hover { background: var(--rose-dim); }
+  .period-group { margin-bottom: 24px; }
+  .period-group:last-child { margin-bottom: 0; }
+  .period-group-title { font-size: 0.875rem; font-weight: 650; color: var(--text-secondary); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle); }
   .upload-list { display: flex; flex-direction: column; gap: 8px; }
-  .upload-row { display: grid; grid-template-columns: 92px minmax(150px, 1fr) minmax(120px, 0.8fr) minmax(150px, 0.9fr) auto; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 0.875rem; }
-  .upload-period { font-weight: 650; }
+  .upload-row { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(120px, 0.8fr) minmax(150px, 0.9fr) auto; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 0.875rem; }
   .upload-tokens { font-family: var(--mono); }
   .upload-device, .upload-date, .upload-reason { color: var(--text-muted); font-size: 0.8125rem; }
   .upload-reason { grid-column: 2 / -1; }
   code { font-family: var(--mono); font-size: 0.8125rem; }
 
   @media (max-width: 760px) {
-    .page-header { display: block; }
-    .page-header .btn { margin-top: 16px; }
     .upload-row { grid-template-columns: 1fr auto; }
     .upload-tokens, .upload-device, .upload-date, .upload-reason { grid-column: 1 / -1; }
   }
