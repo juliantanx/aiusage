@@ -45,11 +45,21 @@ Your AI coding tools each log usage separately — different formats, different 
 
 ## Public Leaderboard
 
-AIUsage includes a public token leaderboard for users who choose to share aggregate totals.
+AIUsage includes a public leaderboard for users who choose to share aggregate totals. Ranking supports both **token totals** and **cost**, with filtering by tool and model.
 
-- Anyone can view the leaderboard at [aiusage.jtanx.com/leaderboard](https://aiusage.jtanx.com/leaderboard) or from the CLI with `aiusage rank`.
-- Uploading requires an account and an authorized CLI device: `aiusage login`, then `aiusage upload`.
-- Leaderboard uploads contain aggregate token totals for leaderboard periods. They do not include prompts, completions, source code, file paths, model breakdowns, project data, or local cost estimates.
+- View the leaderboard at [aiusage.jtanx.com/leaderboard](https://aiusage.jtanx.com/leaderboard) or from the CLI with `aiusage leaderboard`.
+- Upload requires an account and an authorized CLI device: `aiusage login`, then `aiusage upload`.
+- Leaderboard uploads contain aggregate token totals for ranking periods. They do not include prompts, completions, source code, file paths, or local cost estimates.
+- Anonymous mode is available in [/settings](https://aiusage.jtanx.com/settings) to hide your identity on the leaderboard.
+
+## Site Account
+
+The official site at [aiusage.jtanx.com](https://aiusage.jtanx.com) provides an account system for leaderboard participation:
+
+- **Login**: Password, GitHub OAuth, or LINUX DO OAuth
+- **Profile** ([/settings](https://aiusage.jtanx.com/settings)): Username (30-day cooldown), display name, avatar, password, leaderboard visibility, anonymous mode
+- **Upload Status** ([/uploads](https://aiusage.jtanx.com/uploads)): View upload history, manage authorized devices
+- **Admin Dashboard** ([/admin](https://aiusage.jtanx.com/admin)): Upload moderation, user management, pricing tables, audit logs (admin role required)
 
 Responsibility split:
 

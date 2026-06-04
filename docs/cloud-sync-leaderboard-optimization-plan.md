@@ -148,7 +148,7 @@ leaderboard_metrics.pricing_version = 榜单 cost 使用的价格版本
 
 ```text
 records
-synced_records
+synced_records（含 source_file、cwd 字段，支持跨设备项目统计）
 tool_calls
 sync_tombstones
 ```
@@ -1403,7 +1403,7 @@ admin_audit_logs
 
 ## 13. 实施计划
 
-### 阶段 1：稳定公开榜单 v1
+### 阶段 1：稳定公开榜单 v1 ✅ 已完成
 
 目标：
 
@@ -1418,7 +1418,7 @@ admin_audit_logs
 
 - `aiusage upload` 能上传 daily/weekly/monthly/yearly/all_time。
 - Web leaderboard 支持 tokens/cost、all/tool/model/tool_model。
-- `rank` 不作为命令名。
+- `leaderboard` 为正式命令名（非 `rank`）。
 - 价格由服务端系统内置价格表计算。
 - 管理员可以查看 flagged uploads、approve/reject/hide snapshot、hide/restore metric。
 - 管理员所有写操作都有 audit log。
@@ -1428,6 +1428,20 @@ admin_audit_logs
 - 匿名榜单不会暴露真实 `user_id`、avatar 或 profile URL。
 - `leaderboard_metrics` 写入明确 `pricing_version`。
 - unknown model 不静默按 0 成本参与 cost leaderboard。
+
+实现状态（v1.4.0）：
+
+- 所有验收标准已满足。
+- `leaderboard_metrics` 支持 scope_type（all/tool/model/tool_model）、tool、model、pricing_version 字段。
+- 上传流程包含 HMAC 签名校验、schema 校验、hash 校验、period 校验、breakdown 一致性校验。
+- 管理后台支持 4 个标签页：上传审核、用户管理、定价表管理、审计日志。
+- 官方定价表支持 draft → published → archived 生命周期。
+- 匿名模式通过 `users.leaderboard_anonymous` 字段实现。
+- `has_unknown_cost` 标记未知模型不按 0 成本参与费用排名。
+- 站点账号支持密码注册、GitHub OAuth、LINUX DO OAuth。
+- 设备授权支持 code-based 流程和 web 批准页面。
+- `/uploads` 页面支持设备管理和上传历史查看。
+- `synced_records` 表已扩展 `source_file` 和 `cwd` 字段，支持跨设备项目统计。
 
 ### 阶段 2：官方同步最小可用版
 

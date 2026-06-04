@@ -72,7 +72,15 @@
         { id: 'widget-tray', en: 'Tray Icon', zh: '托盘图标' },
       ]
     },
-    { id: 'leaderboard', en: 'Public Leaderboard', zh: '公开排行榜', children: [] },
+    { id: 'account', en: 'Site Account', zh: '站点账号', children: [] },
+    { id: 'leaderboard', en: 'Public Leaderboard', zh: '公开排行榜',
+      children: [
+        { id: 'lb-view', en: 'Viewing & Filtering', zh: '查看与筛选' },
+        { id: 'lb-upload', en: 'Upload Flow', zh: '上传流程' },
+        { id: 'lb-anonymous', en: 'Anonymous Mode', zh: '匿名模式' },
+      ]
+    },
+    { id: 'uploads-page', en: 'Upload Status', zh: '上传状态', children: [] },
     { id: 'cli', en: 'CLI Reference', zh: 'CLI 命令',
       children: [
         { id: 'cli-parse', en: 'parse', zh: 'parse' },
@@ -898,39 +906,110 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </Callout>
     </section>
 
-    <!-- ══════ CLI Reference ══════ -->
-    <section id="leaderboard">
+    <!-- ══════ Site Account ══════ -->
+    <section id="account">
       <div class="sec-head">
         <span class="sec-idx">16</span>
+        <h2>{zh ? '站点账号' : 'Site Account'}</h2>
+      </div>
+      <p>{zh
+        ? 'AIUsage 官方站点（aiusage.jtanx.com）提供账号系统，用于排行榜上传、设备授权和个人资料管理。注册和登录支持密码和第三方 OAuth。'
+        : 'The AIUsage official site (aiusage.jtanx.com) provides an account system for leaderboard uploads, device authorization, and profile management. Registration and login support both password and third-party OAuth.'
+      }</p>
+      <h3>{zh ? '注册与登录' : 'Registration & Login'}</h3>
+      <ul>
+        <li><strong>{zh ? '密码注册' : 'Password'}</strong> — {zh ? '使用邮箱和密码注册' : 'Register with email and password'}</li>
+        <li><strong>GitHub OAuth</strong> — {zh ? '通过 GitHub 账号授权登录' : 'Sign in with your GitHub account'}</li>
+        <li><strong>LINUX DO OAuth</strong> — {zh ? '通过 LINUX DO 社区账号授权登录' : 'Sign in with your LINUX DO community account'}</li>
+      </ul>
+      <h3>{zh ? '个人设置' : 'Profile Settings'}</h3>
+      <p>{zh
+        ? '登录后可在 /settings 页面管理个人资料：'
+        : 'After login, manage your profile at /settings:'
+      }</p>
+      <ul>
+        <li><strong>{zh ? '用户名' : 'Username'}</strong> — {zh ? '修改用户名（30 天冷却期）' : 'Change username (30-day cooldown)'}</li>
+        <li><strong>{zh ? '显示名称' : 'Display Name'}</strong> — {zh ? '设置公开显示名称' : 'Set your public display name'}</li>
+        <li><strong>{zh ? '头像' : 'Avatar'}</strong> — {zh ? '上传或移除头像' : 'Upload or remove avatar'}</li>
+        <li><strong>{zh ? '密码' : 'Password'}</strong> — {zh ? '设置或修改密码' : 'Set or change password'}</li>
+        <li><strong>{zh ? '排行榜可见性' : 'Leaderboard Visibility'}</strong> — {zh ? '公开或私有' : 'Public or private'}</li>
+        <li><strong>{zh ? '匿名模式' : 'Anonymous Mode'}</strong> — {zh ? '在排行榜上隐藏用户名和头像' : 'Hide username and avatar on the leaderboard'}</li>
+      </ul>
+    </section>
+
+    <!-- ══════ Public Leaderboard ══════ -->
+    <section id="leaderboard">
+      <div class="sec-head">
+        <span class="sec-idx">17</span>
         <h2>{zh ? '公开排行榜' : 'Public Leaderboard'}</h2>
       </div>
       <p>{zh
-        ? '公开排行榜用于展示用户主动提交的聚合 Token 总量。查看排行榜不需要登录；上传数据需要登录并授权 CLI 设备。'
-        : 'The public leaderboard shows aggregate token totals submitted by users who opt in. Viewing does not require sign-in; uploading requires an account and an authorized CLI device.'
+        ? '公开排行榜用于展示用户主动提交的聚合数据。支持按 Token 总量或费用排名，可按工具和模型维度细分。查看不需要登录；上传需要登录并授权 CLI 设备。'
+        : 'The public leaderboard displays aggregate data submitted by users who opt in. It supports ranking by total tokens or cost, with breakdowns by tool and model. Viewing does not require sign-in; uploading requires an account and an authorized CLI device.'
+      }</p>
+    </section>
+
+    <section id="lb-view">
+      <h3>{zh ? '查看与筛选' : 'Viewing & Filtering'}</h3>
+      <p>{zh
+        ? '站点排行榜和 CLI 都支持以下筛选维度：'
+        : 'Both the site leaderboard and CLI support these filter dimensions:'
       }</p>
       <ul>
-        <li>{zh ? '站点地址：' : 'Site: '}<a href="/leaderboard">/leaderboard</a></li>
-        <li>{zh ? '终端查看：' : 'CLI view: '}<code>aiusage rank</code></li>
-        <li>{zh ? '上传流程：' : 'Upload flow: '}<code>aiusage login</code> → <code>aiusage upload</code></li>
+        <li><strong>{zh ? '周期' : 'Period'}</strong> — daily, weekly, monthly, yearly, all_time</li>
+        <li><strong>{zh ? '指标' : 'Metric'}</strong> — {zh ? 'Token 总量或费用' : 'Total tokens or cost'}</li>
+        <li><strong>{zh ? '范围' : 'Scope'}</strong> — all（总榜）、tool（按工具）、model（按模型）、tool_model（工具+模型）</li>
+        <li><strong>{zh ? '工具筛选' : 'Tool filter'}</strong> — {zh ? '指定工具名（如 claude-code）' : 'Specific tool name (e.g. claude-code)'}</li>
+        <li><strong>{zh ? '模型筛选' : 'Model filter'}</strong> — {zh ? '指定模型名（如 claude-sonnet-4-6）' : 'Specific model name (e.g. claude-sonnet-4-6)'}</li>
+      </ul>
+    </section>
+
+    <section id="lb-upload">
+      <h3>{zh ? '上传流程' : 'Upload Flow'}</h3>
+      <ul>
+        <li><code>aiusage login</code> — {zh ? '授权当前 CLI 设备' : 'Authorize this CLI device'}</li>
+        <li><code>aiusage upload</code> — {zh ? '上传聚合快照（HMAC 签名）' : 'Upload aggregate snapshots (HMAC signed)'}</li>
+        <li><code>aiusage upload-status</code> — {zh ? '查看上传状态和审核结果' : 'View upload status and review results'}</li>
+        <li>{zh ? '站点管理：' : 'Site management: '}<a href="/uploads">/uploads</a> — {zh ? '查看上传历史、管理授权设备' : 'View upload history and manage authorized devices'}</li>
       </ul>
       <p>{zh
-        ? '上传内容仅包含排名周期内的聚合 Token 总量和必要元数据，不包含 prompt、completion、源码、文件路径、模型分布、项目数据或本地费用估算。'
-        : 'Uploads contain only aggregate token totals for ranking periods plus required metadata. They do not include prompts, completions, source code, file paths, model breakdowns, project data, or local cost estimates.'
+        ? '上传内容仅包含排名周期内的聚合 Token 总量和必要元数据，不包含 prompt、completion、源码、文件路径或本地费用估算。'
+        : 'Uploads contain only aggregate token totals for ranking periods plus required metadata. They do not include prompts, completions, source code, file paths, or local cost estimates.'
       }</p>
+    </section>
+
+    <section id="lb-anonymous">
+      <h3>{zh ? '匿名模式' : 'Anonymous Mode'}</h3>
       <p>{zh
-        ? '职责边界：CLI 负责本地解析、授权和签名上传；站点负责公开浏览、账号资料、授权设备、上传状态和管理员治理。'
-        : 'Responsibility split: the CLI handles local parsing, authorization, and signed uploads; the site handles public browsing, profiles, authorized devices, upload status, and moderation.'
+        ? '在 /settings 中开启匿名模式后，排行榜上你的用户名和头像将被隐藏，但仍会计入排名。适合希望参与排行但不想公开身份的用户。'
+        : 'Enable anonymous mode in /settings to hide your username and avatar on the leaderboard while still being counted in rankings. Ideal for users who want to participate without revealing their identity.'
       }</p>
+    </section>
+
+    <!-- ══════ Upload Status Page ══════ -->
+    <section id="uploads-page">
+      <div class="sec-head">
+        <span class="sec-idx">18</span>
+        <h2>{zh ? '上传状态' : 'Upload Status'}</h2>
+      </div>
+      <p>{zh
+        ? '登录后访问 /uploads 页面，可以管理授权设备和查看上传历史。'
+        : 'After login, visit /uploads to manage authorized devices and view upload history.'
+      }</p>
+      <ul>
+        <li><strong>{zh ? '授权设备' : 'Authorized Devices'}</strong> — {zh ? '查看设备名称、创建时间、最后上传时间、状态，可撤销设备授权' : 'View device name, creation date, last upload, status, and revoke device authorization'}</li>
+        <li><strong>{zh ? '上传历史' : 'Upload History'}</strong> — {zh ? '最近 100 条上传快照，包含周期类型、Token 总量、设备名、时间和审核状态（accepted/rejected/flagged）' : 'Latest 100 upload snapshots with period type, total tokens, device name, date, and review status (accepted/rejected/flagged)'}</li>
+      </ul>
     </section>
 
     <section id="cli">
       <div class="sec-head">
-        <span class="sec-idx">17</span>
+        <span class="sec-idx">19</span>
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
-        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、rank、login、upload、upload-status、logout、pm2-setup 和 pm2-start。'
-        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, rank, login, upload, upload-status, logout, pm2-setup, and pm2-start.'
+        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、leaderboard、login、upload、upload-status、logout、pm2-setup 和 pm2-start。'
+        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, leaderboard, login, upload, upload-status, logout, pm2-setup, and pm2-start.'
       }</p>
     </section>
 
@@ -1015,7 +1094,7 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     </section>
 
     <section id="cli-leaderboard">
-      <h3><code>rank</code> — {zh ? '公开榜单与上传' : 'Public Leaderboard and Uploads'}</h3>
+      <h3><code>leaderboard</code> — {zh ? '公开榜单与上传' : 'Public Leaderboard and Uploads'}</h3>
       <p>{zh
         ? '不带子命令时会查看公开排行榜。查看不需要登录；上传和上传状态查询需要先完成设备授权。'
         : 'Without a subcommand, this views the public leaderboard. Viewing does not require sign-in; uploads and upload status require device authorization first.'
@@ -1023,7 +1102,7 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       <DocsTable
         headers={zh ? ['命令', '说明'] : ['Command', 'Description']}
         rows={[
-          ['<code>rank</code>', zh ? '查看公开排行榜，默认 daily 周期，默认 20 行' : 'View the public leaderboard. Defaults to daily and 20 rows'],
+          ['<code>leaderboard</code>', zh ? '查看公开排行榜，默认 daily 周期，按 Token 排名，默认 20 行' : 'View the public leaderboard. Defaults to daily, tokens metric, 20 rows'],
           ['<code>login</code>', zh ? '授权当前 CLI 设备用于上传聚合总量' : 'Authorize this CLI device for aggregate uploads'],
           ['<code>upload</code>', zh ? '上传当前设备可见的聚合 Token 快照' : 'Upload aggregate token snapshots visible to this device'],
           ['<code>upload-status</code>', zh ? '查看自己的近期上传状态和审核结果' : 'Show your recent upload status and review results'],
@@ -1034,6 +1113,10 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
           ['<code>-p, --period &lt;period&gt;</code>', zh ? '查看周期：daily、weekly、monthly、yearly、all_time' : 'View period: daily, weekly, monthly, yearly, all_time'],
+          ['<code>-m, --metric &lt;metric&gt;</code>', zh ? '排名指标：tokens（Token 总量）或 cost（费用）' : 'Ranking metric: tokens (total tokens) or cost'],
+          ['<code>-s, --scope &lt;scope&gt;</code>', zh ? '排名范围：all（总榜）、tool（按工具）、model（按模型）、tool_model（工具+模型）' : 'Ranking scope: all, tool, model, tool_model'],
+          ['<code>--tool &lt;tool&gt;</code>', zh ? '按工具名筛选（如 claude-code）' : 'Filter by tool name (e.g. claude-code)'],
+          ['<code>--model &lt;model&gt;</code>', zh ? '按模型名筛选（如 claude-sonnet-4-6）' : 'Filter by model name (e.g. claude-sonnet-4-6)'],
           ['<code>-l, --limit &lt;n&gt;</code>', zh ? '显示行数，最大 50' : 'Number of rows to show, max 50'],
         ]}
       />
