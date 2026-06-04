@@ -36,7 +36,25 @@ export interface UploadSnapshot {
   period_start: string
   period_end: string
   total_tokens: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  thinking_tokens: number
+  breakdowns: UploadBreakdown[]
   token_snapshot_hash: string
+}
+
+export interface UploadBreakdown {
+  scope_type: 'all' | 'tool' | 'model' | 'tool_model'
+  tool: string | null
+  model: string | null
+  total_tokens: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  thinking_tokens: number
 }
 
 export interface UploadRequest {
@@ -76,7 +94,11 @@ export interface LeaderboardEntry {
   user_id: string
   display_name: string
   avatar_url: string | null
+  scope_type: string
+  tool: string | null
+  model: string | null
   total_tokens: string
+  total_cost_usd: string
   updated_at: string
 }
 
@@ -86,6 +108,10 @@ export interface LeaderboardResponse {
   current_user: LeaderboardEntry | null
   period_type: string
   period_start: string
+  metric: string
+  scope: string
+  tool: string | null
+  model: string | null
 }
 
 export class LeaderboardApiError extends Error {
@@ -111,10 +137,14 @@ function endpointUnavailableMessage(path: string, status: number): string {
 
 export async function fetchLeaderboard(
   serverUrl: string,
-  options: { period_type?: string; cursor?: string } = {}
+  options: { period_type?: string; metric?: string; scope?: string; tool?: string; model?: string; cursor?: string } = {}
 ): Promise<LeaderboardResponse> {
   const params = new URLSearchParams()
   if (options.period_type) params.set('period_type', options.period_type)
+  if (options.metric) params.set('metric', options.metric)
+  if (options.scope) params.set('scope', options.scope)
+  if (options.tool) params.set('tool', options.tool)
+  if (options.model) params.set('model', options.model)
   if (options.cursor) params.set('cursor', options.cursor)
 
   const query = params.toString()
@@ -134,6 +164,10 @@ export async function fetchLeaderboard(
       current_user: null,
       period_type: options.period_type || 'daily',
       period_start: new Date().toISOString().slice(0, 10),
+      metric: options.metric || 'tokens',
+      scope: options.scope || 'all',
+      tool: options.tool || null,
+      model: options.model || null,
     }
   }
 

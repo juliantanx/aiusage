@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte'
+  import { page } from '$app/stores'
   import { lang } from '$lib/lang'
 
   const periods = [
@@ -10,15 +11,33 @@
     { key: 'all_time', zh: '累计', en: 'All time' }
   ]
 
+  const metrics = [
+    { key: 'tokens', zh: 'Token', en: 'Tokens' },
+    { key: 'cost', zh: '费用', en: 'Cost' }
+  ]
+
+  const scopes = [
+    { key: 'all', zh: '总榜', en: 'Overall' },
+    { key: 'tool', zh: '工具', en: 'Tool' },
+    { key: 'model', zh: '模型', en: 'Model' },
+    { key: 'tool_model', zh: '工具 + 模型', en: 'Tool + model' }
+  ]
+
   let activePeriod = 'daily'
+  let activeMetric = 'tokens'
+  let activeScope = 'all'
+  let toolFilter = ''
+  let modelFilter = ''
   let data = null
   let loading = true
   let loadingMore = false
   let error = ''
 
   $: zh = $lang === 'zh'
+  $: user = $page.data.user
   $: rows = data?.entries || []
   $: leaders = rows.slice(0, 3)
+  $: valueLabel = activeMetric === 'cost' ? (zh ? '费用' : 'Cost') : 'Tokens'
 
   function periodLabel(key) {
     const period = periods.find(p => p.key === key)
@@ -37,6 +56,26 @@
   function formatFullTokens(n) {
     const num = Number(n)
     return Number.isFinite(num) ? num.toLocaleString() : '0'
+  }
+
+  function formatCost(n) {
+    const num = Number(n)
+    return Number.isFinite(num) ? '$' + num.toFixed(4) : '$0.0000'
+  }
+
+  function formatValue(entry) {
+    return activeMetric === 'cost' ? formatCost(entry.total_cost_usd) : formatTokens(entry.total_tokens)
+  }
+
+  function formatFullValue(entry) {
+    return activeMetric === 'cost' ? formatCost(entry.total_cost_usd) : formatFullTokens(entry.total_tokens)
+  }
+
+  function scopeValue(entry) {
+    if (entry.scope_type === 'tool') return entry.tool || '-'
+    if (entry.scope_type === 'model') return entry.model || '-'
+    if (entry.scope_type === 'tool_model') return `${entry.tool || '-'} / ${entry.model || '-'}`
+    return zh ? '全部' : 'All'
   }
 
   function formatDate(iso) {
@@ -65,7 +104,13 @@
     error = ''
 
     try {
-      const params = new URLSearchParams({ period_type: activePeriod })
+      const params = new URLSearchParams({
+        period_type: activePeriod,
+        metric: activeMetric,
+        scope: activeScope
+      })
+      if ((activeScope === 'tool' || activeScope === 'tool_model') && toolFilter.trim()) params.set('tool', toolFilter.trim())
+      if ((activeScope === 'model' || activeScope === 'tool_model') && modelFilter.trim()) params.set('model', modelFilter.trim())
       if (cursor) params.set('cursor', cursor)
       const res = await fetch(`/api/leaderboard?${params}`)
       if (!res.ok) throw new Error('Failed to load')
@@ -84,6 +129,10 @@
   function switchPeriod(period) {
     if (activePeriod === period || loading) return
     activePeriod = period
+    loadLeaderboard()
+  }
+
+  function reloadRanking() {
     loadLeaderboard()
   }
 
@@ -106,24 +155,61 @@
         <h1>{zh ? 'AIUsage 排行榜' : 'AIUsage Leaderboard'}</h1>
       </div>
       <div class="header-actions">
-        <a href="/settings" class="btn secondary">{zh ? '上传状态' : 'Upload status'}</a>
-        <a href="/login" class="btn primary">{zh ? '登录上传' : 'Sign in to upload'}</a>
+        {#if user}
+          <a href="/uploads" class="btn secondary">{zh ? '上传状态' : 'Upload status'}</a>
+        {:else}
+          <a href="/login" class="btn primary">{zh ? '登录上传' : 'Sign in to upload'}</a>
+        {/if}
       </div>
     </header>
 
-    <div class="toolbar" aria-label={zh ? '周期选择' : 'Period selector'}>
-      {#each periods as p}
-        <button class="period-tab" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
-          {zh ? p.zh : p.en}
-        </button>
-      {/each}
+    <div class="ranking-controls">
+      <div class="toolbar" aria-label={zh ? '周期选择' : 'Period selector'}>
+        {#each periods as p}
+          <button class="period-tab" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
+            {zh ? p.zh : p.en}
+          </button>
+        {/each}
+      </div>
+
+      <label class="control">
+        <span>{zh ? '指标' : 'Metric'}</span>
+        <select bind:value={activeMetric} on:change={reloadRanking}>
+          {#each metrics as metric}
+            <option value={metric.key}>{zh ? metric.zh : metric.en}</option>
+          {/each}
+        </select>
+      </label>
+
+      <label class="control">
+        <span>{zh ? '范围' : 'Scope'}</span>
+        <select bind:value={activeScope} on:change={reloadRanking}>
+          {#each scopes as scope}
+            <option value={scope.key}>{zh ? scope.zh : scope.en}</option>
+          {/each}
+        </select>
+      </label>
+
+      {#if activeScope === 'tool' || activeScope === 'tool_model'}
+        <label class="control filter">
+          <span>{zh ? '工具' : 'Tool'}</span>
+          <input bind:value={toolFilter} on:change={reloadRanking} placeholder={zh ? '可选' : 'Optional'} />
+        </label>
+      {/if}
+
+      {#if activeScope === 'model' || activeScope === 'tool_model'}
+        <label class="control filter">
+          <span>{zh ? '模型' : 'Model'}</span>
+          <input bind:value={modelFilter} on:change={reloadRanking} placeholder={zh ? '可选' : 'Optional'} />
+        </label>
+      {/if}
     </div>
 
     {#if data?.current_user}
       <div class="me-row">
         <span class="me-rank">#{data.current_user.rank}</span>
         <span class="me-name">{data.current_user.display_name}</span>
-        <span class="me-tokens">{formatFullTokens(data.current_user.total_tokens)} tokens</span>
+        <span class="me-tokens">{formatFullValue(data.current_user)} {activeMetric === 'tokens' ? 'tokens' : ''}</span>
       </div>
     {/if}
 
@@ -138,7 +224,7 @@
               <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
             {/if}
             <span class="leader-name">{entry.display_name}</span>
-            <span class="leader-tokens">{formatTokens(entry.total_tokens)}</span>
+            <span class="leader-tokens">{formatValue(entry)}</span>
           </div>
         {/each}
       </div>
@@ -147,6 +233,8 @@
     <div class="table-wrap">
       <div class="table-meta">
         <span>{periodLabel(activePeriod)}</span>
+        <span>{valueLabel}</span>
+        <span>{scopes.find(s => s.key === activeScope)?.[zh ? 'zh' : 'en']}</span>
         {#if data?.period_start}
           <span>{zh ? '周期开始' : 'Period start'}: {formatDate(data.period_start)}</span>
         {/if}
@@ -161,14 +249,17 @@
         <div class="state">{zh ? '暂无公开数据。' : 'No public entries yet.'}</div>
       {:else}
         <div class="lb-table" role="table" aria-label={zh ? 'Token 排行榜' : 'Token leaderboard'}>
-          <div class="lb-row header" role="row">
+          <div class="lb-row header" class:has-scope={activeScope !== 'all'} role="row">
             <span class="col-rank" role="columnheader">#</span>
             <span class="col-user" role="columnheader">{zh ? '用户' : 'User'}</span>
-            <span class="col-tokens" role="columnheader">Tokens</span>
+            {#if activeScope !== 'all'}
+              <span class="col-scope" role="columnheader">{zh ? '范围' : 'Scope'}</span>
+            {/if}
+            <span class="col-tokens" role="columnheader">{valueLabel}</span>
             <span class="col-updated" role="columnheader">{zh ? '更新' : 'Updated'}</span>
           </div>
           {#each rows as entry}
-            <div class="lb-row" class:top={entry.rank <= 3} role="row">
+            <div class="lb-row" class:top={entry.rank <= 3} class:has-scope={activeScope !== 'all'} role="row">
               <span class="col-rank" role="cell">#{entry.rank}</span>
               <span class="col-user" role="cell">
                 {#if entry.avatar_url}
@@ -178,8 +269,11 @@
                 {/if}
                 <span class="user-name">{entry.display_name}</span>
               </span>
-              <span class="col-tokens" role="cell" title={formatFullTokens(entry.total_tokens)}>
-                {formatTokens(entry.total_tokens)}
+              {#if activeScope !== 'all'}
+                <span class="col-scope" role="cell" title={scopeValue(entry)}>{scopeValue(entry)}</span>
+              {/if}
+              <span class="col-tokens" role="cell" title={formatFullValue(entry)}>
+                {formatValue(entry)}
               </span>
               <span class="col-updated" role="cell">{formatDate(entry.updated_at)}</span>
             </div>
@@ -262,6 +356,44 @@
     border-radius: 8px;
     background: var(--raised);
     overflow-x: auto;
+  }
+
+  .ranking-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .ranking-controls .toolbar { margin-bottom: 0; }
+  .control {
+    display: grid;
+    gap: 4px;
+    min-width: 120px;
+  }
+  .control.filter { min-width: 170px; }
+  .control span {
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .control select,
+  .control input {
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8125rem;
+  }
+  .control select:focus,
+  .control input:focus {
+    outline: none;
+    border-color: var(--accent);
   }
 
   .period-tab {
@@ -356,6 +488,7 @@
     padding: 0 16px;
     border-bottom: 1px solid var(--border-subtle);
   }
+  .lb-row.has-scope { grid-template-columns: 72px minmax(0, 1fr) minmax(140px, 220px) 144px 144px; }
   .lb-row:last-child { border-bottom: 0; }
   .lb-row:not(.header):hover { background: var(--raised); }
   .lb-row.top { background: oklch(0.55 0.12 175 / 0.035); }
@@ -373,6 +506,7 @@
   .col-rank { color: var(--text-secondary); font-weight: 650; }
   .col-user { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
   .user-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col-scope { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.8125rem; }
   .col-tokens { text-align: right; font-weight: 650; }
   .col-updated { color: var(--text-muted); text-align: right; font-size: 0.8125rem; }
 
@@ -439,8 +573,13 @@
     .lb-header { align-items: flex-start; flex-direction: column; }
     .header-actions { justify-content: flex-start; }
     .leaders { grid-template-columns: 1fr; }
+    .ranking-controls { align-items: stretch; }
+    .toolbar { width: 100%; }
+    .control, .control.filter { min-width: min(100%, 160px); flex: 1 1 150px; }
     .table-meta { flex-wrap: wrap; gap: 8px 14px; }
     .lb-row { grid-template-columns: 52px minmax(0, 1fr) 92px; padding: 0 12px; }
+    .lb-row.has-scope { grid-template-columns: 52px minmax(0, 1fr) 92px; }
+    .col-scope { display: none; }
     .col-updated { display: none; }
     .me-row { grid-template-columns: 56px 1fr; }
     .me-tokens { grid-column: 2; }

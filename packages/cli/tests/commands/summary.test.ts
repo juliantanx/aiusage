@@ -174,6 +174,73 @@ describe('Summary Command', () => {
     expect(Object.keys(summary.byTool)).toEqual(['opencode'])
   })
 
+  it('filters all-device summary by timestamp range', () => {
+    const startTs = Date.parse('2026-06-01T00:00:00.000Z')
+    const endTs = Date.parse('2026-06-30T23:59:59.999Z')
+
+    insertRecord(db, createTestRecord({
+      id: 'local-in-period',
+      ts: Date.parse('2026-06-04T12:00:00.000Z'),
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheWriteTokens: 0,
+      cost: 0.001,
+    }))
+    insertRecord(db, createTestRecord({
+      id: 'local-out-of-period',
+      ts: Date.parse('2026-05-31T23:59:59.999Z'),
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheWriteTokens: 0,
+      cost: 0.01,
+    }))
+    insertSyncedRecord(db, {
+      id: 'synced-in-period',
+      ts: Date.parse('2026-06-10T08:00:00.000Z'),
+      tool: 'codex',
+      model: 'gpt-4',
+      provider: 'openai',
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.002,
+      costSource: 'pricing',
+      sessionKey: 'sk1',
+      device: 'remote-device',
+      deviceInstanceId: 'remote-uuid',
+      updatedAt: Date.now(),
+    })
+    insertSyncedRecord(db, {
+      id: 'synced-out-of-period',
+      ts: Date.parse('2026-07-01T00:00:00.000Z'),
+      tool: 'codex',
+      model: 'gpt-4',
+      provider: 'openai',
+      inputTokens: 2000,
+      outputTokens: 1000,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost: 0.02,
+      costSource: 'pricing',
+      sessionKey: 'sk2',
+      device: 'remote-device',
+      deviceInstanceId: 'remote-uuid',
+      updatedAt: Date.now(),
+    })
+
+    const summary = generateSummary(db, {
+      currentDeviceInstanceId: 'device-123',
+      startTs,
+      endTs,
+    })
+
+    expect(summary.totalTokens).toBe(450)
+    expect(summary.recordCount).toBe(2)
+  })
+
   it('returns local-only data when no currentDeviceInstanceId', () => {
     insertRecord(db, createTestRecord({ id: 'local1', inputTokens: 100, outputTokens: 50, cacheWriteTokens: 0, cost: 0.001 }))
     insertSyncedRecord(db, {

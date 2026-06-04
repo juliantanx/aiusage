@@ -1,18 +1,37 @@
 import { sql } from '../db/pool.js'
 import { decryptDeviceSecret, sha256, buildCanonicalString, hashIp, computeHmac } from '../crypto/hmac.js'
+import { calculateDefaultCost } from '@aiusage/core'
 import { nanoid } from 'nanoid'
 import { createHmac } from 'node:crypto'
 
-const TIMESTAMP_WINDOW_MS = 5 * 60 * 1000 // 5 minutes
-const ALLOWED_PERIOD_TYPES = ['daily', 'weekly', 'monthly', 'yearly', 'all_time']
-const MAX_TOKENS_PER_SNAPSHOT = 100_000_000_000 // 100B
-const MAX_PAYLOAD_SIZE = 50_000 // 50KB
+const TIMESTAMP_WINDOW_MS = 5 * 60 * 1000
+const ALLOWED_PERIOD_TYPES = ['daily', 'weekly', 'monthly', 'yearly', 'all_time'] as const
+const ALLOWED_SCOPE_TYPES = ['all', 'tool', 'model', 'tool_model'] as const
+const MAX_PAYLOAD_SIZE = 1_000_000
 
-export interface UploadSnapshot {
-  period_type: string
+type PeriodType = (typeof ALLOWED_PERIOD_TYPES)[number]
+type ScopeType = (typeof ALLOWED_SCOPE_TYPES)[number]
+
+interface TokenTotals {
+  total_tokens: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  thinking_tokens: number
+}
+
+export interface UploadBreakdown extends TokenTotals {
+  scope_type: ScopeType
+  tool: string | null
+  model: string | null
+}
+
+export interface UploadSnapshot extends TokenTotals {
+  period_type: PeriodType
   period_start: string
   period_end: string
-  total_tokens: number
+  breakdowns: UploadBreakdown[]
   token_snapshot_hash: string
 }
 
@@ -38,53 +57,276 @@ export interface UploadResult {
   error_code?: string
 }
 
-const ALLOWED_FIELDS = new Set(['schema_version', 'client_version', 'client_platform', 'snapshots'])
-const ALLOWED_SNAPSHOT_FIELDS = new Set(['period_type', 'period_start', 'period_end', 'total_tokens', 'token_snapshot_hash'])
+const UPLOAD_FIELDS = new Set(['schema_version', 'client_version', 'client_platform', 'snapshots'])
+const SNAPSHOT_FIELDS = new Set([
+  'period_type',
+  'period_start',
+  'period_end',
+  'total_tokens',
+  'input_tokens',
+  'output_tokens',
+  'cache_read_tokens',
+  'cache_write_tokens',
+  'thinking_tokens',
+  'breakdowns',
+  'token_snapshot_hash',
+])
+const BREAKDOWN_FIELDS = new Set([
+  'scope_type',
+  'tool',
+  'model',
+  'total_tokens',
+  'input_tokens',
+  'output_tokens',
+  'cache_read_tokens',
+  'cache_write_tokens',
+  'thinking_tokens',
+])
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function validateAllowedFields(obj: Record<string, unknown>, allowed: Set<string>, errorCode: string): string | null {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) return `${errorCode}:${key}`
+  }
+  return null
+}
+
+function totalsFrom(value: TokenTotals): TokenTotals {
+  return {
+    total_tokens: value.total_tokens,
+    input_tokens: value.input_tokens,
+    output_tokens: value.output_tokens,
+    cache_read_tokens: value.cache_read_tokens,
+    cache_write_tokens: value.cache_write_tokens,
+    thinking_tokens: value.thinking_tokens,
+  }
+}
+
+function zeroTotals(): TokenTotals {
+  return {
+    total_tokens: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+    thinking_tokens: 0,
+  }
+}
+
+function addTotals(target: TokenTotals, source: TokenTotals): void {
+  target.input_tokens += source.input_tokens
+  target.output_tokens += source.output_tokens
+  target.cache_read_tokens += source.cache_read_tokens
+  target.cache_write_tokens += source.cache_write_tokens
+  target.thinking_tokens += source.thinking_tokens
+  target.total_tokens += source.total_tokens
+}
+
+function totalsEqual(a: TokenTotals, b: TokenTotals): boolean {
+  return a.total_tokens === b.total_tokens &&
+    a.input_tokens === b.input_tokens &&
+    a.output_tokens === b.output_tokens &&
+    a.cache_read_tokens === b.cache_read_tokens &&
+    a.cache_write_tokens === b.cache_write_tokens &&
+    a.thinking_tokens === b.thinking_tokens
+}
+
+function validateTokenTotals(value: Record<string, unknown>): boolean {
+  return isNonNegativeInteger(value.total_tokens) &&
+    isNonNegativeInteger(value.input_tokens) &&
+    isNonNegativeInteger(value.output_tokens) &&
+    isNonNegativeInteger(value.cache_read_tokens) &&
+    isNonNegativeInteger(value.cache_write_tokens) &&
+    isNonNegativeInteger(value.thinking_tokens) &&
+    value.total_tokens === value.input_tokens + value.output_tokens + value.cache_read_tokens + value.cache_write_tokens + value.thinking_tokens
+}
+
+function metricKey(scopeType: ScopeType, tool: string | null, model: string | null): string {
+  return `${scopeType}:${tool ?? ''}:${model ?? ''}`
+}
+
+function normalizeBreakdowns(breakdowns: UploadBreakdown[]): UploadBreakdown[] {
+  return [...breakdowns].sort((a, b) =>
+    a.scope_type.localeCompare(b.scope_type) ||
+    String(a.tool ?? '').localeCompare(String(b.tool ?? '')) ||
+    String(a.model ?? '').localeCompare(String(b.model ?? ''))
+  )
+}
+
+function canonicalSnapshot(snapshot: UploadSnapshot): Omit<UploadSnapshot, 'token_snapshot_hash'> {
+  return {
+    period_type: snapshot.period_type,
+    period_start: snapshot.period_start,
+    period_end: snapshot.period_end,
+    total_tokens: snapshot.total_tokens,
+    input_tokens: snapshot.input_tokens,
+    output_tokens: snapshot.output_tokens,
+    cache_read_tokens: snapshot.cache_read_tokens,
+    cache_write_tokens: snapshot.cache_write_tokens,
+    thinking_tokens: snapshot.thinking_tokens,
+    breakdowns: normalizeBreakdowns(snapshot.breakdowns).map(b => ({
+      scope_type: b.scope_type,
+      tool: b.tool,
+      model: b.model,
+      total_tokens: b.total_tokens,
+      input_tokens: b.input_tokens,
+      output_tokens: b.output_tokens,
+      cache_read_tokens: b.cache_read_tokens,
+      cache_write_tokens: b.cache_write_tokens,
+      thinking_tokens: b.thinking_tokens,
+    })),
+  }
+}
+
+function computeSnapshotHash(snapshot: UploadSnapshot): string {
+  return `sha256:${sha256(JSON.stringify(canonicalSnapshot(snapshot)))}`
+}
+
+function validateBreakdownShape(raw: Record<string, unknown>): raw is UploadBreakdown {
+  if (validateAllowedFields(raw, BREAKDOWN_FIELDS, 'breakdown_forbidden_field')) return false
+  if (!ALLOWED_SCOPE_TYPES.includes(raw.scope_type as ScopeType)) return false
+  if (!validateTokenTotals(raw)) return false
+
+  const tool = raw.tool
+  const model = raw.model
+  if (tool !== null && typeof tool !== 'string') return false
+  if (model !== null && typeof model !== 'string') return false
+  if (typeof tool === 'string' && tool.trim() === '') return false
+  if (typeof model === 'string' && model.trim() === '') return false
+
+  switch (raw.scope_type) {
+    case 'all':
+      return tool === null && model === null
+    case 'tool':
+      return typeof tool === 'string' && model === null
+    case 'model':
+      return tool === null && typeof model === 'string'
+    case 'tool_model':
+      return typeof tool === 'string' && typeof model === 'string'
+    default:
+      return false
+  }
+}
+
+function validateBreakdownConsistency(snapshot: UploadSnapshot): { valid: boolean; error?: string; error_code?: string } {
+  const seen = new Set<string>()
+  const allRows = snapshot.breakdowns.filter(b => b.scope_type === 'all')
+  if (allRows.length !== 1) {
+    return { valid: false, error: 'Expected exactly one all-scope breakdown', error_code: 'invalid_breakdowns' }
+  }
+
+  for (const row of snapshot.breakdowns) {
+    const key = metricKey(row.scope_type, row.tool, row.model)
+    if (seen.has(key)) {
+      return { valid: false, error: `Duplicate breakdown: ${key}`, error_code: 'invalid_breakdowns' }
+    }
+    seen.add(key)
+  }
+
+  if (!totalsEqual(totalsFrom(snapshot), totalsFrom(allRows[0]))) {
+    return { valid: false, error: 'Snapshot totals do not match all-scope breakdown', error_code: 'invalid_breakdowns' }
+  }
+
+  const toolModelTotal = zeroTotals()
+  const byTool = new Map<string, TokenTotals>()
+  const byModel = new Map<string, TokenTotals>()
+
+  for (const row of snapshot.breakdowns) {
+    if (row.scope_type !== 'tool_model') continue
+    addTotals(toolModelTotal, totalsFrom(row))
+
+    const toolTotals = byTool.get(row.tool!) ?? zeroTotals()
+    addTotals(toolTotals, totalsFrom(row))
+    byTool.set(row.tool!, toolTotals)
+
+    const modelTotals = byModel.get(row.model!) ?? zeroTotals()
+    addTotals(modelTotals, totalsFrom(row))
+    byModel.set(row.model!, modelTotals)
+  }
+
+  if (!totalsEqual(toolModelTotal, totalsFrom(snapshot))) {
+    return { valid: false, error: 'tool_model totals do not match snapshot totals', error_code: 'invalid_breakdowns' }
+  }
+
+  for (const row of snapshot.breakdowns) {
+    if (row.scope_type === 'tool' && !totalsEqual(totalsFrom(row), byTool.get(row.tool!) ?? zeroTotals())) {
+      return { valid: false, error: `Tool breakdown mismatch: ${row.tool}`, error_code: 'invalid_breakdowns' }
+    }
+    if (row.scope_type === 'model' && !totalsEqual(totalsFrom(row), byModel.get(row.model!) ?? zeroTotals())) {
+      return { valid: false, error: `Model breakdown mismatch: ${row.model}`, error_code: 'invalid_breakdowns' }
+    }
+  }
+
+  return { valid: true }
+}
 
 export function validatePayload(body: unknown): { valid: boolean; error?: string; error_code?: string } {
-  if (!body || typeof body !== 'object') {
+  if (!isObject(body)) {
     return { valid: false, error: 'Invalid JSON body', error_code: 'invalid_payload' }
   }
 
-  const obj = body as Record<string, unknown>
-
-  // Check for forbidden fields
-  for (const key of Object.keys(obj)) {
-    if (!ALLOWED_FIELDS.has(key)) {
-      return { valid: false, error: `Forbidden field: ${key}`, error_code: 'payload_forbidden_field' }
-    }
+  const forbidden = validateAllowedFields(body, UPLOAD_FIELDS, 'payload_forbidden_field')
+  if (forbidden) {
+    const [, field] = forbidden.split(':')
+    return { valid: false, error: `Forbidden field: ${field}`, error_code: 'payload_forbidden_field' }
   }
 
-  if (typeof obj.schema_version !== 'number' || obj.schema_version !== 1) {
+  if (body.schema_version !== 1) {
     return { valid: false, error: 'Unsupported schema version', error_code: 'unsupported_schema_version' }
   }
-
-  if (typeof obj.client_version !== 'string') {
-    return { valid: false, error: 'Missing client_version', error_code: 'invalid_payload' }
+  if (typeof body.client_version !== 'string' || body.client_version.length > 40) {
+    return { valid: false, error: 'Invalid client_version', error_code: 'invalid_payload' }
   }
-
-  if (!['macos', 'linux', 'windows'].includes(obj.client_platform as string)) {
+  if (!['macos', 'linux', 'windows'].includes(body.client_platform as string)) {
     return { valid: false, error: 'Invalid client_platform', error_code: 'invalid_payload' }
   }
-
-  if (!Array.isArray(obj.snapshots) || obj.snapshots.length === 0) {
-    return { valid: false, error: 'Missing or empty snapshots', error_code: 'invalid_payload' }
+  if (!Array.isArray(body.snapshots) || body.snapshots.length === 0 || body.snapshots.length > 5) {
+    return { valid: false, error: 'Invalid snapshots', error_code: 'invalid_payload' }
   }
 
-  for (const snap of obj.snapshots as Record<string, unknown>[]) {
-    for (const key of Object.keys(snap)) {
-      if (!ALLOWED_SNAPSHOT_FIELDS.has(key)) {
-        return { valid: false, error: `Forbidden snapshot field: ${key}`, error_code: 'payload_forbidden_field' }
+  for (const rawSnap of body.snapshots) {
+    if (!isObject(rawSnap)) {
+      return { valid: false, error: 'Invalid snapshot', error_code: 'invalid_payload' }
+    }
+    const snapshotForbidden = validateAllowedFields(rawSnap, SNAPSHOT_FIELDS, 'snapshot_forbidden_field')
+    if (snapshotForbidden) {
+      const [, field] = snapshotForbidden.split(':')
+      return { valid: false, error: `Forbidden snapshot field: ${field}`, error_code: 'payload_forbidden_field' }
+    }
+    if (!ALLOWED_PERIOD_TYPES.includes(rawSnap.period_type as PeriodType)) {
+      return { valid: false, error: `Invalid period_type: ${rawSnap.period_type}`, error_code: 'invalid_period_boundary' }
+    }
+    if (typeof rawSnap.period_start !== 'string' || typeof rawSnap.period_end !== 'string') {
+      return { valid: false, error: 'Invalid period boundary', error_code: 'invalid_period_boundary' }
+    }
+    if (!validateTokenTotals(rawSnap)) {
+      return { valid: false, error: 'Invalid token totals', error_code: 'invalid_token_value' }
+    }
+    if (!Array.isArray(rawSnap.breakdowns) || rawSnap.breakdowns.length === 0 || rawSnap.breakdowns.length > 1000) {
+      return { valid: false, error: 'Invalid breakdowns', error_code: 'invalid_breakdowns' }
+    }
+    for (const rawBreakdown of rawSnap.breakdowns) {
+      if (!isObject(rawBreakdown) || !validateBreakdownShape(rawBreakdown)) {
+        return { valid: false, error: 'Invalid breakdown', error_code: 'invalid_breakdowns' }
       }
     }
 
-    if (!ALLOWED_PERIOD_TYPES.includes(snap.period_type as string)) {
-      return { valid: false, error: `Invalid period_type: ${snap.period_type}`, error_code: 'invalid_period_boundary' }
+    const snap = rawSnap as unknown as UploadSnapshot
+    if (!validatePeriodBoundary(snap)) {
+      return { valid: false, error: 'Period boundary does not match UTC rules', error_code: 'invalid_period_boundary' }
     }
-
-    if (typeof snap.total_tokens !== 'number' || snap.total_tokens < 0 || !Number.isInteger(snap.total_tokens)) {
-      return { valid: false, error: 'Invalid total_tokens', error_code: 'invalid_token_value' }
+    if (snap.token_snapshot_hash !== computeSnapshotHash(snap)) {
+      return { valid: false, error: 'Snapshot hash mismatch', error_code: 'invalid_snapshot_hash' }
     }
+    const consistency = validateBreakdownConsistency(snap)
+    if (!consistency.valid) return consistency
   }
 
   return { valid: true }
@@ -93,7 +335,7 @@ export function validatePayload(body: unknown): { valid: boolean; error?: string
 export async function verifyUploadRequest(
   request: Request,
   bodyText: string
-): Promise<{ valid: boolean; deviceId?: string; userId?: string; error?: string; error_code?: string }> {
+): Promise<{ valid: boolean; deviceId?: string; userId?: string; idempotencyKey?: string; error?: string; error_code?: string }> {
   const deviceId = request.headers.get('X-AIUsage-Device-Id')
   const timestamp = request.headers.get('X-AIUsage-Timestamp')
   const nonce = request.headers.get('X-AIUsage-Nonce')
@@ -104,7 +346,6 @@ export async function verifyUploadRequest(
     return { valid: false, error: 'Missing required headers', error_code: 'invalid_signature' }
   }
 
-  // Check device exists and is active
   const devices = await sql`
     SELECT d.id, d.user_id, d.secret_encrypted, d.status, u.status as user_status
     FROM user_devices d
@@ -113,32 +354,17 @@ export async function verifyUploadRequest(
   `
   const device = devices[0] as { id: string; user_id: string; secret_encrypted: string; status: string; user_status: string } | undefined
 
-  if (!device) {
-    return { valid: false, error: 'Device not found', error_code: 'device_not_found' }
-  }
-  if (device.status === 'revoked') {
-    return { valid: false, error: 'Device revoked', error_code: 'device_revoked' }
-  }
-  if (device.user_status === 'banned') {
-    return { valid: false, error: 'User banned', error_code: 'user_banned' }
-  }
+  if (!device) return { valid: false, error: 'Device not found', error_code: 'device_not_found' }
+  if (device.status === 'revoked') return { valid: false, error: 'Device revoked', error_code: 'device_revoked' }
+  if (device.user_status === 'banned') return { valid: false, error: 'User banned', error_code: 'user_banned' }
 
-  // Check timestamp
   const ts = parseInt(timestamp, 10)
-  if (isNaN(ts) || Math.abs(Date.now() - ts) > TIMESTAMP_WINDOW_MS) {
+  if (Number.isNaN(ts) || Math.abs(Date.now() - ts) > TIMESTAMP_WINDOW_MS) {
     return { valid: false, error: 'Timestamp expired', error_code: 'timestamp_expired' }
   }
 
-  // Check nonce
   const existingNonce = await sql`SELECT nonce FROM upload_nonces WHERE device_id = ${deviceId} AND nonce = ${nonce}`
-  if (existingNonce[0]) {
-    return { valid: false, error: 'Nonce reused', error_code: 'nonce_reused' }
-  }
-
-  // Verify signature
-  const bodyHash = sha256(bodyText)
-  const path = new URL(request.url).pathname
-  const canonical = buildCanonicalString(request.method, path, bodyHash, timestamp, nonce, deviceId, idempotencyKey)
+  if (existingNonce[0]) return { valid: false, error: 'Nonce reused', error_code: 'nonce_reused' }
 
   let deviceSecret: string
   try {
@@ -147,18 +373,18 @@ export async function verifyUploadRequest(
     return { valid: false, error: 'Failed to decrypt device secret', error_code: 'invalid_signature' }
   }
 
+  const bodyHash = sha256(bodyText)
+  const path = new URL(request.url).pathname
+  const canonical = buildCanonicalString(request.method, path, bodyHash, timestamp, nonce, deviceId, idempotencyKey)
   const expectedSig = `hmac-sha256=${computeHmacForVerify(canonical, deviceSecret)}`
   if (!timingSafeEqual(expectedSig, signature)) {
     return { valid: false, error: 'Invalid signature', error_code: 'invalid_signature' }
   }
 
-  // Store nonce
   await sql`INSERT INTO upload_nonces (device_id, nonce) VALUES (${deviceId}, ${nonce})`
-
-  // Update last_used_at
   await sql`UPDATE user_devices SET last_used_at = NOW() WHERE id = ${deviceId}`
 
-  return { valid: true, deviceId, userId: device.user_id }
+  return { valid: true, deviceId, userId: device.user_id, idempotencyKey }
 }
 
 function computeHmacForVerify(data: string, secret: string): string {
@@ -176,206 +402,141 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 export function validatePeriodBoundary(snap: UploadSnapshot): boolean {
   const start = new Date(snap.period_start)
-  if (isNaN(start.getTime())) return false
+  const end = new Date(snap.period_end)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false
 
   switch (snap.period_type) {
     case 'daily':
-      return start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0 && start.getUTCMilliseconds() === 0
+      return start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0 &&
+        end.getTime() === start.getTime() + 86400000 - 1
     case 'weekly':
-      return start.getUTCDay() === 1 && start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0
+      return start.getUTCDay() === 1 && start.getUTCHours() === 0 && start.getUTCMinutes() === 0 &&
+        end.getTime() === start.getTime() + 7 * 86400000 - 1
     case 'monthly':
-      return start.getUTCDate() === 1 && start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0
+      return start.getUTCDate() === 1 && start.getUTCHours() === 0 && start.getUTCMinutes() === 0 &&
+        end.getTime() === Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1) - 1
     case 'yearly':
-      return start.getUTCMonth() === 0 && start.getUTCDate() === 1 && start.getUTCHours() === 0 && start.getUTCMinutes() === 0 && start.getUTCSeconds() === 0
+      return start.getUTCMonth() === 0 && start.getUTCDate() === 1 && start.getUTCHours() === 0 &&
+        end.getTime() === Date.UTC(start.getUTCFullYear() + 1, 0, 1) - 1
     case 'all_time':
-      return snap.period_start === '1970-01-01T00:00:00.000Z'
+      return snap.period_start === '1970-01-01T00:00:00.000Z' && end.getTime() >= start.getTime()
     default:
       return false
   }
 }
 
-export async function riskCheck(
-  userId: string,
-  deviceId: string,
-  snap: UploadSnapshot
-): Promise<{ flagged: boolean; reason_code?: string; reason_message?: string }> {
-  // Check token threshold
-  const thresholds: Record<string, number> = {
-    daily: 10_000_000,
-    weekly: 50_000_000,
-    monthly: 200_000_000,
-    yearly: 2_000_000_000,
-    all_time: 5_000_000_000
+function costForBreakdown(row: UploadBreakdown): number {
+  if (row.scope_type !== 'tool_model' || !row.model) return 0
+  return calculateDefaultCost(row.model, {
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    cacheReadTokens: row.cache_read_tokens,
+    cacheWriteTokens: row.cache_write_tokens,
+    thinkingTokens: row.thinking_tokens,
+  })
+}
+
+function buildCostMap(snapshot: UploadSnapshot): Map<string, number> {
+  const costs = new Map<string, number>()
+  let allCost = 0
+
+  for (const row of snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')) {
+    const cost = costForBreakdown(row)
+    allCost += cost
+    costs.set(metricKey('tool_model', row.tool, row.model), cost)
+    costs.set(metricKey('tool', row.tool, null), (costs.get(metricKey('tool', row.tool, null)) ?? 0) + cost)
+    costs.set(metricKey('model', null, row.model), (costs.get(metricKey('model', null, row.model)) ?? 0) + cost)
   }
 
-  if (snap.total_tokens > (thresholds[snap.period_type] || MAX_TOKENS_PER_SNAPSHOT)) {
-    return {
-      flagged: true,
-      reason_code: `token_exceeds_${snap.period_type}_threshold`,
-      reason_message: `${snap.period_type} total_tokens ${snap.total_tokens} exceeds threshold`
-    }
-  }
-
-  // Check for rapid overwrites
-  const recentUploads = await sql`
-    SELECT id FROM upload_snapshots
-    WHERE user_id = ${userId} AND period_type = ${snap.period_type} AND period_start = ${snap.period_start}
-    AND created_at > NOW() - INTERVAL '10 minutes'
-  `
-  if (recentUploads.length >= 3) {
-    return {
-      flagged: true,
-      reason_code: 'frequent_period_overwrite',
-      reason_message: `${recentUploads.length} uploads for ${snap.period_type} in last 10 minutes`
-    }
-  }
-
-  // Check for large jump
-  const lastAccepted = await sql`
-    SELECT total_tokens FROM leaderboard_entries
-    WHERE user_id = ${userId} AND period_type = ${snap.period_type} AND period_start = ${snap.period_start}
-  `
-  if (lastAccepted[0]) {
-    const prev = Number((lastAccepted[0] as { total_tokens: bigint }).total_tokens)
-    if (prev > 0 && snap.total_tokens > prev * 10) {
-      return {
-        flagged: true,
-        reason_code: 'large_token_jump',
-        reason_message: `total_tokens increased from ${prev} to ${snap.total_tokens}`
-      }
-    }
-    if (snap.total_tokens < prev * 0.1 && prev > 10000) {
-      return {
-        flagged: true,
-        reason_code: 'token_regression',
-        reason_message: `total_tokens decreased from ${prev} to ${snap.total_tokens}`
-      }
-    }
-  }
-
-  return { flagged: false }
+  costs.set(metricKey('all', null, null), allCost)
+  return costs
 }
 
 export async function processUpload(
   userId: string,
   deviceId: string,
+  idempotencyKey: string,
   request: UploadRequest,
   ip: string
 ): Promise<UploadResult> {
-  const idempotencyKey = `upload:${deviceId}:${JSON.stringify(request.snapshots.map(s => s.period_type))}`
-
-  // Check idempotency
   const existing = await sql`
     SELECT id, status, payload_hash, result_summary FROM upload_requests
     WHERE device_id = ${deviceId} AND idempotency_key = ${idempotencyKey}
   `
   if (existing[0]) {
-    const ex = existing[0] as { id: string; status: string; payload_hash: string; result_summary: unknown }
+    const ex = existing[0] as { status: string; payload_hash: string; result_summary: unknown }
     const currentHash = sha256(JSON.stringify(request))
     if (ex.payload_hash === currentHash) {
-      return { status: ex.status as 'accepted' | 'rejected' | 'flagged', snapshots: (ex.result_summary as SnapshotResult[]) || [] }
+      return { status: ex.status as UploadResult['status'], snapshots: (ex.result_summary as SnapshotResult[]) || [] }
     }
     return { status: 'rejected', snapshots: [], error: 'Idempotency conflict', error_code: 'idempotency_conflict' }
+  }
+
+  const recentRequests = await sql`
+    SELECT COUNT(*) as cnt FROM upload_requests
+    WHERE device_id = ${deviceId} AND created_at > NOW() - INTERVAL '1 hour'
+  `
+  if (Number((recentRequests[0] as { cnt: bigint }).cnt) >= 30) {
+    return { status: 'rejected', snapshots: [], error: 'Rate limited', error_code: 'rate_limited' }
   }
 
   const requestId = nanoid()
   const payloadHash = sha256(JSON.stringify(request))
   const ipHash = hashIp(ip)
+  const snapshotResults: SnapshotResult[] = request.snapshots.map(s => ({
+    period_type: s.period_type,
+    period_start: s.period_start,
+    status: 'accepted',
+  }))
 
-  // Check rate limits
-  const recentRequests = await sql`
-    SELECT COUNT(*) as cnt FROM upload_requests
-    WHERE device_id = ${deviceId} AND created_at > NOW() - INTERVAL '1 hour'
-  `
-  if (Number((recentRequests[0] as { cnt: bigint }).cnt) >= 10) {
-    return { status: 'rejected', snapshots: [], error: 'Rate limited', error_code: 'rate_limited' }
-  }
+  await sql.begin(async (tx) => {
+    await tx`
+      INSERT INTO upload_requests (id, user_id, device_id, idempotency_key, payload_hash, status, result_summary, client_version, client_platform, schema_version, ip_hash)
+      VALUES (${requestId}, ${userId}, ${deviceId}, ${idempotencyKey}, ${payloadHash}, 'accepted', ${JSON.stringify(snapshotResults)}, ${request.client_version}, ${request.client_platform}, ${request.schema_version}, ${ipHash})
+    `
 
-  const snapshotResults: SnapshotResult[] = []
-  let hasAccepted = false
-  let allFlagged = true
-
-  for (const snap of request.snapshots) {
-    // Validate period boundary
-    if (!validatePeriodBoundary(snap)) {
-      snapshotResults.push({
-        period_type: snap.period_type,
-        period_start: snap.period_start,
-        status: 'rejected',
-        reason_code: 'invalid_period_boundary',
-        reason_message: 'Period boundary does not match UTC rules'
-      })
-      continue
-    }
-
-    // Risk check
-    const risk = await riskCheck(userId, deviceId, snap)
-    if (risk.flagged) {
-      snapshotResults.push({
-        period_type: snap.period_type,
-        period_start: snap.period_start,
-        status: 'flagged',
-        reason_code: risk.reason_code,
-        reason_message: risk.reason_message
-      })
-      continue
-    }
-
-    allFlagged = false
-    hasAccepted = true
-    snapshotResults.push({
-      period_type: snap.period_type,
-      period_start: snap.period_start,
-      status: 'accepted'
-    })
-  }
-
-  const requestStatus = allFlagged && snapshotResults.length > 0 ? 'flagged' : hasAccepted ? 'accepted' : 'rejected'
-
-  // Store upload request
-  await sql`
-    INSERT INTO upload_requests (id, user_id, device_id, idempotency_key, payload_hash, status, result_summary, client_version, client_platform, schema_version, ip_hash)
-    VALUES (${requestId}, ${userId}, ${deviceId}, ${idempotencyKey}, ${payloadHash}, ${requestStatus}, ${JSON.stringify(snapshotResults)}, ${request.client_version}, ${request.client_platform}, ${request.schema_version}, ${ipHash})
-  `
-
-  // Process accepted snapshots
-  for (let i = 0; i < request.snapshots.length; i++) {
-    const snap = request.snapshots[i]
-    const result = snapshotResults[i]
-
-    const snapId = nanoid()
-    const entryId = nanoid()
-
-    // Store snapshot
-    if (result.status === 'accepted') {
-      await sql`
+    for (const snapshot of request.snapshots) {
+      const snapshotId = nanoid()
+      await tx`
         INSERT INTO upload_snapshots (id, upload_request_id, user_id, device_id, period_type, period_start, period_end, total_tokens, token_snapshot_hash, status)
-        VALUES (${snapId}, ${requestId}, ${userId}, ${deviceId}, ${snap.period_type}, ${snap.period_start}, ${snap.period_end}, ${snap.total_tokens}, ${snap.token_snapshot_hash}, 'accepted')
+        VALUES (${snapshotId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end}, ${snapshot.total_tokens}, ${snapshot.token_snapshot_hash}, 'accepted')
       `
 
-      // Upsert leaderboard entry
-      await sql`
-        INSERT INTO leaderboard_entries (id, user_id, period_type, period_start, period_end, total_tokens, visibility, source_snapshot_id)
-        VALUES (${entryId}, ${userId}, ${snap.period_type}, ${snap.period_start}, ${snap.period_end}, ${snap.total_tokens}, 'public', ${snapId})
-        ON CONFLICT (user_id, period_type, period_start)
-        DO UPDATE SET
-          total_tokens = ${snap.total_tokens},
-          period_end = ${snap.period_end},
-          source_snapshot_id = ${snapId},
-          updated_at = NOW()
-      `
-    } else if (result.status === 'flagged') {
-      await sql`
-        INSERT INTO upload_snapshots (id, upload_request_id, user_id, device_id, period_type, period_start, period_end, total_tokens, token_snapshot_hash, status, reason_code, reason_message, review_status)
-        VALUES (${snapId}, ${requestId}, ${userId}, ${deviceId}, ${snap.period_type}, ${snap.period_start}, ${snap.period_end}, ${snap.total_tokens}, ${snap.token_snapshot_hash}, 'flagged', ${result.reason_code || null}, ${result.reason_message || null}, 'pending')
-      `
-    } else {
-      await sql`
-        INSERT INTO upload_snapshots (id, upload_request_id, user_id, device_id, period_type, period_start, period_end, total_tokens, token_snapshot_hash, status, reason_code, reason_message)
-        VALUES (${snapId}, ${requestId}, ${userId}, ${deviceId}, ${snap.period_type}, ${snap.period_start}, ${snap.period_end}, ${snap.total_tokens}, ${snap.token_snapshot_hash}, 'rejected', ${result.reason_code || null}, ${result.reason_message || null})
-      `
+      const costs = buildCostMap(snapshot)
+      for (const row of snapshot.breakdowns) {
+        const metricId = nanoid()
+        const cost = costs.get(metricKey(row.scope_type, row.tool, row.model)) ?? 0
+        await tx`
+          INSERT INTO leaderboard_metrics (
+            id, upload_request_id, user_id, device_id, period_type, period_start, period_end,
+            scope_type, tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+            thinking_tokens, total_tokens, total_cost_usd, visibility
+          )
+          VALUES (
+            ${metricId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end},
+            ${row.scope_type}, ${row.tool}, ${row.model}, ${row.input_tokens}, ${row.output_tokens}, ${row.cache_read_tokens}, ${row.cache_write_tokens},
+            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, 'public'
+          )
+          ON CONFLICT (user_id, period_type, period_start, scope_type, (COALESCE(tool, '')), (COALESCE(model, '')))
+          DO UPDATE SET
+            upload_request_id = ${requestId},
+            device_id = ${deviceId},
+            period_end = ${snapshot.period_end},
+            input_tokens = ${row.input_tokens},
+            output_tokens = ${row.output_tokens},
+            cache_read_tokens = ${row.cache_read_tokens},
+            cache_write_tokens = ${row.cache_write_tokens},
+            thinking_tokens = ${row.thinking_tokens},
+            total_tokens = ${row.total_tokens},
+            total_cost_usd = ${cost},
+            visibility = 'public',
+            updated_at = NOW()
+        `
+      }
     }
-  }
+  })
 
-  return { status: requestStatus, snapshots: snapshotResults }
+  return { status: 'accepted', snapshots: snapshotResults }
 }
+
+export { MAX_PAYLOAD_SIZE }

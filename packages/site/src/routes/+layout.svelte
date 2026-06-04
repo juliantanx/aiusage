@@ -170,6 +170,9 @@
                 <a href="/settings" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
                   {zh ? '设置' : 'Settings'}
                 </a>
+                <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                  {zh ? '上传状态' : 'Upload status'}
+                </a>
                 <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
                   {zh ? '退出登录' : 'Sign out'}
                 </button>
@@ -221,6 +224,9 @@
               <div class="user-menu-divider"></div>
               <a href="/settings" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
                 {zh ? '设置' : 'Settings'}
+              </a>
+              <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                {zh ? '上传状态' : 'Upload status'}
               </a>
               <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
                 {zh ? '退出登录' : 'Sign out'}

@@ -139,23 +139,8 @@ const migrations = [
         reviewed_by TEXT REFERENCES users(id),
         reviewed_at TIMESTAMPTZ,
         review_note TEXT,
-        leaderboard_entry_id TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(upload_request_id, period_type, period_start)
-      )`
-
-      await tx`CREATE TABLE IF NOT EXISTS leaderboard_entries (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id),
-        period_type period_type NOT NULL,
-        period_start TIMESTAMPTZ NOT NULL,
-        period_end TIMESTAMPTZ NOT NULL,
-        total_tokens BIGINT NOT NULL,
-        visibility leaderboard_visibility DEFAULT 'public',
-        source_snapshot_id TEXT REFERENCES upload_snapshots(id),
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(user_id, period_type, period_start)
       )`
 
       await tx`CREATE TABLE IF NOT EXISTS admin_audit_logs (
@@ -170,8 +155,6 @@ const migrations = [
       )`
 
       // Indexes
-      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_query ON leaderboard_entries(period_type, period_start, visibility, total_tokens DESC)`
-      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_user ON leaderboard_entries(user_id, period_type, period_start)`
       await tx`CREATE INDEX IF NOT EXISTS idx_upload_requests_device_key ON upload_requests(device_id, idempotency_key)`
       await tx`CREATE INDEX IF NOT EXISTS idx_upload_snapshots_req ON upload_snapshots(upload_request_id, period_type, period_start)`
       await tx`CREATE INDEX IF NOT EXISTS idx_upload_snapshots_user ON upload_snapshots(user_id, period_type, period_start)`
@@ -198,6 +181,51 @@ const migrations = [
       )`
 
       await tx`CREATE INDEX IF NOT EXISTS idx_reserved_usernames_until ON reserved_usernames(reserved_until)`
+    }
+  },
+  {
+    version: 3,
+    name: 'leaderboard_metrics',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`DELETE FROM upload_snapshots`
+      await tx`DELETE FROM upload_requests`
+      await tx`DROP TABLE IF EXISTS leaderboard_entries`
+      await tx`ALTER TABLE upload_snapshots DROP COLUMN IF EXISTS leaderboard_entry_id`
+
+      await tx`CREATE TABLE IF NOT EXISTS leaderboard_metrics (
+        id TEXT PRIMARY KEY,
+        upload_request_id TEXT NOT NULL REFERENCES upload_requests(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+        period_type period_type NOT NULL,
+        period_start TIMESTAMPTZ NOT NULL,
+        period_end TIMESTAMPTZ NOT NULL,
+        scope_type TEXT NOT NULL CHECK (scope_type IN ('all', 'tool', 'model', 'tool_model')),
+        tool TEXT,
+        model TEXT,
+        input_tokens BIGINT NOT NULL,
+        output_tokens BIGINT NOT NULL,
+        cache_read_tokens BIGINT NOT NULL,
+        cache_write_tokens BIGINT NOT NULL,
+        thinking_tokens BIGINT NOT NULL,
+        total_tokens BIGINT NOT NULL,
+        total_cost_usd NUMERIC(20, 8) NOT NULL,
+        visibility leaderboard_visibility DEFAULT 'public',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE UNIQUE INDEX IF NOT EXISTS idx_leaderboard_metrics_unique
+        ON leaderboard_metrics(user_id, period_type, period_start, scope_type, COALESCE(tool, ''), COALESCE(model, ''))`
+
+      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_metrics_rank_tokens
+        ON leaderboard_metrics(period_type, period_start, scope_type, visibility, total_tokens DESC, updated_at ASC, user_id ASC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_metrics_rank_cost
+        ON leaderboard_metrics(period_type, period_start, scope_type, visibility, total_cost_usd DESC, updated_at ASC, user_id ASC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_metrics_filters
+        ON leaderboard_metrics(period_type, period_start, scope_type, tool, model, visibility)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_leaderboard_metrics_user
+        ON leaderboard_metrics(user_id, period_type, period_start, scope_type)`
     }
   }
 ]

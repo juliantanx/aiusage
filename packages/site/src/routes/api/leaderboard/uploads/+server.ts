@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { validatePayload, verifyUploadRequest, processUpload } from '$lib/server/uploads/verify.js'
+import { MAX_PAYLOAD_SIZE, validatePayload, verifyUploadRequest, processUpload } from '$lib/server/uploads/verify.js'
 
 export const POST: RequestHandler = async ({ request }) => {
   // Check Content-Type
@@ -11,7 +11,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
   // Check payload size
   const bodyText = await request.text()
-  if (bodyText.length > 50_000) {
+  if (bodyText.length > MAX_PAYLOAD_SIZE) {
     return json({ error: 'Payload too large', error_code: 'payload_too_large' }, { status: 413 })
   }
 
@@ -37,7 +37,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
   // Process upload
   const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1'
-  const result = await processUpload(verification.userId!, verification.deviceId!, body as Parameters<typeof processUpload>[2], ip)
+  const result = await processUpload(verification.userId!, verification.deviceId!, verification.idempotencyKey!, body as Parameters<typeof processUpload>[3], ip)
 
   return json(result)
 }

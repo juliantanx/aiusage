@@ -296,12 +296,16 @@ program
     await launchWidget()
   })
 
-// rank command
+// leaderboard command
 program
-  .command('rank')
+  .command('leaderboard')
   .description('View the public leaderboard')
   .allowExcessArguments(false)
   .option('-p, --period <period>', 'Period to view (daily|weekly|monthly|yearly|all_time)', 'daily')
+  .option('-m, --metric <metric>', 'Ranking metric (tokens|cost)', 'tokens')
+  .option('-s, --scope <scope>', 'Ranking scope (all|tool|model|tool_model)', 'all')
+  .option('--tool <tool>', 'Filter by tool')
+  .option('--model <model>', 'Filter by model')
   .option('-l, --limit <limit>', 'Number of rows to show, max 50', '20')
   .action(async (options) => {
     await runLeaderboardView(options)

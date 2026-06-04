@@ -1,130 +1,180 @@
 import { sql } from '../db/pool.js'
 
-export interface LeaderboardEntry {
+export type RankingMetric = 'tokens' | 'cost'
+export type RankingScope = 'all' | 'tool' | 'model' | 'tool_model'
+
+export interface RankingEntry {
   rank: number
   user_id: string
   display_name: string
   avatar_url: string | null
+  scope_type: RankingScope
+  tool: string | null
+  model: string | null
   total_tokens: string
+  total_cost_usd: string
   updated_at: string
 }
 
 export interface LeaderboardResponse {
-  entries: LeaderboardEntry[]
+  entries: RankingEntry[]
   next_cursor: string | null
-  current_user: LeaderboardEntry | null
+  current_user: RankingEntry | null
   period_type: string
   period_start: string
+  metric: RankingMetric
+  scope: RankingScope
+  tool: string | null
+  model: string | null
 }
 
 const PAGE_SIZE = 50
 
-export async function queryLeaderboard(
-  periodType: string,
-  periodStart: string,
-  cursor: string | null,
+export async function queryLeaderboard(options: {
+  periodType: string
+  periodStart: string
+  metric: RankingMetric
+  scope: RankingScope
+  tool: string | null
+  model: string | null
+  cursor: string | null
   currentUserId: string | null
-): Promise<LeaderboardResponse> {
-  let entries: Array<{ user_id: string; display_name: string; avatar_url: string | null; total_tokens: string; updated_at: string; rn: string }>
+}): Promise<LeaderboardResponse> {
+  const orderExpr = options.metric === 'cost'
+    ? sql`lm.total_cost_usd DESC`
+    : sql`lm.total_tokens DESC`
+  const cursorRank = options.cursor ? decodeCursor(options.cursor) : 0
 
-  if (cursor) {
-    const cursorRank = decodeCursor(cursor)
-    entries = await sql`
-      WITH ranked AS (
-        SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
-          ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
-        FROM leaderboard_entries le
-        JOIN users u ON u.id = le.user_id
-        WHERE le.period_type = ${periodType}::period_type
-          AND le.period_start = ${periodStart}
-          AND le.visibility = 'public'
-          AND u.status = 'active'
-          AND u.leaderboard_visibility = 'public'
-      )
-      SELECT *
-      FROM ranked
-      WHERE rn > ${cursorRank}
-      ORDER BY rn ASC
-      LIMIT ${PAGE_SIZE + 1}
-    `
-  } else {
-    entries = await sql`
-      WITH ranked AS (
-        SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text,
-          ROW_NUMBER() OVER (ORDER BY le.total_tokens DESC, le.updated_at ASC, le.user_id ASC) as rn
-        FROM leaderboard_entries le
-        JOIN users u ON u.id = le.user_id
-        WHERE le.period_type = ${periodType}::period_type
-          AND le.period_start = ${periodStart}
-          AND le.visibility = 'public'
-          AND u.status = 'active'
-          AND u.leaderboard_visibility = 'public'
-      )
-      SELECT *
-      FROM ranked
-      ORDER BY rn ASC
-      LIMIT ${PAGE_SIZE + 1}
-    `
-  }
+  const entries = await sql`
+    WITH ranked AS (
+      SELECT
+        lm.user_id,
+        u.display_name,
+        u.avatar_url,
+        lm.scope_type,
+        lm.tool,
+        lm.model,
+        lm.total_tokens::text,
+        lm.total_cost_usd::text,
+        lm.updated_at::text,
+        ROW_NUMBER() OVER (ORDER BY ${orderExpr}, lm.updated_at ASC, lm.user_id ASC) as rn
+      FROM leaderboard_metrics lm
+      JOIN users u ON u.id = lm.user_id
+      WHERE lm.period_type = ${options.periodType}::period_type
+        AND lm.period_start = ${options.periodStart}
+        AND lm.scope_type = ${options.scope}
+        AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
+        AND (${options.model}::text IS NULL OR lm.model = ${options.model})
+        AND lm.visibility = 'public'
+        AND u.status = 'active'
+        AND u.leaderboard_visibility = 'public'
+    )
+    SELECT *
+    FROM ranked
+    WHERE rn > ${cursorRank}
+    ORDER BY rn ASC
+    LIMIT ${PAGE_SIZE + 1}
+  ` as Array<RankingEntry & { rn: string }>
 
   const hasMore = entries.length > PAGE_SIZE
   const page = entries.slice(0, PAGE_SIZE)
+  const nextCursor = hasMore && page.length > 0 ? encodeCursor(page[page.length - 1].rn) : null
 
-  let nextCursor: string | null = null
-  if (hasMore && page.length > 0) {
-    const last = page[page.length - 1]
-    nextCursor = encodeCursor(last.rn)
-  }
-
-  // Get current user's rank
-  let currentUser: LeaderboardEntry | null = null
-  if (currentUserId) {
+  let currentUser: RankingEntry | null = null
+  if (options.currentUserId) {
     const userEntry = await sql`
-      SELECT le.user_id, u.display_name, u.avatar_url, le.total_tokens::text, le.updated_at::text
-      FROM leaderboard_entries le
-      JOIN users u ON u.id = le.user_id
-      WHERE le.period_type = ${periodType}::period_type
-        AND le.period_start = ${periodStart}
-        AND le.user_id = ${currentUserId}
-        AND le.visibility = 'public'
-    `
+      SELECT
+        lm.user_id,
+        u.display_name,
+        u.avatar_url,
+        lm.scope_type,
+        lm.tool,
+        lm.model,
+        lm.total_tokens::text,
+        lm.total_cost_usd::text,
+        lm.updated_at::text
+      FROM leaderboard_metrics lm
+      JOIN users u ON u.id = lm.user_id
+      WHERE lm.period_type = ${options.periodType}::period_type
+        AND lm.period_start = ${options.periodStart}
+        AND lm.scope_type = ${options.scope}
+        AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
+        AND (${options.model}::text IS NULL OR lm.model = ${options.model})
+        AND lm.user_id = ${options.currentUserId}
+        AND lm.visibility = 'public'
+    ` as Array<Omit<RankingEntry, 'rank'>>
+
     if (userEntry[0]) {
-      const ue = userEntry[0] as { user_id: string; display_name: string; avatar_url: string | null; total_tokens: string; updated_at: string }
+      const ue = userEntry[0]
       const rankResult = await sql`
         SELECT COUNT(*) + 1 as rank
-        FROM leaderboard_entries le
-        JOIN users u ON u.id = le.user_id
-        WHERE le.period_type = ${periodType}::period_type
-          AND le.period_start = ${periodStart}
-          AND le.visibility = 'public'
+        FROM leaderboard_metrics lm
+        JOIN users u ON u.id = lm.user_id
+        WHERE lm.period_type = ${options.periodType}::period_type
+          AND lm.period_start = ${options.periodStart}
+          AND lm.scope_type = ${options.scope}
+          AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
+          AND (${options.model}::text IS NULL OR lm.model = ${options.model})
+          AND lm.visibility = 'public'
           AND u.status = 'active'
           AND u.leaderboard_visibility = 'public'
           AND (
-            le.total_tokens > ${ue.total_tokens}
-            OR (le.total_tokens = ${ue.total_tokens} AND le.updated_at < ${ue.updated_at})
-            OR (le.total_tokens = ${ue.total_tokens} AND le.updated_at = ${ue.updated_at} AND le.user_id < ${ue.user_id})
+            ${
+              options.metric === 'cost'
+                ? sql`lm.total_cost_usd > ${ue.total_cost_usd}`
+                : sql`lm.total_tokens > ${ue.total_tokens}`
+            }
+            OR (
+              ${
+                options.metric === 'cost'
+                  ? sql`lm.total_cost_usd = ${ue.total_cost_usd}`
+                  : sql`lm.total_tokens = ${ue.total_tokens}`
+              }
+              AND lm.updated_at < ${ue.updated_at}
+            )
+            OR (
+              ${
+                options.metric === 'cost'
+                  ? sql`lm.total_cost_usd = ${ue.total_cost_usd}`
+                  : sql`lm.total_tokens = ${ue.total_tokens}`
+              }
+              AND lm.updated_at = ${ue.updated_at}
+              AND lm.user_id < ${ue.user_id}
+            )
           )
       `
       currentUser = {
         rank: Number((rankResult[0] as { rank: bigint }).rank),
-        ...ue
+        ...ue,
       }
     }
   }
 
   return {
-    entries: page.map(e => ({
-      rank: Number(e.rn),
-      user_id: e.user_id,
-      display_name: e.display_name,
-      avatar_url: e.avatar_url,
-      total_tokens: e.total_tokens,
-      updated_at: e.updated_at
-    })),
+    entries: page.map(row => toRankingEntry(row)),
     next_cursor: nextCursor,
     current_user: currentUser,
-    period_type: periodType,
-    period_start: periodStart
+    period_type: options.periodType,
+    period_start: options.periodStart,
+    metric: options.metric,
+    scope: options.scope,
+    tool: options.tool,
+    model: options.model,
+  }
+}
+
+function toRankingEntry(row: RankingEntry & { rn: string }): RankingEntry {
+  return {
+    rank: Number(row.rn),
+    user_id: row.user_id,
+    display_name: row.display_name,
+    avatar_url: row.avatar_url,
+    scope_type: row.scope_type,
+    tool: row.tool,
+    model: row.model,
+    total_tokens: row.total_tokens,
+    total_cost_usd: row.total_cost_usd,
+    updated_at: row.updated_at,
   }
 }
 
@@ -136,8 +186,7 @@ export function getCurrentPeriodStart(periodType: string): string {
     case 'weekly': {
       const day = now.getUTCDay()
       const diff = day === 0 ? 6 : day - 1
-      const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff))
-      return monday.toISOString()
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff)).toISOString()
     }
     case 'monthly':
       return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
@@ -146,16 +195,16 @@ export function getCurrentPeriodStart(periodType: string): string {
     case 'all_time':
       return '1970-01-01T00:00:00.000Z'
     default:
-      return ''
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
   }
 }
 
 function encodeCursor(rank: string): string {
-  return Buffer.from(rank).toString('base64url')
+  return Buffer.from(rank, 'utf-8').toString('base64url')
 }
 
 function decodeCursor(cursor: string): number {
-  const decoded = Buffer.from(cursor, 'base64url').toString('utf8')
+  const decoded = Buffer.from(cursor, 'base64url').toString('utf-8')
   const rank = Number(decoded)
-  return Number.isFinite(rank) && rank > 0 ? Math.floor(rank) : 0
+  return Number.isFinite(rank) && rank > 0 ? rank : 0
 }
