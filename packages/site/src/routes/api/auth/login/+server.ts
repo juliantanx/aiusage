@@ -14,14 +14,18 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
   // Find user by username or email
   const users = await sql`
-    SELECT id, username, email, display_name, avatar_url, role, status, password_hash
+    SELECT id, username, email, email_verified, display_name, avatar_url, role, status, password_hash
     FROM users
     WHERE (username = ${login} OR email = ${login}) AND password_hash IS NOT NULL
   `
-  const user = users[0] as { id: string; username: string; email: string; display_name: string; avatar_url: string | null; role: string; status: string; password_hash: string } | undefined
+  const user = users[0] as { id: string; username: string; email: string; email_verified: boolean; display_name: string; avatar_url: string | null; role: string; status: string; password_hash: string } | undefined
 
   if (!user || !(await verifyPassword(password, user.password_hash))) {
     return json({ error: 'Invalid credentials' }, { status: 401 })
+  }
+
+  if (!user.email_verified) {
+    return json({ error: 'email_not_verified', message: 'Please verify your email before signing in' }, { status: 403 })
   }
 
   if (user.status === 'banned') {

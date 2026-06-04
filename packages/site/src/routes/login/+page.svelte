@@ -11,6 +11,13 @@
   let error = ''
   let loading = false
 
+  $: verifiedState = $page.url.searchParams.get('verified')
+  $: notice = verifiedState === '1'
+    ? (zh ? '邮箱已验证，可以登录。' : 'Email verified. You can sign in now.')
+    : verifiedState === 'invalid'
+      ? (zh ? '验证链接无效或已过期。' : 'Verification link is invalid or expired.')
+      : ''
+
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
     return match ? match[1] : ''
@@ -35,6 +42,8 @@
       } else {
         error = data.error === 'user_banned'
           ? (zh ? '你的账号已被封禁。' : 'Your account has been banned.')
+          : data.error === 'email_not_verified'
+            ? (zh ? '请先打开邮箱中的验证链接，再登录。' : 'Please verify your email before signing in.')
           : data.error || (zh ? '登录失败' : 'Login failed')
       }
     } catch {
@@ -56,6 +65,9 @@
 
     {#if error}
       <div class="error-msg">{error}</div>
+    {/if}
+    {#if notice}
+      <div class:success-msg={verifiedState === '1'} class:error-msg={verifiedState === 'invalid'}>{notice}</div>
     {/if}
 
     <form on:submit|preventDefault={handleLogin}>
@@ -103,6 +115,7 @@
   h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
   .auth-subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
   .error-msg { background: oklch(0.55 0.22 25 / 0.08); color: var(--rose); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+  .success-msg { background: oklch(0.62 0.14 155 / 0.1); color: oklch(0.42 0.12 155); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
   .field { margin-bottom: 1rem; }
   label { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.375rem; color: var(--text-secondary); }
   input { width: 100%; padding: 0.625rem 0.875rem; font-size: 0.9375rem; border: 1px solid var(--border-medium); border-radius: 8px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.15s; }

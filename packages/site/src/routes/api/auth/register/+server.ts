@@ -2,13 +2,19 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { hashPassword, validateUsername, validateEmail, validatePassword } from '$lib/server/auth/password.js'
-import { createSession } from '$lib/server/auth/session.js'
-import { maybeGrantAdmin } from '$lib/server/oauth/providers.js'
+import {
+  checkVerificationEmailRateLimit,
+  createEmailVerification,
+  recordVerificationEmailAttempt,
+  sendVerificationEmail
+} from '$lib/server/auth/email-verification.js'
 import { nanoid } from 'nanoid'
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   const body = await request.json()
-  const { username, email, password } = body
+  const username = String(body.username || '').trim()
+  const email = String(body.email || '').trim().toLowerCase()
+  const password = body.password
 
   const usernameError = validateUsername(username)
   if (usernameError) return json({ error: usernameError }, { status: 400 })
@@ -19,6 +25,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
   const passwordError = validatePassword(password)
   if (passwordError) return json({ error: passwordError }, { status: 400 })
 
+  const ip = getClientAddress()
+  const rateLimitError = await checkVerificationEmailRateLimit(ip, email)
+  if (rateLimitError) return json({ error: rateLimitError }, { status: 429 })
+
   // Check uniqueness
   const existingUser = await sql`SELECT id FROM users WHERE username = ${username} OR email = ${email}`
   if (existingUser[0]) {
@@ -28,22 +38,26 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
   const userId = nanoid()
   const passwordHash = await hashPassword(password)
 
-  await sql`
-    INSERT INTO users (id, username, email, display_name, password_hash, role, status)
-    VALUES (${userId}, ${username}, ${email}, ${username}, ${passwordHash}, 'user', 'active')
-  `
-
-  // Check admin emails
-  await maybeGrantAdmin(userId, email)
-
-  const sid = await createSession(userId)
-  cookies.set('ai_session', sid, {
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 604800
+  await sql.begin(async (tx) => {
+    await tx`
+      INSERT INTO users (id, username, email, email_verified, display_name, password_hash, role, status)
+      VALUES (${userId}, ${username}, ${email}, FALSE, ${username}, ${passwordHash}, 'user', 'active')
+    `
   })
 
-  return json({ success: true, user: { id: userId, username, email, display_name: username } })
+  const verificationUrl = await createEmailVerification(userId, email)
+  try {
+    await sendVerificationEmail(email, username, verificationUrl)
+    await recordVerificationEmailAttempt(ip, email)
+  } catch (err) {
+    console.error('Failed to send verification email:', err)
+    await sql`DELETE FROM users WHERE id = ${userId}`
+    return json({ error: 'Failed to send verification email' }, { status: 500 })
+  }
+
+  return json({
+    success: true,
+    requires_email_verification: true,
+    message: 'Check your email to verify your account'
+  })
 }

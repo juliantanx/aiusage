@@ -401,5 +401,43 @@ const migrations = [
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )`
     }
+  },
+  {
+    version: 7,
+    name: 'email_verification_tokens',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`CREATE TABLE IF NOT EXISTS email_verification_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user ON email_verification_tokens(user_id, consumed_at)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires ON email_verification_tokens(expires_at)`
+
+      // Existing password users predate this flow, so keep them able to sign in.
+      await tx`UPDATE users SET email_verified = TRUE WHERE password_hash IS NOT NULL AND email_verified = FALSE`
+    }
+  },
+  {
+    version: 8,
+    name: 'email_send_attempts',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`CREATE TABLE IF NOT EXISTS email_send_attempts (
+        id TEXT PRIMARY KEY,
+        purpose TEXT NOT NULL,
+        ip_hash TEXT NOT NULL,
+        email_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE INDEX IF NOT EXISTS idx_email_send_attempts_ip ON email_send_attempts(purpose, ip_hash, created_at DESC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_email_send_attempts_email ON email_send_attempts(purpose, email_hash, created_at DESC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_email_send_attempts_created ON email_send_attempts(created_at)`
+    }
   }
 ]

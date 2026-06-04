@@ -1,5 +1,5 @@
 <script>
-  import { goto, invalidateAll } from '$app/navigation'
+  import { invalidateAll } from '$app/navigation'
   import { page } from '$app/stores'
   import { lang } from '$lib/lang'
 
@@ -11,6 +11,7 @@
   let password = ''
   let confirmPassword = ''
   let error = ''
+  let success = ''
   let loading = false
 
   function getCsrfToken() {
@@ -20,6 +21,7 @@
 
   async function handleRegister() {
     error = ''
+    success = ''
     if (password !== confirmPassword) {
       error = zh ? '两次输入的密码不一致' : 'Passwords do not match'
       return
@@ -36,8 +38,14 @@
       })
       const data = await res.json()
       if (res.ok) {
+        success = zh
+          ? '验证邮件已发送。请打开邮箱中的链接后再登录。'
+          : 'Verification email sent. Open the link in your inbox before signing in.'
+        username = ''
+        email = ''
+        password = ''
+        confirmPassword = ''
         await invalidateAll()
-        goto('/leaderboard')
       } else {
         error = data.error || (zh ? '注册失败' : 'Registration failed')
       }
@@ -60,6 +68,9 @@
 
     {#if error}
       <div class="error-msg">{error}</div>
+    {/if}
+    {#if success}
+      <div class="success-msg">{success}</div>
     {/if}
 
     <form on:submit|preventDefault={handleRegister}>
@@ -115,6 +126,7 @@
   h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
   .auth-subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
   .error-msg { background: oklch(0.55 0.22 25 / 0.08); color: var(--rose); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+  .success-msg { background: oklch(0.62 0.14 155 / 0.1); color: oklch(0.42 0.12 155); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
   .field { margin-bottom: 1rem; }
   label { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.375rem; color: var(--text-secondary); }
   input { width: 100%; padding: 0.625rem 0.875rem; font-size: 0.9375rem; border: 1px solid var(--border-medium); border-radius: 8px; background: var(--bg); color: var(--text); outline: none; transition: border-color 0.15s; }
