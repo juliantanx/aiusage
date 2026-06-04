@@ -274,5 +274,106 @@ const migrations = [
       await tx`CREATE INDEX IF NOT EXISTS idx_price_tables_status ON official_price_tables(status)`
       await tx`CREATE INDEX IF NOT EXISTS idx_price_entries_table ON official_price_entries(table_id)`
     }
+  },
+  {
+    version: 5,
+    name: 'cloud_sync',
+    up: async (tx: ReturnType<typeof sql>) => {
+      // cloud_device_instances: binds a CLI device to a local deviceInstanceId for cloud sync
+      await tx`CREATE TABLE IF NOT EXISTS cloud_device_instances (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+        device_instance_id TEXT NOT NULL,
+        sync_generation BIGINT NOT NULL DEFAULT 1,
+        last_push_cursor TEXT,
+        last_pull_cursor TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, device_instance_id),
+        UNIQUE(device_id)
+      )`
+
+      // cloud_usage_records: private detail records synced from CLI devices
+      await tx`CREATE TABLE IF NOT EXISTS cloud_usage_records (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL REFERENCES user_devices(id),
+        device_instance_id TEXT NOT NULL,
+        sync_generation BIGINT NOT NULL DEFAULT 1,
+        record_id TEXT NOT NULL,
+        ts BIGINT NOT NULL,
+        tool TEXT NOT NULL,
+        model TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT '',
+        input_tokens BIGINT NOT NULL DEFAULT 0,
+        output_tokens BIGINT NOT NULL DEFAULT 0,
+        cache_read_tokens BIGINT NOT NULL DEFAULT 0,
+        cache_write_tokens BIGINT NOT NULL DEFAULT 0,
+        thinking_tokens BIGINT NOT NULL DEFAULT 0,
+        cost NUMERIC(20, 8),
+        cost_source TEXT,
+        session_key TEXT NOT NULL DEFAULT '',
+        source_file TEXT NOT NULL DEFAULT '',
+        cwd TEXT NOT NULL DEFAULT '',
+        device_name TEXT,
+        platform TEXT,
+        updated_at BIGINT NOT NULL,
+        deleted_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        server_updated_at TIMESTAMPTZ DEFAULT NOW(),
+        change_seq BIGSERIAL,
+        UNIQUE(user_id, sync_generation, device_instance_id, record_id)
+      )`
+
+      // cloud_sync_batches: push/pull batch tracking for idempotency and diagnostics
+      await tx`CREATE TABLE IF NOT EXISTS cloud_sync_batches (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL REFERENCES user_devices(id),
+        idempotency_key TEXT NOT NULL,
+        direction TEXT NOT NULL CHECK (direction IN ('push', 'pull')),
+        record_count INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('accepted', 'rejected', 'failed')),
+        error_code TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(device_id, idempotency_key)
+      )`
+
+      // cloud_sync_state: per-device sync watermark
+      await tx`CREATE TABLE IF NOT EXISTS cloud_sync_state (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+        last_push_at TIMESTAMPTZ,
+        last_pull_at TIMESTAMPTZ,
+        last_server_cursor TEXT,
+        last_error_code TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (user_id, device_id)
+      )`
+
+      // cloud_sync_resets: tracks cloud data clears to prevent stale device uploads
+      await tx`CREATE TABLE IF NOT EXISTS cloud_sync_resets (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        sync_generation BIGINT NOT NULL DEFAULT 1,
+        clear_before_change_seq BIGINT,
+        reset_at TIMESTAMPTZ DEFAULT NOW(),
+        reset_by_device_id TEXT
+      )`
+
+      // Indexes for cloud_usage_records
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_usage_user_ts ON cloud_usage_records(user_id, ts DESC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_usage_user_tool_ts ON cloud_usage_records(user_id, tool, ts DESC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_usage_user_model_ts ON cloud_usage_records(user_id, model, ts DESC)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_usage_device ON cloud_usage_records(user_id, sync_generation, device_instance_id)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_usage_change_seq ON cloud_usage_records(user_id, change_seq)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_usage_deleted ON cloud_usage_records(user_id, deleted_at) WHERE deleted_at IS NOT NULL`
+
+      // Indexes for cloud_sync_batches
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_sync_batches_user ON cloud_sync_batches(user_id, created_at DESC)`
+
+      // Indexes for cloud_device_instances
+      await tx`CREATE INDEX IF NOT EXISTS idx_cloud_device_instances_user ON cloud_device_instances(user_id)`
+    }
   }
 ]

@@ -249,7 +249,7 @@ program
 program
   .command('init')
   .description('Configure cloud sync')
-  .option('--backend <backend>', 'Sync backend (github|s3|skip)')
+  .option('--backend <backend>', 'Sync backend (cloud|github|s3|skip)')
   .option('--repo <repo>', 'GitHub repository (format: username/repo-name)')
   .option('--token <token>', 'GitHub Personal Access Token')
   .option('--bucket <bucket>', 'S3 bucket name')

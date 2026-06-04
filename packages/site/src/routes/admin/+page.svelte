@@ -141,6 +141,11 @@
     if (await doAction('/api/admin/pricing/seed', { version }, `Price table "${version}" seeded`))
       await loadPricing()
   }
+  async function recomputeLeaderboard() {
+    if (!confirm('Recompute all leaderboard metrics using the current published price table?')) return
+    if (await doAction('/api/admin/leaderboard/recompute', {}, 'Leaderboard recomputed'))
+      await loadPricing()
+  }
   async function publishTable(id) {
     if (await doAction(`/api/admin/pricing/${id}/publish`, {}, 'Price table published'))
       await loadPricing()
@@ -272,7 +277,10 @@
         <section class="admin-section">
           <div class="section-header">
             <h2>Official Price Tables</h2>
-            <button class="btn-approve" on:click={seedPricing} disabled={!!actionLoading}>Seed from Core</button>
+            <div style="display: flex; gap: 0.5rem">
+              <button class="btn-muted" on:click={recomputeLeaderboard} disabled={!!actionLoading}>Recompute Leaderboard</button>
+              <button class="btn-approve" on:click={seedPricing} disabled={!!actionLoading}>Seed from Core</button>
+            </div>
           </div>
           {#if pricingLoading}
             <p class="muted">Loading...</p>

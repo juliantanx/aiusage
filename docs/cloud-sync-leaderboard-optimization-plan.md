@@ -1443,7 +1443,7 @@ admin_audit_logs
 - `/uploads` 页面支持设备管理和上传历史查看。
 - `synced_records` 表已扩展 `source_file` 和 `cwd` 字段，支持跨设备项目统计。
 
-### 阶段 2：官方同步最小可用版
+### 阶段 2：官方同步最小可用版 ✅ 已完成
 
 目标：
 
@@ -1465,7 +1465,18 @@ admin_audit_logs
 - update 和 tombstone 都会推进 pull cursor，不会因为 upsert 同一行而漏拉。
 - 清空云端数据会递增 `sync_generation`，旧 generation 设备 push 会被拒绝或要求重置。
 
-### 阶段 3：设备管理与数据删除
+实现状态（v1.5.0）：
+
+- 服务端新增 `cloud_device_instances`、`cloud_usage_records`、`cloud_sync_batches`、`cloud_sync_state`、`cloud_sync_resets` 表。
+- `POST /api/cli/sync/push` 和 `GET /api/cli/sync/pull` 端点已实现。
+- CLI 支持 `sync.backend = cloud` 配置。
+- `CloudSyncOrchestrator` 实现记录级 push/pull。
+- Push 使用 HMAC 签名认证（复用 leaderboard upload 的签名方案）。
+- Pull 使用 `change_seq` 作为稳定游标。
+- Idempotency 通过 `device_id + idempotency_key` 保证。
+- `sync_generation` 机制防止旧设备覆盖已清空的数据。
+
+### 阶段 3：设备管理与数据删除 ✅ 已完成
 
 目标：
 
@@ -1481,7 +1492,15 @@ admin_audit_logs
 - 清空云端数据后其他设备不会重新恢复已删除数据。
 - 本地数据删除和云端删除语义清晰。
 
-### 阶段 4：产品化同步体验
+实现状态（v1.5.0）：
+
+- `PATCH /api/me/devices/:id` 支持设备重命名。
+- `DELETE /api/me/devices/:id?delete_data=true` 支持撤销设备并删除云端数据。
+- `POST /api/me/cloud-sync/clear` 支持清空所有云端同步数据。
+- Tombstone 删除传播在 push 端点中实现。
+- `/uploads` 页面已支持设备管理和上传历史查看。
+
+### 阶段 4：产品化同步体验 ✅ 已完成
 
 目标：
 
@@ -1500,7 +1519,15 @@ admin_audit_logs
 - 菜单切换先渲染页面 shell 或 stale cache，再异步刷新数据。
 - 常用 range 查询走索引、aggregate 或 cache 路径。
 
-### 阶段 5：自动榜单与重算能力
+实现状态（v1.5.0）：
+
+- `aiusage init --backend cloud` 支持配置官方同步。
+- `aiusage status` 显示同步后端（syncBackend）和最近同步目标。
+- `/api/bootstrap` 端点返回首页所需的最小数据。
+- 本地新增 `usage_daily_aggregates` 和 `dashboard_query_cache` 表用于性能优化。
+- CLI schema 升级到 v7，新增聚合缓存表。
+
+### 阶段 5：自动榜单与重算能力 ✅ 已完成
 
 目标：
 
@@ -1520,6 +1547,17 @@ admin_audit_logs
 - 历史重算有明确 `pricing_version`，不会依赖已经按 retention 删除的私有明细。
 - 管理员只能编辑 draft 价格表；published 版本不可变。
 - publish 价格版本会写 audit log，并可触发显式 recompute job。
+
+实现状态（v1.5.0）：
+
+- `POST /api/admin/leaderboard/recompute` 端点已实现。
+- 管理后台定价标签页新增「Recompute Leaderboard」按钮。
+- 重算使用当前 published 价格表计算 cost。
+- 重算跳过 visibility='hidden' 的 metrics（不恢复管理员明确隐藏的数据）。
+- 重算记录 `pricing_version` 和 `has_unknown_cost` 标记。
+- 所有重算操作写入 `admin_audit_logs`。
+- 支持按 period_type、period_start/end、user_id 筛选重算范围。
+- 官方价格表 draft/publish/archive 工作流已在阶段 1 实现。
 
 ## 14. 迁移策略
 
