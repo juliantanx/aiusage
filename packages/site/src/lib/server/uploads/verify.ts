@@ -1,8 +1,10 @@
 import { sql } from '../db/pool.js'
 import { decryptDeviceSecret, sha256, buildCanonicalString, hashIp, computeHmac } from '../crypto/hmac.js'
-import { calculateDefaultCost } from '@aiusage/core'
+import { calculateDefaultCost, resolveDefaultPrice } from '@aiusage/core'
 import { nanoid } from 'nanoid'
 import { createHmac } from 'node:crypto'
+
+const CORE_PRICING_VERSION = 'core_v1'
 
 const TIMESTAMP_WINDOW_MS = 5 * 60 * 1000
 const ALLOWED_PERIOD_TYPES = ['daily', 'weekly', 'monthly', 'yearly', 'all_time'] as const
@@ -425,23 +427,37 @@ export function validatePeriodBoundary(snap: UploadSnapshot): boolean {
   }
 }
 
-function costForBreakdown(row: UploadBreakdown): number {
-  if (row.scope_type !== 'tool_model' || !row.model) return 0
-  return calculateDefaultCost(row.model, {
-    inputTokens: row.input_tokens,
-    outputTokens: row.output_tokens,
-    cacheReadTokens: row.cache_read_tokens,
-    cacheWriteTokens: row.cache_write_tokens,
-    thinkingTokens: row.thinking_tokens,
-  })
+function costForBreakdown(row: UploadBreakdown): { cost: number; unknown: boolean } {
+  if (row.scope_type !== 'tool_model' || !row.model) return { cost: 0, unknown: false }
+  const price = resolveDefaultPrice(row.model)
+  if (!price) {
+    return { cost: 0, unknown: row.total_tokens > 0 }
+  }
+  return {
+    cost: calculateDefaultCost(row.model, {
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cacheReadTokens: row.cache_read_tokens,
+      cacheWriteTokens: row.cache_write_tokens,
+      thinkingTokens: row.thinking_tokens,
+    }),
+    unknown: false,
+  }
 }
 
-function buildCostMap(snapshot: UploadSnapshot): Map<string, number> {
+interface CostMapResult {
+  costs: Map<string, number>
+  unknownModels: Set<string>
+}
+
+function buildCostMap(snapshot: UploadSnapshot): CostMapResult {
   const costs = new Map<string, number>()
+  const unknownModels = new Set<string>()
   let allCost = 0
 
   for (const row of snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')) {
-    const cost = costForBreakdown(row)
+    const { cost, unknown } = costForBreakdown(row)
+    if (unknown && row.model) unknownModels.add(row.model)
     allCost += cost
     costs.set(metricKey('tool_model', row.tool, row.model), cost)
     costs.set(metricKey('tool', row.tool, null), (costs.get(metricKey('tool', row.tool, null)) ?? 0) + cost)
@@ -449,7 +465,7 @@ function buildCostMap(snapshot: UploadSnapshot): Map<string, number> {
   }
 
   costs.set(metricKey('all', null, null), allCost)
-  return costs
+  return { costs, unknownModels }
 }
 
 export async function processUpload(
@@ -502,20 +518,34 @@ export async function processUpload(
         VALUES (${snapshotId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end}, ${snapshot.total_tokens}, ${snapshot.token_snapshot_hash}, 'accepted')
       `
 
-      const costs = buildCostMap(snapshot)
+      // Get current pricing version: prefer published official table, fallback to core
+      const publishedTable = await tx`
+        SELECT version FROM official_price_tables WHERE status = 'published' ORDER BY published_at DESC LIMIT 1
+      `
+      const pricingVersion = publishedTable[0] ? (publishedTable[0] as { version: string }).version : CORE_PRICING_VERSION
+
+      const { costs, unknownModels } = buildCostMap(snapshot)
       for (const row of snapshot.breakdowns) {
         const metricId = nanoid()
         const cost = costs.get(metricKey(row.scope_type, row.tool, row.model)) ?? 0
+        // Determine if this metric row has unknown cost
+        const hasUnknownCost = row.scope_type === 'tool_model' && row.model != null && unknownModels.has(row.model)
+          || row.scope_type === 'model' && row.model != null && unknownModels.has(row.model)
+          || row.scope_type === 'all' && unknownModels.size > 0
+          || row.scope_type === 'tool' && snapshot.breakdowns
+              .filter(b => b.scope_type === 'tool_model' && b.tool === row.tool && b.model != null && unknownModels.has(b.model))
+              .length > 0
+
         await tx`
           INSERT INTO leaderboard_metrics (
             id, upload_request_id, user_id, device_id, period_type, period_start, period_end,
             scope_type, tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-            thinking_tokens, total_tokens, total_cost_usd, visibility
+            thinking_tokens, total_tokens, total_cost_usd, visibility, pricing_version, has_unknown_cost
           )
           VALUES (
             ${metricId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end},
             ${row.scope_type}, ${row.tool}, ${row.model}, ${row.input_tokens}, ${row.output_tokens}, ${row.cache_read_tokens}, ${row.cache_write_tokens},
-            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, 'public'
+            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, 'public', ${pricingVersion}, ${hasUnknownCost}
           )
           ON CONFLICT (user_id, period_type, period_start, scope_type, (COALESCE(tool, '')), (COALESCE(model, '')))
           DO UPDATE SET
@@ -530,6 +560,8 @@ export async function processUpload(
             total_tokens = ${row.total_tokens},
             total_cost_usd = ${cost},
             visibility = 'public',
+            pricing_version = ${pricingVersion},
+            has_unknown_cost = ${hasUnknownCost},
             updated_at = NOW()
         `
       }

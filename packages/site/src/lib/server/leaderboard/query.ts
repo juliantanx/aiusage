@@ -48,9 +48,9 @@ export async function queryLeaderboard(options: {
   const entries = await sql`
     WITH ranked AS (
       SELECT
-        lm.user_id,
-        u.display_name,
-        u.avatar_url,
+        CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(lm.user_id), 1, 8) ELSE lm.user_id END AS user_id,
+        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
+        CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
         lm.scope_type,
         lm.tool,
         lm.model,

@@ -65,7 +65,22 @@ export const PUT: RequestHandler = async (event) => {
     updates.display_name = displayName
   }
 
-  if (Object.keys(updates).length === 0) {
+  // leaderboard settings
+  let leaderboardVisibility: string | undefined
+  let leaderboardAnonymous: boolean | undefined
+  if (body.leaderboard_visibility !== undefined) {
+    const vis = String(body.leaderboard_visibility)
+    if (!['public', 'private'].includes(vis)) {
+      return json({ error: 'Invalid leaderboard_visibility', error_key: 'invalid_visibility' }, { status: 400 })
+    }
+    leaderboardVisibility = vis
+  }
+  if (body.leaderboard_anonymous !== undefined) {
+    leaderboardAnonymous = body.leaderboard_anonymous === true
+  }
+
+  const hasLeaderboardUpdates = leaderboardVisibility !== undefined || leaderboardAnonymous !== undefined
+  if (Object.keys(updates).length === 0 && !hasLeaderboardUpdates) {
     return json({ message: 'No changes' })
   }
 
@@ -81,14 +96,24 @@ export const PUT: RequestHandler = async (event) => {
     values.push(updates.display_name)
     setClauses.push(`display_name = $${values.length}`)
   }
+  if (leaderboardVisibility !== undefined) {
+    values.push(leaderboardVisibility)
+    setClauses.push(`leaderboard_visibility = $${values.length}`)
+  }
+  if (leaderboardAnonymous !== undefined) {
+    values.push(leaderboardAnonymous)
+    setClauses.push(`leaderboard_anonymous = $${values.length}`)
+  }
 
   values.push(user.id)
   const idParam = `$${values.length}`
 
-  await sql.unsafe(
-    `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = ${idParam}`,
-    values
-  )
+  if (setClauses.length > 0) {
+    await sql.unsafe(
+      `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = ${idParam}`,
+      values
+    )
+  }
 
   // Reserve old username for 30 days
   if (usernameChanged) {
@@ -101,7 +126,7 @@ export const PUT: RequestHandler = async (event) => {
   }
 
   const updated = await sql`
-    SELECT id, username, display_name, username_changed_at FROM users WHERE id = ${user.id}
+    SELECT id, username, display_name, username_changed_at, leaderboard_visibility, leaderboard_anonymous FROM users WHERE id = ${user.id}
   `
 
   return json(updated[0])
