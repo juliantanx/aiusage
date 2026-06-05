@@ -442,7 +442,7 @@ async function systemSubmenu(rl: Interface): Promise<void> {
           }).trim()
           let remoteVersion = 'unknown'
           try {
-            const npmInfo = execSync('npm view aiusage version', {
+            const npmInfo = execSync('npm view @juliantanx/aiusage version', {
               encoding: 'utf-8',
               stdio: ['pipe', 'pipe', 'pipe'],
             }).trim()
@@ -460,10 +460,10 @@ async function systemSubmenu(rl: Interface): Promise<void> {
             if (doUpdate.toLowerCase() === 'y') {
               console.log('  Updating...')
               try {
-                execSync('npm install -g aiusage@latest', { stdio: 'inherit' })
+                execSync('npm install -g @juliantanx/aiusage@latest', { stdio: 'inherit' })
                 console.log('  Update complete.')
               } catch {
-                console.log('  Update failed. Try manually: npm install -g aiusage@latest')
+                console.log('  Update failed. Try manually: npm install -g @juliantanx/aiusage@latest')
               }
             }
           } else if (remoteVersion === localVersion) {
