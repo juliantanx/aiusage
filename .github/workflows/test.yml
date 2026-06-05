@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    name: Node.js ${{ matrix.node-version }}
+  test-core:
+    name: Core (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,14 +28,43 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
 
-      - name: Install build tools (for native module compilation)
-        run: sudo apt-get install -y python3 make g++
+      - name: Install dependencies (skip native compilation)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build core
+        run: pnpm --filter @aiusage/core build
+
+      - name: Test core & web
+        run: pnpm --filter @aiusage/core --filter @aiusage/web test
+
+  test-native:
+    name: Native (Node.js ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24', '26']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
+      - name: Build core
         run: pnpm --filter @aiusage/core build
 
-      - name: Test
-        run: pnpm test
+      - name: Test cli & widget
+        run: |
+          pnpm --filter @juliantanx/aiusage test
+          pnpm --filter @juliantanx/aiusage-widget test

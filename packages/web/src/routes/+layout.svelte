@@ -6,32 +6,46 @@
   import { triggerSync, fetchSyncStatus, fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
   import { getAuthShellState } from '$lib/auth-shell.js'
+  import {
+    House, LayoutDashboard, Coins, DollarSign, Box,
+    MessageSquare, FolderKanban, Wrench,
+    Gauge, Tag, Trophy, Settings, HelpCircle,
+    RefreshCw, ArrowUpDown, Sun, Moon, MonitorCog,
+    Languages, PanelLeftClose, PanelLeftOpen, ExternalLink
+  } from 'lucide-svelte'
 
   const NAV_GROUPS = [
     {
+      key: 'nav.group.overview',
+      items: [
+        { path: '/',           key: 'nav.home',      icon: House },
+        { path: '/overview',   key: 'nav.overview',  icon: LayoutDashboard },
+      ]
+    },
+    {
       key: 'nav.group.analytics',
       items: [
-        { path: '/',           key: 'nav.home',      icon: '⌖' },
-        { path: '/overview',   key: 'nav.overview',  icon: '◈' },
-        { path: '/tokens',     key: 'nav.tokens',    icon: '◇' },
-        { path: '/cost',       key: 'nav.cost',      icon: '$' },
+        { path: '/tokens',     key: 'nav.tokens',    icon: Coins },
+        { path: '/cost',       key: 'nav.cost',      icon: DollarSign },
+        { path: '/models',     key: 'nav.models',    icon: Box },
       ]
     },
     {
-      key: 'nav.group.data',
+      key: 'nav.group.activity',
       items: [
-        { path: '/models',     key: 'nav.models',    icon: '◆' },
-        { path: '/tool-calls', key: 'nav.toolCalls', icon: '⚡' },
-        { path: '/projects',   key: 'nav.projects',  icon: '◎' },
-        { path: '/sessions',   key: 'nav.sessions',  icon: '≡' },
+        { path: '/sessions',   key: 'nav.sessions',  icon: MessageSquare },
+        { path: '/projects',   key: 'nav.projects',  icon: FolderKanban },
+        { path: '/tool-calls', key: 'nav.toolCalls', icon: Wrench },
       ]
     },
     {
-      key: 'nav.group.manage',
+      key: 'nav.group.system',
       items: [
-        { path: '/quotas',     key: 'nav.quotas',    icon: '▣' },
-        { path: '/pricing',    key: 'nav.pricing',   icon: '¤' },
-        { path: '/settings',   key: 'nav.settings',  icon: '◉' },
+        { path: '/quotas',     key: 'nav.quotas',    icon: Gauge },
+        { path: '/pricing',    key: 'nav.pricing',   icon: Tag },
+        { path: '/leaderboard', key: 'nav.leaderboard', icon: Trophy },
+        { path: '/settings',   key: 'nav.settings',  icon: Settings },
+        { path: '/support',    key: 'nav.support',   icon: HelpCircle },
       ]
     }
   ]
@@ -41,7 +55,7 @@
   let collapsed = false
   let mobileOpen = false
 
-  const themeIcons = { system: '◐', dark: '●', light: '○' }
+  const themeIcons = { system: MonitorCog, dark: Moon, light: Sun }
 
   let syncStatus = null
   let syncing = false
@@ -331,7 +345,7 @@
                 class:active={$page.url.pathname === item.path}
                 title={collapsed ? $t(item.key) : undefined}
               >
-                <span class="nav-icon">{item.icon}</span>
+                <span class="nav-icon"><svelte:component this={item.icon} size={16} strokeWidth={1.75} /></span>
                 {#if !collapsed}
                   <span class="nav-label">{$t(item.key)}</span>
                 {/if}
@@ -350,7 +364,7 @@
             ? `${$t('sync.lastSync')}: ${formatSyncTime(syncStatus.lastSyncAt)}`
             : $t('sync.notConfigured')}
         >
-          <span class="ctrl-icon" class:spinning={syncing}>{syncing ? '↻' : '⇅'}</span>
+          <span class="ctrl-icon" class:spinning={syncing}>{#if syncing}<RefreshCw size={14} strokeWidth={1.75} />{:else}<ArrowUpDown size={14} strokeWidth={1.75} />{/if}</span>
           {#if !collapsed}
             <span class="ctrl-label" class:ok={syncResult === $t('sync.complete')} class:err={syncResult === $t('sync.failed')}>
               {syncResult || $t('sync.trigger')}
@@ -359,7 +373,7 @@
         </button>
 
         <button class="ctrl-btn" on:click={cycleTheme} title={$t(`theme.${$userPref}`)}>
-          <span class="ctrl-icon">{themeIcons[$userPref]}</span>
+          <span class="ctrl-icon"><svelte:component this={themeIcons[$userPref]} size={14} strokeWidth={1.75} /></span>
           {#if !collapsed}
             <span class="ctrl-label">{$t(`theme.${$userPref}`)}</span>
           {/if}
@@ -373,14 +387,14 @@
         </button>
 
         <button class="ctrl-btn collapse-btn" on:click={toggleSidebar} title={$t(collapsed ? 'nav.expand' : 'nav.collapse')}>
-          <span class="ctrl-icon">{collapsed ? '›' : '‹'}</span>
+          <span class="ctrl-icon">{#if collapsed}<PanelLeftOpen size={14} strokeWidth={1.75} />{:else}<PanelLeftClose size={14} strokeWidth={1.75} />{/if}</span>
           {#if !collapsed}
             <span class="ctrl-label">{$t('nav.collapse')}</span>
           {/if}
         </button>
 
         <a class="ctrl-btn" href="https://aiusage.jtanx.com" target="_blank" rel="noopener" title="aiusage.jtanx.com">
-          <span class="ctrl-icon">↗</span>
+          <span class="ctrl-icon"><ExternalLink size={14} strokeWidth={1.75} /></span>
           {#if !collapsed}
             <span class="ctrl-label">{$lang === 'en' ? 'Website' : '官网'}</span>
           {/if}
@@ -407,7 +421,7 @@
       </a>
       <div class="mobile-controls">
         <button class="ctrl-btn" on:click={cycleTheme}>
-          <span class="ctrl-icon">{themeIcons[$userPref]}</span>
+          <span class="ctrl-icon"><svelte:component this={themeIcons[$userPref]} size={14} strokeWidth={1.75} /></span>
         </button>
         <button class="ctrl-btn" on:click={toggleLang}>
           <span class="ctrl-icon lang-icon">{$lang === 'en' ? '中' : 'EN'}</span>
@@ -431,8 +445,11 @@
     padding: 0;
     box-sizing: border-box;
   }
+  :global(html) {
+    font-size: 18px;
+  }
   :global(body) {
-    font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
@@ -823,7 +840,7 @@
 
   .group-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -860,12 +877,11 @@
   }
 
   .nav-icon {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    width: 18px;
-    text-align: center;
+    width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    line-height: 1;
   }
   .nav-label {
     flex: 1;
@@ -911,20 +927,19 @@
   }
 
   .ctrl-icon {
-    font-family: var(--mono);
-    font-size: 0.75rem;
     width: 18px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    line-height: 1;
   }
   .lang-icon {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 700;
   }
   .ctrl-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.02em;
     flex: 1;
@@ -1079,7 +1094,7 @@
   }
   :global(th) {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -1122,7 +1137,7 @@
   }
   :global(.state-msg.error) { color: var(--rose); }
 
-  :global(button) { font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+  :global(button) { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
 
   /* ── Reduced motion ───────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
@@ -1185,7 +1200,7 @@
     :global(.hero-label),
     :global(.token-label),
     :global(.stat-label) {
-      font-size: 0.6875rem !important;
+      font-size: 0.75rem !important;
     }
     :global(.legend-item),
     :global(.tc-rank) {

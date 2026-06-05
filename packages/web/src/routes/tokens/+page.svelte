@@ -199,7 +199,7 @@
   }
   .mode-btn {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     padding: 0.22rem 0.65rem;
@@ -255,7 +255,7 @@
   .bar.total-bar { background: var(--chart-total); width: 14px; }
   .label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 6px;
   }

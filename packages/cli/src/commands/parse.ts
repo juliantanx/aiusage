@@ -34,6 +34,29 @@ interface ToolPaths {
 // Re-export for backward compatibility with other modules that import from here
 export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath, defaultGooseDbPath, defaultZedDbPath } from '../discovery.js'
 
+/**
+ * Extract cwd from a parsed JSONL first-line object.
+ * Different tools store cwd in different locations:
+ * - Claude Code: top-level `cwd`
+ * - Codex: `payload.cwd` (type: session_meta)
+ * - Gemini/Kimi/CodeBuddy/Grok/Craft/Droid/OMP/Pi: top-level `cwd` (if present)
+ * - OpenClaw: `workspaceDir` is always .openclaw/workspace, not useful
+ * - Copilot: no cwd field
+ */
+function extractCwdFromJson(data: Record<string, unknown>): string | undefined {
+  // Top-level cwd (Claude Code, generic tools)
+  if (typeof data.cwd === 'string' && data.cwd) return data.cwd
+
+  // Nested payload.cwd (Codex session_meta)
+  const payload = data.payload
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const p = payload as Record<string, unknown>
+    if (typeof p.cwd === 'string' && p.cwd) return p.cwd
+  }
+
+  return undefined
+}
+
 function extractSessionId(filePath: string, tool: Tool): string {
   if (tool === 'claude-code') {
     // Extract from path like ~/.claude/projects/<project>/<session>.jsonl
@@ -349,11 +372,11 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         const lines = content.split('\n')
         let byteOffset = 0
 
-        // Extract cwd from the first line — it's always present in JSONL session files
+        // Extract cwd from the first line (Claude Code: top-level, Codex: payload.cwd)
         let fileCwd: string | undefined
         try {
           const firstData = JSON.parse(lines[0])
-          if (typeof firstData.cwd === 'string' && firstData.cwd) fileCwd = firstData.cwd
+          fileCwd = extractCwdFromJson(firstData)
         } catch {}
 
         const sessionId = extractSessionId(filePath, tool)
@@ -729,6 +752,10 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     ).run(devicePlatform)
   }
 
+  // Backfill Hermes records that used a bare dbPath as source_file.
+  // Now we use "dbPath:session:<id>:<title>" for better project grouping.
+  backfillHermesSourceFiles(db)
+
   // Backfill cwd for records parsed before this feature was added.
   // Reads only the first 2 KB of each file — enough to find the cwd field.
   const staleFiles = db.prepare(
@@ -742,8 +769,9 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
       closeSync(fd)
       const firstLine = buf.subarray(0, n).toString('utf8').split('\n')[0]
       const data = JSON.parse(firstLine)
-      if (typeof data.cwd === 'string' && data.cwd) {
-        db.prepare(`UPDATE records SET cwd = ? WHERE source_file = ? AND cwd = ''`).run(data.cwd, source_file)
+      const cwd = extractCwdFromJson(data)
+      if (cwd) {
+        db.prepare(`UPDATE records SET cwd = ? WHERE source_file = ? AND cwd = ''`).run(cwd, source_file)
       }
     } catch {}
   }
@@ -760,6 +788,46 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   backfillMissingToolCalls(db, exchangeRate)
 
   return { parsedCount, toolCallCount, errors }
+}
+
+function backfillHermesSourceFiles(db: Database.Database): void {
+  // Old hermes records used the bare dbPath as source_file.
+  // Update them to "dbPath:session:<id>:<title>" for per-session project grouping.
+  const rows = db.prepare(`
+    SELECT DISTINCT r.source_file, r.session_id
+    FROM records r
+    WHERE r.tool = 'hermes'
+      AND r.source_file NOT LIKE '%:session:%'
+      AND r.source_file NOT LIKE 'synced/%'
+  `).all() as { source_file: string; session_id: string }[]
+
+  if (rows.length === 0) return
+
+  // Try to read session titles from the hermes DB
+  const dbPath = rows[0].source_file
+  let titleMap: Map<string, string> = new Map()
+  try {
+    if (existsSync(dbPath)) {
+      const hermesDb = new Database(dbPath, { readonly: true })
+      try {
+        const sessions = hermesDb.prepare(
+          `SELECT id, title FROM sessions WHERE title IS NOT NULL AND title != ''`
+        ).all() as { id: string; title: string }[]
+        for (const s of sessions) titleMap.set(s.id, s.title)
+      } finally {
+        hermesDb.close()
+      }
+    }
+  } catch {}
+
+  const updateStmt = db.prepare(`UPDATE records SET source_file = ? WHERE tool = 'hermes' AND session_id = ? AND source_file = ?`)
+  for (const row of rows) {
+    const title = (titleMap.get(row.session_id) || '').replace(/[/\\:]/g, '_').slice(0, 80)
+    const newSourceFile = title
+      ? `${row.source_file}:session:${row.session_id}:${title}`
+      : `${row.source_file}:session:${row.session_id}`
+    updateStmt.run(newSourceFile, row.session_id, row.source_file)
+  }
 }
 
 function backfillSkillNames(db: Database.Database): void {

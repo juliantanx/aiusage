@@ -1,6 +1,7 @@
 import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
+import { randomBytes } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
@@ -17,6 +18,13 @@ import {
   shouldProtectApiPath,
   verifyPassword,
 } from '../auth.js'
+import { getSiteUrl } from '../site-url.js'
+import { startDeviceAuth, completeDeviceAuth, fetchLeaderboardStatus } from '../leaderboard/api.js'
+import { clearCredentials, hasCredentials, loadCredentials, saveCredentials } from '../leaderboard/credentials.js'
+import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
+import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
+
+const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
 
 function recalcCosts(db: Database.Database): number {
   const BATCH_SIZE = 1000
@@ -97,10 +105,57 @@ function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.end(JSON.stringify(data))
 }
 
-async function readJsonBody(req: http.IncomingMessage): Promise<any> {
+async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   let body = ''
   for await (const chunk of req) body += chunk
-  return body ? JSON.parse(body) : {}
+  if (!body.trim()) return {}
+  return JSON.parse(body) as Record<string, unknown>
+}
+
+function getDeviceName(): string {
+  return loadConfig()?.device || hostname() || `${platform()}-${process.arch}`
+}
+
+function getLeaderboardFallback(periodType: string): Record<string, unknown> {
+  return {
+    entries: [],
+    next_cursor: null,
+    current_user: null,
+    period_type: periodType,
+    period_start: new Date().toISOString().slice(0, 10),
+    source_status: 'unavailable',
+  }
+}
+
+async function proxyLeaderboard(res: http.ServerResponse, url: URL): Promise<void> {
+  const periodType = url.searchParams.get('period_type') || 'daily'
+  const upstreamBase = getSiteUrl()
+  const upstream = new URL('/api/leaderboard', upstreamBase)
+  upstream.searchParams.set('period_type', periodType)
+
+  const cursor = url.searchParams.get('cursor')
+  if (cursor) upstream.searchParams.set('cursor', cursor)
+
+  try {
+    const response = await fetch(upstream, {
+      headers: { Accept: 'application/json' },
+    })
+    const contentType = response.headers.get('content-type') || ''
+    if (!response.ok || !contentType.includes('application/json')) {
+      json(res, getLeaderboardFallback(periodType))
+      return
+    }
+
+    const data = await response.json().catch(() => null)
+    if (!data || !Array.isArray(data.entries)) {
+      json(res, getLeaderboardFallback(periodType))
+      return
+    }
+
+    json(res, data)
+  } catch {
+    json(res, getLeaderboardFallback(periodType))
+  }
 }
 
 
@@ -882,27 +937,34 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool)
 
-        // Projects are derived from source_file which only exists in local records.
-        // synced_records has no source_file column, so other-device project data is unavailable.
-        if (df.where && !df.useUnion) {
-          json(res, { projects: [] })
-          return
-        }
+        let rows: any[]
 
-        const rows = db.prepare(`
-          SELECT source_file, cwd,
-                 COUNT(*) AS sessionCount,
-                 SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
-                 SUM(cost) AS cost
-          FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-          GROUP BY source_file ORDER BY totalTokens DESC
-        `).all({ ...dr.params, ...tf.params }) as any[]
+        if (df.where && !df.useUnion) {
+          // Specific other device: query synced_records which now carry source_file and cwd
+          rows = db.prepare(`
+            SELECT source_file, cwd,
+                   COUNT(*) AS sessionCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS cost
+            FROM synced_records WHERE 1=1 ${df.where} ${tf.where}
+            GROUP BY source_file ORDER BY totalTokens DESC
+          `).all({ ...df.params, ...tf.params }) as any[]
+        } else {
+          rows = db.prepare(`
+            SELECT source_file, cwd,
+                   COUNT(*) AS sessionCount,
+                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS totalTokens,
+                   SUM(cost) AS cost
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+            GROUP BY source_file ORDER BY totalTokens DESC
+          `).all({ ...dr.params, ...tf.params }) as any[]
+        }
 
         // Build a cwd inference map for Claude Code paths: encoded project dir → cwd.
         // Records without cwd can inherit it from another session in the same project directory.
         const cwdByEncodedDir: Record<string, string> = {}
         for (const row of rows) {
-          if (row.cwd) {
+          if (row.cwd && row.source_file) {
             const m = (row.source_file as string).replace(/\\/g, '/').match(/\.claude\/projects\/([^/]+)/)
             if (m && !cwdByEncodedDir[m[1]]) cwdByEncodedDir[m[1]] = row.cwd
           }
@@ -911,6 +973,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         // Aggregate by project
         const projectMap: Record<string, { sessions: number; tokens: number; cost: number; fullPath: string }> = {}
         for (const row of rows) {
+          if (!row.source_file) continue
           let effectiveCwd: string = row.cwd || ''
           if (!effectiveCwd) {
             const m = (row.source_file as string).replace(/\\/g, '/').match(/\.claude\/projects\/([^/]+)/)
@@ -1074,6 +1137,132 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
+      // ── /api/leaderboard ──────────────────────────────────────────
+      if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
+        await proxyLeaderboard(res, url)
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/upload' && req.method === 'POST') {
+        try {
+          const result = await uploadLeaderboardData(db, options?.currentDeviceInstanceId)
+          json(res, {
+            totalTokens: result.totalTokens,
+            response: result.response,
+          })
+        } catch (err: any) {
+          json(res, {
+            error: {
+              code: err?.code || 'UPLOAD_FAILED',
+              message: err instanceof Error ? err.message : String(err),
+            },
+          }, err?.code === 'not_logged_in' ? 401 : 502)
+        }
+        return
+      }
+
+      // ── /api/leaderboard/auth ─────────────────────────────────────
+      if (url.pathname === '/api/leaderboard/auth/status' && req.method === 'GET') {
+        const creds = loadCredentials()
+        if (!creds) {
+          json(res, { loggedIn: false, siteUrl: getSiteUrl(), uploads: [] })
+          return
+        }
+
+        try {
+          const status = await fetchLeaderboardStatus(getSiteUrl())
+          json(res, {
+            loggedIn: true,
+            deviceId: creds.device_id,
+            obtainedAt: creds.obtained_at,
+            siteUrl: getSiteUrl(),
+            uploads: status.snapshots,
+          })
+        } catch (err) {
+          json(res, {
+            loggedIn: true,
+            deviceId: creds.device_id,
+            obtainedAt: creds.obtained_at,
+            siteUrl: getSiteUrl(),
+            uploads: [],
+            statusError: err instanceof Error ? err.message : String(err),
+          })
+        }
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/auth/start' && req.method === 'POST') {
+        if (hasCredentials()) {
+          const creds = loadCredentials()
+          json(res, {
+            alreadyLoggedIn: true,
+            deviceId: creds?.device_id ?? null,
+            obtainedAt: creds?.obtained_at ?? null,
+          })
+          return
+        }
+
+        try {
+          const verifier = base64url(randomBytes(32))
+          const challenge = base64url(sha256Buffer(verifier))
+          const started = await startDeviceAuth(getSiteUrl(), {
+            device_name: getDeviceName(),
+            cli_version: 'web',
+            device_challenge: challenge,
+          })
+          pendingLeaderboardAuth.set(started.device_request_id, {
+            verifier,
+            expiresAt: new Date(started.expires_at).getTime(),
+          })
+          json(res, started)
+        } catch (err) {
+          json(res, { error: { code: 'AUTH_START_FAILED', message: err instanceof Error ? err.message : String(err) } }, 502)
+        }
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/auth/complete' && req.method === 'POST') {
+        try {
+          const body = await readJsonBody(req)
+          const requestId = typeof body.device_request_id === 'string' ? body.device_request_id : ''
+          const pending = pendingLeaderboardAuth.get(requestId)
+          if (!requestId || !pending) {
+            json(res, { error: { code: 'INVALID_REQUEST', message: 'Unknown or expired authorization request' } }, 400)
+            return
+          }
+          if (Date.now() > pending.expiresAt) {
+            pendingLeaderboardAuth.delete(requestId)
+            json(res, { error: { code: 'AUTH_EXPIRED', message: 'Authorization expired' } }, 410)
+            return
+          }
+
+          const completed = await completeDeviceAuth(getSiteUrl(), {
+            device_request_id: requestId,
+            device_verifier: pending.verifier,
+          })
+          pendingLeaderboardAuth.delete(requestId)
+          saveCredentials({
+            device_id: completed.device_id,
+            device_secret: completed.device_secret,
+            obtained_at: new Date().toISOString(),
+          })
+          json(res, { loggedIn: true, deviceId: completed.device_id })
+        } catch (err: any) {
+          if (err?.code === 'authorization_pending') {
+            json(res, { pending: true }, 202)
+            return
+          }
+          json(res, { error: { code: err?.code || 'AUTH_COMPLETE_FAILED', message: err instanceof Error ? err.message : String(err) } }, 502)
+        }
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/auth/logout' && req.method === 'POST') {
+        clearCredentials()
+        json(res, { ok: true })
+        return
+      }
+
       // ── /api/devices ──────────────────────────────────────────────
       if (url.pathname === '/api/devices') {
         const currentId = options?.currentDeviceInstanceId
@@ -1185,10 +1374,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             dashboardPollInterval: rest.dashboardPollInterval ?? null,
             parseInterval: rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
+            leaderboardAutoUpload: rest.leaderboardAutoUpload ?? false,
+            leaderboardUploadInterval: rest.leaderboardUploadInterval ?? null,
             sync: rest.sync ?? null,
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
             exchangeRateCache: rest.exchangeRateCache ?? null,
+            siteUrl: getSiteUrl(),
             credentialKeys: credentials ? Object.keys(credentials) : [],
             hostname: hostname(),
             platform: osPlatform,
@@ -1244,6 +1436,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if ('retentionDays' in update) {
               if (!update.retentionDays) delete existing.retentionDays
               else existing.retentionDays = Number(update.retentionDays)
+            }
+            if ('leaderboardAutoUpload' in update) {
+              existing.leaderboardAutoUpload = update.leaderboardAutoUpload === true
+            }
+            if ('leaderboardUploadInterval' in update) {
+              const uploadInterval = Number(update.leaderboardUploadInterval)
+              if (Number.isFinite(uploadInterval) && uploadInterval > 0) {
+                existing.leaderboardUploadInterval = uploadInterval
+              } else {
+                delete existing.leaderboardUploadInterval
+              }
             }
 
             if ('sync' in update) {

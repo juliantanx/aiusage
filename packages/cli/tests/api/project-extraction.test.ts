@@ -59,6 +59,36 @@ describe('extractProject', () => {
   it('returns unknown for empty sourceFile', () => {
     expect(extractProject('')).toBe('unknown')
   })
+
+  it('extracts openclaw agent name as project', () => {
+    expect(
+      extractProject('/Users/alice/.openclaw/agents/main/sessions/abc123.jsonl')
+    ).toBe('openclaw/main')
+  })
+
+  it('extracts openclaw custom agent name', () => {
+    expect(
+      extractProject('/Users/alice/.openclaw/agents/my-agent/sessions/abc123.jsonl')
+    ).toBe('openclaw/my-agent')
+  })
+
+  it('extracts hermes project from session title in sourceFile', () => {
+    expect(
+      extractProject('/Users/alice/.hermes/state.db:session:20260522_081752:Greeting and Assistance Offer')
+    ).toBe('Greeting and Assistance Offer')
+  })
+
+  it('returns hermes for hermes sessions without title', () => {
+    expect(
+      extractProject('/Users/alice/.hermes/state.db:session:20260522_081752')
+    ).toBe('hermes')
+  })
+
+  it('falls back for codex paths without cwd', () => {
+    // Codex paths have no project info — project comes from cwd field
+    const result = extractProject('/Users/alice/.codex/sessions/2026/05/22/rollout-abc123.jsonl')
+    expect(result).not.toBe('unknown') // should extract something from generic path
+  })
 })
 
 describe('extractProjectFromCwd', () => {

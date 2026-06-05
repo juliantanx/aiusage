@@ -192,7 +192,7 @@
   }
   .hero-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -224,7 +224,7 @@
   }
   .token-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -317,7 +317,7 @@
     color: var(--text-muted);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-family: var(--mono);
     font-weight: 500;
     transition: color 0.12s, background 0.12s;

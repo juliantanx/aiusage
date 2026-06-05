@@ -230,8 +230,16 @@ const PROVIDER_PREFIXES = [
  *      'z-ai/glm-5-20260211' matches 'glm-5'
  */
 export function resolvePrice(model: string): PriceEntry | undefined {
+  return resolvePriceFromTable(model, PRICE_TABLE)
+}
+
+export function resolveDefaultPrice(model: string): PriceEntry | undefined {
+  return resolvePriceFromTable(model, DEFAULT_PRICE_TABLE)
+}
+
+function resolvePriceFromTable(model: string, table: Record<string, PriceEntry>): PriceEntry | undefined {
   // Exact match
-  if (PRICE_TABLE[model]) return PRICE_TABLE[model]
+  if (table[model]) return table[model]
 
   // Strip provider prefix and try again
   let stripped = model
@@ -243,8 +251,8 @@ export function resolvePrice(model: string): PriceEntry | undefined {
   }
   if (stripped !== model) {
     const lc = stripped.toLowerCase()
-    if (PRICE_TABLE[lc]) return PRICE_TABLE[lc]
-    if (PRICE_TABLE[stripped]) return PRICE_TABLE[stripped]
+    if (table[lc]) return table[lc]
+    if (table[stripped]) return table[stripped]
   }
 
   // Prefix match (longest prefix wins) — try original, stripped, and lowercase variants
@@ -252,7 +260,7 @@ export function resolvePrice(model: string): PriceEntry | undefined {
   let bestEntry: PriceEntry | undefined
   const candidates = [model, stripped, stripped.toLowerCase()]
   for (const c of candidates) {
-    for (const [prefix, entry] of Object.entries(PRICE_TABLE)) {
+    for (const [prefix, entry] of Object.entries(table)) {
       if (c.startsWith(prefix) && prefix.length > bestPrefix.length) {
         bestPrefix = prefix
         bestEntry = entry
@@ -262,7 +270,7 @@ export function resolvePrice(model: string): PriceEntry | undefined {
   return bestEntry
 }
 
-export function calculateCost(
+function calculateCostWithResolver(
   model: string,
   tokens: {
     inputTokens: number
@@ -271,9 +279,10 @@ export function calculateCost(
     cacheWriteTokens: number
     thinkingTokens: number
   },
-  exchangeRate?: number
+  exchangeRate: number | undefined,
+  resolver: (model: string) => PriceEntry | undefined
 ): number {
-  const price = resolvePrice(model)
+  const price = resolver(model)
   if (!price) return 0
 
   const inputCost = (tokens.inputTokens / 1_000_000) * price.input
@@ -288,4 +297,32 @@ export function calculateCost(
     return convertToUSD(rawCost, exchangeRate ?? FALLBACK_RATE)
   }
   return rawCost
+}
+
+export function calculateCost(
+  model: string,
+  tokens: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    thinkingTokens: number
+  },
+  exchangeRate?: number
+): number {
+  return calculateCostWithResolver(model, tokens, exchangeRate, resolvePrice)
+}
+
+export function calculateDefaultCost(
+  model: string,
+  tokens: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    thinkingTokens: number
+  },
+  exchangeRate?: number
+): number {
+  return calculateCostWithResolver(model, tokens, exchangeRate, resolveDefaultPrice)
 }

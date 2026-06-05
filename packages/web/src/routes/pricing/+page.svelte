@@ -238,7 +238,7 @@
   }
   .toggle-btn {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     padding: 0.25rem 0.6rem;
     border: none;
@@ -323,7 +323,7 @@
   }
   .price-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -354,7 +354,7 @@
     padding: 0.15rem 0.5rem;
     border-radius: 4px;
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -368,7 +368,7 @@
 
   .btn-sm {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     padding: 0.2rem 0.55rem;
     border: 1px solid var(--border-subtle);
@@ -392,7 +392,7 @@
     flex-direction: column;
     gap: 0.2rem;
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;

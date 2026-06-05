@@ -12,22 +12,37 @@ LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.authors="Julian <juliantanx@users.noreply.github.com>"
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin pnpm to v9 (compatible with Node 20)
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /app
 
+# Copy workspace root files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+
+# Copy package.json files for each workspace package
 COPY packages/core/package.json packages/core/
 COPY packages/site/package.json packages/site/
 
+# Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Copy source code
 COPY packages/core/ packages/core/
 COPY packages/site/ packages/site/
 
+# Build
 RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/site build
 
-FROM nginx:alpine
+# Prepare production directory: copy build output and create a standalone package
+# that uses npm to resolve dependencies (avoids pnpm workspace complexity)
+RUN mkdir -p /deploy && \
+    cp -r /app/packages/site/build /deploy/build && \
+    cat /app/packages/site/package.json | \
+      node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); delete pkg.devDependencies; delete pkg.scripts; pkg.type='module'; fs.writeFileSync('/deploy/package.json',JSON.stringify(pkg,null,2))" && \
+    cd /deploy && npm install --omit=dev 2>&1 || true
+
+FROM node:20-slim
 
 LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.description="Official website and documentation for AIUsage — track AI coding assistant usage, token consumption, costs, and tool calls across Claude Code, Codex, Cursor, and more" \
@@ -36,30 +51,18 @@ LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="juliantanx"
 
-COPY --from=builder /app/packages/site/build /usr/share/nginx/html
+WORKDIR /app
 
-COPY <<'EOF' /etc/nginx/conf.d/default.conf
-server {
-    listen 80;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
+COPY --from=builder /deploy/build ./build
+COPY --from=builder /deploy/package.json ./
+COPY --from=builder /deploy/node_modules ./node_modules
 
-    location / {
-        try_files $uri $uri/index.html $uri.html /404.html;
-    }
+ENV NODE_ENV=production
+ENV PORT=3000
 
-    location ~* \.(css|js|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|ico|webp)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
+EXPOSE 3000
 
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
-    gzip_min_length 256;
-}
-EOF
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => { if (!r.ok) throw new Error('unhealthy') }).catch(() => process.exit(1))"
 
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "build"]

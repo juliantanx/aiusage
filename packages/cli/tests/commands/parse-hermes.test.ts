@@ -21,6 +21,7 @@ function createHermesDb(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
+      source TEXT NOT NULL DEFAULT 'cli',
       model TEXT,
       billing_provider TEXT,
       billing_base_url TEXT,
@@ -32,7 +33,8 @@ function createHermesDb(db: Database.Database): void {
       cache_write_tokens INTEGER NOT NULL DEFAULT 0,
       reasoning_tokens INTEGER NOT NULL DEFAULT 0,
       estimated_cost_usd REAL,
-      actual_cost_usd REAL
+      actual_cost_usd REAL,
+      title TEXT
     )
   `)
   db.exec(`
@@ -84,7 +86,7 @@ describe('runParseHermes', () => {
     expect(result.records[0].thinkingTokens).toBe(10)
     expect(result.records[0].ts).toBe(Math.round(1779408317.5 * 1000))
     expect(result.records[0].sessionId).toBe('sess_1')
-    expect(result.records[0].sourceFile).toBe('/home/user/.hermes/state.db')
+    expect(result.records[0].sourceFile).toBe('/home/user/.hermes/state.db:session:sess_1')
     expect(result.records[0].lineOffset).toBe(0)
     expect(result.errors).toHaveLength(0)
   })

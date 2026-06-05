@@ -430,7 +430,7 @@
   }
   .live-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.1em;
     color: var(--green);
@@ -438,7 +438,7 @@
 
   .range-badge {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -464,7 +464,7 @@
   }
   .clock-date {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.04em;
     color: var(--text-muted);
@@ -500,7 +500,7 @@
 
   .counter-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -534,7 +534,7 @@
   }
   .sub-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -573,7 +573,7 @@
     gap: 0.5rem;
     margin-top: 0.375rem;
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     color: var(--text-muted);
     width: 100%;
@@ -586,7 +586,7 @@
     border-radius: 4px;
     background: transparent;
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     color: var(--text-muted);
     cursor: pointer;
@@ -616,7 +616,7 @@
   .stat-block:hover { background: var(--raised); }
   .stat-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -652,7 +652,7 @@
   }
   .seg-lbl {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -673,7 +673,7 @@
   }
   .leg {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -723,7 +723,7 @@
   }
   .cfg-title {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -748,7 +748,7 @@
   .cfg-section { margin-bottom: 1rem; }
   .cfg-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -762,7 +762,7 @@
     border-radius: 5px;
     background: transparent;
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     color: var(--text-secondary);
     cursor: pointer;
@@ -771,7 +771,7 @@
   }
   .pill:hover { border-color: var(--accent); color: var(--accent); }
   .pill.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-  .pill-eg { opacity: 0.5; font-size: 0.6875rem; margin-left: 0.25rem; }
+  .pill-eg { opacity: 0.5; font-size: 0.75rem; margin-left: 0.25rem; }
 
   .cfg-refresh-info {
     margin-top: 0.5rem;
@@ -781,7 +781,7 @@
   }
   .refresh-info-text {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     color: var(--text-muted);
   }
@@ -827,7 +827,7 @@
   }
 
   .warn-icon {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     flex-shrink: 0;
   }
 
@@ -859,7 +859,7 @@
   }
   .splash-text {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.1em;
     color: var(--text-muted);
@@ -873,7 +873,7 @@
     border-radius: 6px;
     background: transparent;
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     color: var(--rose);
     cursor: pointer;
