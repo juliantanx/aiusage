@@ -35,10 +35,6 @@
     return `— ${s}s ${$t('sessions.detail.gap')} —`
   }
 
-  function shortSessionId(id) {
-    if (!id) return ''
-    return id.length > 12 ? id.slice(0, 12) + '…' : id
-  }
 
   function tokenPercent(part, total) {
     if (!total || !part) return 0
@@ -90,7 +86,7 @@
         <div class="id-path mono" title={session.cwd}>{session.cwd}</div>
       {/if}
       <div class="id-footer">
-        <span class="id-session mono" title={session.sessionId}>{$t('sessions.detail.meta.sessionId')}: {shortSessionId(session.sessionId)}</span>
+        <span class="id-session mono">{$t('sessions.detail.meta.sessionId')}: {session.sessionId}</span>
         <span class="id-duration mono">{formatDuration(session.duration)}</span>
       </div>
     </div>
