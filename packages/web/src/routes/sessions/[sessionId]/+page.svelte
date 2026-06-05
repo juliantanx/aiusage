@@ -66,7 +66,50 @@
 </div>
 
 {#if loading}
-  <div class="state-msg">{$t('common.loading')}</div>
+  <div class="detail-header">
+    <div class="identity card">
+      <div class="ph-line ph-w40"></div>
+      <div class="ph-line ph-w60"></div>
+      <div class="ph-line ph-w80"></div>
+      <div class="id-footer" style="margin-top:auto; padding-top:0.5rem; border-top:1px solid var(--border-subtle);">
+        <div class="ph-line ph-w50"></div>
+        <div class="ph-line ph-w20"></div>
+      </div>
+    </div>
+    <div class="metrics card">
+      <div class="metrics-grid">
+        {#each [1,2,3,4] as _}
+          <div class="metric-cell">
+            <div class="ph-line ph-w60" style="height:0.5rem;margin-bottom:0.25rem"></div>
+            <div class="ph-line ph-w40" style="height:0.85rem"></div>
+          </div>
+        {/each}
+      </div>
+      <div style="padding-top:0.5rem;border-top:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:0.3rem">
+        {#each [1,2] as _}
+          <div style="display:grid;grid-template-columns:5.5rem 1fr 4.5rem;gap:0.5rem;align-items:center">
+            <div class="ph-line ph-w60" style="height:0.5rem"></div>
+            <div class="ph-line" style="height:6px;border-radius:3px"></div>
+            <div class="ph-line ph-w50" style="height:0.5rem"></div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+  <div class="timeline">
+    {#each [1,2,3] as _}
+      <div class="record-card card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.375rem">
+          <div class="ph-line ph-w40"></div>
+          <div class="ph-line ph-w20"></div>
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-bottom:0.375rem">
+          <div class="ph-line ph-w20"></div>
+          <div class="ph-line ph-w20"></div>
+        </div>
+      </div>
+    {/each}
+  </div>
 {:else if error}
   <div class="state-msg error">{error}</div>
 {:else if data}
@@ -520,6 +563,18 @@
 
   .muted { color: var(--text-muted); }
   .accent { color: var(--accent); }
+
+  /* ── Loading placeholders ──────────────────────────────────── */
+  .ph-line {
+    height: 0.75rem;
+    background: var(--raised);
+    border-radius: 4px;
+  }
+  .ph-w20 { width: 20%; }
+  .ph-w40 { width: 40%; }
+  .ph-w50 { width: 50%; }
+  .ph-w60 { width: 60%; }
+  .ph-w80 { width: 80%; }
 
   /* ── Responsive ───────────────────────────────────────────── */
   @media (max-width: 800px) {
