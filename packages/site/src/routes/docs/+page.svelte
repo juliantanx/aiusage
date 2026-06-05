@@ -72,16 +72,25 @@
         { id: 'widget-tray', en: 'Tray Icon', zh: '托盘图标' },
       ]
     },
-    { id: 'account', en: 'Site Account', zh: '站点账号', children: [] },
+    { id: 'windows', en: 'Windows Launcher', zh: 'Windows 启动器', children: [] },
+    { id: 'account', en: 'Site Account', zh: '站点账号',
+      children: [
+        { id: 'account-register', en: 'Registration & Login', zh: '注册与登录' },
+        { id: 'account-verify', en: 'Email Verification', zh: '邮箱验证' },
+        { id: 'account-settings', en: 'Profile Settings', zh: '个人设置' },
+      ]
+    },
     { id: 'leaderboard', en: 'Public Leaderboard', zh: '公开排行榜',
       children: [
         { id: 'lb-view', en: 'Viewing & Filtering', zh: '查看与筛选' },
         { id: 'lb-upload', en: 'Upload Flow', zh: '上传流程' },
+        { id: 'lb-dashboard', en: 'Dashboard Leaderboard', zh: '仪表盘排行榜' },
         { id: 'lb-anonymous', en: 'Anonymous Mode', zh: '匿名模式' },
       ]
     },
     { id: 'uploads-page', en: 'Upload Status', zh: '上传状态', children: [] },
     { id: 'admin-page', en: 'Admin Dashboard', zh: '管理后台', children: [] },
+    { id: 'support', en: 'Support & Contact', zh: '服务与支持', children: [] },
     { id: 'cli', en: 'CLI Reference', zh: 'CLI 命令',
       children: [
         { id: 'cli-parse', en: 'parse', zh: 'parse' },
@@ -916,22 +925,66 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </Callout>
     </section>
 
+    <!-- ══════ Windows Launcher ══════ -->
+    <section id="windows">
+      <div class="sec-head">
+        <span class="sec-idx">16</span>
+        <h2>{zh ? 'Windows 启动器' : 'Windows Launcher'}</h2>
+      </div>
+      <p>{zh
+        ? '项目根目录提供了 windows-dashboard.bat 脚本，方便 Windows 用户通过双击启动仪表盘，无需手动输入命令。'
+        : 'The project root includes a windows-dashboard.bat script for Windows users to launch the dashboard by double-clicking, without typing CLI commands.'
+      }</p>
+      <ul>
+        <li><strong>{zh ? '交互菜单' : 'Interactive Menu'}</strong> — {zh ? '双击运行后可选择 Start / Stop / Restart / Update / Status' : 'Double-click to choose Start / Stop / Restart / Update / Status'}</li>
+        <li><strong>{zh ? '命令行模式' : 'Command-line Mode'}</strong> — <code>windows-dashboard.bat start</code>、<code>stop</code>、<code>status</code></li>
+        <li><strong>{zh ? '自动检测' : 'Auto-detection'}</strong> — {zh ? '自动检测已运行的仪表盘端口，避免重复启动' : 'Auto-detects running dashboard port to avoid duplicate instances'}</li>
+        <li><strong>{zh ? '自动打开浏览器' : 'Browser Auto-open'}</strong> — {zh ? '启动后自动打开浏览器访问仪表盘' : 'Automatically opens the dashboard in your browser after start'}</li>
+      </ul>
+      <Callout type="info">
+        {zh
+          ? '如果尚未安装 aiusage，脚本会提示自动执行 npm install -g @juliantanx/aiusage。'
+          : 'If aiusage is not installed, the script will prompt to run npm install -g @juliantanx/aiusage automatically.'
+        }
+      </Callout>
+    </section>
+
     <!-- ══════ Site Account ══════ -->
     <section id="account">
       <div class="sec-head">
-        <span class="sec-idx">16</span>
+        <span class="sec-idx">17</span>
         <h2>{zh ? '站点账号' : 'Site Account'}</h2>
       </div>
       <p>{zh
-        ? 'AIUsage 官方站点（aiusage.jtanx.com）提供账号系统，用于排行榜上传、设备授权和个人资料管理。注册和登录支持密码和第三方 OAuth。'
-        : 'The AIUsage official site (aiusage.jtanx.com) provides an account system for leaderboard uploads, device authorization, and profile management. Registration and login support both password and third-party OAuth.'
+        ? 'AIUsage 官方站点（aiusage.jtanx.com）提供账号系统，用于排行榜上传、云同步、设备授权和个人资料管理。注册和登录支持密码和第三方 OAuth。'
+        : 'The AIUsage official site (aiusage.jtanx.com) provides an account system for leaderboard uploads, cloud sync, device authorization, and profile management. Registration and login support both password and third-party OAuth.'
       }</p>
+    </section>
+
+    <section id="account-register">
       <h3>{zh ? '注册与登录' : 'Registration & Login'}</h3>
       <ul>
         <li><strong>{zh ? '密码注册' : 'Password'}</strong> — {zh ? '使用邮箱和密码注册' : 'Register with email and password'}</li>
         <li><strong>GitHub OAuth</strong> — {zh ? '通过 GitHub 账号授权登录' : 'Sign in with your GitHub account'}</li>
         <li><strong>LINUX DO OAuth</strong> — {zh ? '通过 LINUX DO 社区账号授权登录' : 'Sign in with your LINUX DO community account'}</li>
       </ul>
+    </section>
+
+    <section id="account-verify">
+      <h3>{zh ? '邮箱验证' : 'Email Verification'}</h3>
+      <p>{zh
+        ? '使用邮箱注册后，系统会发送验证邮件到你的注册邮箱。点击邮件中的验证链接完成邮箱验证。邮箱验证是上传排行榜数据和使用云同步功能的前提条件。'
+        : 'After registering with email, a verification email is sent to your inbox. Click the verification link to complete email verification. Email verification is required before uploading leaderboard data or using cloud sync.'
+      }</p>
+      <Callout type="info">
+        {zh
+          ? '通过 GitHub 或 LINUX DO OAuth 登录的用户无需手动验证邮箱，系统会自动关联已验证的第三方邮箱。'
+          : 'Users who sign in via GitHub or LINUX DO OAuth do not need manual email verification — the system automatically associates the verified third-party email.'
+        }
+      </Callout>
+    </section>
+
+    <section id="account-settings">
       <h3>{zh ? '个人设置' : 'Profile Settings'}</h3>
       <p>{zh
         ? '登录后可在 /settings 页面管理个人资料：'
@@ -950,7 +1003,7 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     <!-- ══════ Public Leaderboard ══════ -->
     <section id="leaderboard">
       <div class="sec-head">
-        <span class="sec-idx">17</span>
+        <span class="sec-idx">18</span>
         <h2>{zh ? '公开排行榜' : 'Public Leaderboard'}</h2>
       </div>
       <p>{zh
@@ -992,6 +1045,21 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       }</p>
     </section>
 
+    <section id="lb-dashboard">
+      <h3>{zh ? '仪表盘排行榜' : 'Dashboard Leaderboard'}</h3>
+      <p>{zh
+        ? '本地仪表盘的排行榜页面（/leaderboard）提供完整的排行榜浏览和数据上传功能，无需切换到 CLI。'
+        : 'The local dashboard leaderboard page (/leaderboard) provides full leaderboard browsing and data upload capabilities without switching to the CLI.'
+      }</p>
+      <ul>
+        <li><strong>{zh ? '周期切换' : 'Period Tabs'}</strong> — {zh ? '在 daily、weekly、monthly、yearly、all_time 之间切换' : 'Switch between daily, weekly, monthly, yearly, and all_time'}</li>
+        <li><strong>{zh ? '设备授权' : 'Device Authorization'}</strong> — {zh ? '直接在页面内完成设备授权，无需使用 CLI' : 'Authorize your device directly from the page without using the CLI'}</li>
+        <li><strong>{zh ? '手动上传' : 'Manual Upload'}</strong> — {zh ? '点击上传按钮立即上传聚合数据' : 'Click the upload button to immediately upload aggregate data'}</li>
+        <li><strong>{zh ? '自动上传' : 'Auto Upload'}</strong> — {zh ? '启用自动上传开关后，系统会按设定间隔（12 小时 / 每天 / 每周）自动上传数据' : 'Enable the auto-upload toggle to automatically upload data at a set interval (12 hours / daily / weekly)'}</li>
+        <li><strong>{zh ? '上传状态' : 'Upload Status'}</strong> — {zh ? '页面内显示最近一次上传的周期、状态和 Token 总量，以及 accepted / flagged / rejected 计数' : 'View the most recent upload period, status, and token total, plus accepted / flagged / rejected counts'}</li>
+      </ul>
+    </section>
+
     <section id="lb-anonymous">
       <h3>{zh ? '匿名模式' : 'Anonymous Mode'}</h3>
       <p>{zh
@@ -1003,7 +1071,7 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     <!-- ══════ Upload Status Page ══════ -->
     <section id="uploads-page">
       <div class="sec-head">
-        <span class="sec-idx">18</span>
+        <span class="sec-idx">19</span>
         <h2>{zh ? '上传状态' : 'Upload Status'}</h2>
       </div>
       <p>{zh
@@ -1019,7 +1087,7 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
     <!-- ══════ Admin Dashboard ══════ -->
     <section id="admin-page">
       <div class="sec-head">
-        <span class="sec-idx">19</span>
+        <span class="sec-idx">20</span>
         <h2>{zh ? '管理后台' : 'Admin Dashboard'}</h2>
       </div>
       <p>{zh
@@ -1041,9 +1109,30 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </Callout>
     </section>
 
+    <!-- ══════ Support & Contact ══════ -->
+    <section id="support">
+      <div class="sec-head">
+        <span class="sec-idx">21</span>
+        <h2>{zh ? '服务与支持' : 'Support & Contact'}</h2>
+      </div>
+      <p>{zh
+        ? '仪表盘侧边栏的 Support 页面（/support）列出了所有可用的联系方式和社区渠道。'
+        : 'The dashboard sidebar Support page (/support) lists all available contact methods and community channels.'
+      }</p>
+      <ul>
+        <li><strong>{zh ? '微信' : 'WeChat'}</strong> — {zh ? '扫描 QR 码添加个人微信' : 'Scan QR code to add on WeChat'}</li>
+        <li><strong>{zh ? '邮箱' : 'Email'}</strong> — hi@jtanx.com</li>
+        <li><strong>Discord</strong> — {zh ? '社区服务器' : 'Community server'}</li>
+        <li><strong>WhatsApp</strong> — {zh ? '社区群组' : 'Community group'}</li>
+        <li><strong>Telegram</strong> — {zh ? '社区频道' : 'Community channel'}</li>
+        <li><strong>Facebook</strong> — facebook.com/juliantanx</li>
+      </ul>
+    </section>
+
+    <!-- ══════ CLI Reference ══════ -->
     <section id="cli">
       <div class="sec-head">
-        <span class="sec-idx">20</span>
+        <span class="sec-idx">22</span>
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
@@ -1167,6 +1256,8 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         headers={zh ? ['命令', '说明'] : ['Command', 'Description']}
         rows={[
           ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、对象数量、记录数、数据库大小、同步后端和同步状态' : 'Show version, device name, DB path, schema version, object counts, record count, DB size, sync backend, and sync status'],
+          ['<code>login</code>', zh ? '授权当前设备（用于云同步和排行榜上传）' : 'Authorize this device (for cloud sync and leaderboard uploads)'],
+          ['<code>logout</code>', zh ? '删除本地设备凭证' : 'Remove local device credentials'],
           ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步（支持 cloud / GitHub / S3）' : 'Push, pull, and merge data with the remote backend (cloud / GitHub / S3)'],
           ['<code>recalc</code>', zh ? '按最新定价重新计算费用' : 'Recalculate costs with latest pricing'],
           ['<code>init</code>', zh ? '初始化同步后端（支持 cloud / GitHub / S3）' : 'Initialize sync backend (cloud / GitHub / S3)'],
