@@ -20,9 +20,10 @@ const translations = {
       collapse: 'Collapse',
       expand: 'Expand',
       group: {
+        overview: 'Overview',
         analytics: 'Analytics',
-        data: 'Data',
-        manage: 'Manage',
+        activity: 'Activity',
+        system: 'System',
       },
     },
     common: {
@@ -396,9 +397,10 @@ const translations = {
       collapse: '收起',
       expand: '展开',
       group: {
+        overview: '概览',
         analytics: '统计',
-        data: '数据',
-        manage: '管理',
+        activity: '活动',
+        system: '系统',
       },
     },
     common: {

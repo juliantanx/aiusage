@@ -8,31 +8,36 @@
 
   const NAV_GROUPS = [
     {
-      key: 'nav.group.analytics',
+      key: 'nav.group.overview',
       items: [
         { path: '/',           key: 'nav.home',      icon: '⌖' },
         { path: '/overview',   key: 'nav.overview',  icon: '◈' },
+      ]
+    },
+    {
+      key: 'nav.group.analytics',
+      items: [
         { path: '/tokens',     key: 'nav.tokens',    icon: '◇' },
         { path: '/cost',       key: 'nav.cost',      icon: '$' },
-      ]
-    },
-    {
-      key: 'nav.group.data',
-      items: [
         { path: '/models',     key: 'nav.models',    icon: '◆' },
-        { path: '/tool-calls', key: 'nav.toolCalls', icon: '⚡' },
-        { path: '/projects',   key: 'nav.projects',  icon: '◎' },
-        { path: '/sessions',   key: 'nav.sessions',  icon: '≡' },
       ]
     },
     {
-      key: 'nav.group.manage',
+      key: 'nav.group.activity',
+      items: [
+        { path: '/sessions',   key: 'nav.sessions',  icon: '≡' },
+        { path: '/projects',   key: 'nav.projects',  icon: '◎' },
+        { path: '/tool-calls', key: 'nav.toolCalls', icon: '⚡' },
+      ]
+    },
+    {
+      key: 'nav.group.system',
       items: [
         { path: '/quotas',     key: 'nav.quotas',    icon: '▣' },
-        { path: '/leaderboard', key: 'nav.leaderboard', icon: '#' },
         { path: '/pricing',    key: 'nav.pricing',   icon: '¤' },
-        { path: '/support',    key: 'nav.support',   icon: '@' },
+        { path: '/leaderboard', key: 'nav.leaderboard', icon: '#' },
         { path: '/settings',   key: 'nav.settings',  icon: '◉' },
+        { path: '/support',    key: 'nav.support',   icon: '@' },
       ]
     }
   ]

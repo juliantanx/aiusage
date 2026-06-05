@@ -221,7 +221,6 @@
 
 <div class="page-header leaderboard-header">
   <div>
-    <span class="eyebrow">{$t('leaderboard.publicView')}</span>
     <h1>{$t('leaderboard.title')}</h1>
     <p>{$t('leaderboard.desc')}</p>
   </div>
@@ -230,44 +229,123 @@
   </a>
 </div>
 
-<section class="card local-panel">
-  <div class="local-status">
-    <div class="section-title">{$t('leaderboard.authTitle')}</div>
-    {#if authLoading}
-      <div class="auth-state">{$t('common.loading')}</div>
-    {:else}
-      <div class="auth-panel" class:logged-in={authStatus.loggedIn}>
-        <span class="status-dot"></span>
-        <div>
-          <div class="auth-title">
-            {authStatus.loggedIn ? $t('leaderboard.loggedIn') : $t('leaderboard.notLoggedIn')}
-          </div>
-          {#if authStatus.loggedIn}
-            <div class="auth-meta mono">{authStatus.deviceId}</div>
-          {:else}
-            <div class="auth-meta">{$t('leaderboard.webLoginHint')}</div>
-          {/if}
-        </div>
+<div class="period-tabs" aria-label={$t('leaderboard.period')}>
+  {#each periods as period}
+    <button class="period-tab" class:active={activePeriod === period} on:click={() => switchPeriod(period)}>
+      {$t(`leaderboard.periods.${period}`)}
+    </button>
+  {/each}
+</div>
+
+{#if leaders.length > 0}
+  <div class="leaders">
+    {#each leaders as entry}
+      <div class="leader">
+        <span class="leader-rank">#{entry.rank}</span>
+        {#if entry.avatar_url}
+          <img src={entry.avatar_url} alt="" class="leader-avatar" />
+        {:else}
+          <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
+        {/if}
+        <span class="leader-name">{entry.display_name}</span>
+        <span class="leader-tokens mono">{formatTokens(Number(entry.total_tokens))}</span>
       </div>
+    {/each}
+  </div>
+{/if}
+
+<section class="card leaderboard-card">
+  <div class="table-meta">
+    <span>{$t(`leaderboard.periods.${activePeriod}`)}</span>
+    {#if data?.period_start}
+      <span>{$t('leaderboard.periodStart')}: {formatDate(data.period_start)}</span>
     {/if}
+    <span>{$t('leaderboard.showing')} {rows.length}</span>
   </div>
 
-  <div class="local-actions">
-    {#if authStatus.loggedIn}
-      <button class="primary-action" on:click={uploadNow} disabled={uploadBusy || authLoading}>
-        {uploadBusy ? $t('leaderboard.uploading') : $t('leaderboard.uploadInWeb')}
-      </button>
-      <button class="text-action" on:click={logout} disabled={authBusy || uploadBusy}>
-        {$t('leaderboard.logout')}
-      </button>
-    {:else}
-      <button class="primary-action" on:click={beginLogin} disabled={authBusy || authLoading}>
-        {authBusy ? $t('leaderboard.authorizing') : $t('leaderboard.loginInWeb')}
+  {#if error}
+    <div class="state-msg error">{error}</div>
+  {:else if loading}
+    <div class="state-msg">{$t('common.loading')}</div>
+  {:else if rows.length === 0}
+    <div class="state-msg">{$t('leaderboard.noEntries')}</div>
+  {:else}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{$t('leaderboard.user')}</th>
+            <th class="num">Tokens</th>
+            <th class="num updated">{$t('leaderboard.updated')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each rows as entry}
+            <tr class:top={entry.rank <= 3}>
+              <td class="mono muted-rank">#{entry.rank}</td>
+              <td>
+                <span class="user-cell">
+                  {#if entry.avatar_url}
+                    <img src={entry.avatar_url} alt="" class="avatar" />
+                  {:else}
+                    <span class="avatar placeholder">{avatarText(entry.display_name)}</span>
+                  {/if}
+                  <span class="user-name">{entry.display_name}</span>
+                </span>
+              </td>
+              <td class="mono num" title={formatFullTokens(entry.total_tokens)}>{formatTokens(Number(entry.total_tokens))}</td>
+              <td class="num updated">{formatDate(entry.updated_at)}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+
+    {#if data.next_cursor}
+      <button class="load-more" on:click={loadMore} disabled={loadingMore}>
+        {loadingMore ? $t('leaderboard.loadingMore') : $t('leaderboard.loadMore')}
       </button>
     {/if}
+  {/if}
+</section>
+
+<section class="card local-panel">
+  <div class="local-header">
+    <div class="section-title">{$t('leaderboard.authTitle')}</div>
+    <div class="local-actions">
+      {#if authStatus.loggedIn}
+        <button class="primary-action" on:click={uploadNow} disabled={uploadBusy || authLoading}>
+          {uploadBusy ? $t('leaderboard.uploading') : $t('leaderboard.uploadInWeb')}
+        </button>
+        <button class="text-action" on:click={logout} disabled={authBusy || uploadBusy}>
+          {$t('leaderboard.logout')}
+        </button>
+      {:else}
+        <button class="primary-action" on:click={beginLogin} disabled={authBusy || authLoading}>
+          {authBusy ? $t('leaderboard.authorizing') : $t('leaderboard.loginInWeb')}
+        </button>
+      {/if}
+    </div>
   </div>
 
-  <div class="auto-upload-panel">
+  {#if !authLoading}
+    <div class="auth-panel" class:logged-in={authStatus.loggedIn}>
+      <span class="status-dot"></span>
+      <div>
+        <div class="auth-title">
+          {authStatus.loggedIn ? $t('leaderboard.loggedIn') : $t('leaderboard.notLoggedIn')}
+        </div>
+        {#if authStatus.loggedIn}
+          <div class="auth-meta mono">{authStatus.deviceId}</div>
+        {:else}
+          <div class="auth-meta">{$t('leaderboard.webLoginHint')}</div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  <div class="auto-upload-row">
     <label class="toggle-row">
       <input
         type="checkbox"
@@ -326,93 +404,7 @@
   {/if}
 </section>
 
-<div class="period-tabs" aria-label={$t('leaderboard.period')}>
-  {#each periods as period}
-    <button class="period-tab" class:active={activePeriod === period} on:click={() => switchPeriod(period)}>
-      {$t(`leaderboard.periods.${period}`)}
-    </button>
-  {/each}
-</div>
-
-{#if leaders.length > 0}
-  <div class="leaders">
-    {#each leaders as entry}
-      <div class="leader">
-        <span class="leader-rank">#{entry.rank}</span>
-        {#if entry.avatar_url}
-          <img src={entry.avatar_url} alt="" class="leader-avatar" />
-        {:else}
-          <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
-        {/if}
-        <span class="leader-name">{entry.display_name}</span>
-        <span class="leader-tokens mono">{formatTokens(Number(entry.total_tokens))}</span>
-      </div>
-    {/each}
-  </div>
-{/if}
-
-<div class="content-grid">
-  <section class="card leaderboard-card">
-    <div class="table-meta">
-      <span>{$t(`leaderboard.periods.${activePeriod}`)}</span>
-      {#if data?.period_start}
-        <span>{$t('leaderboard.periodStart')}: {formatDate(data.period_start)}</span>
-      {/if}
-      <span>{$t('leaderboard.showing')} {rows.length}</span>
-    </div>
-
-    {#if error}
-      <div class="state-msg error">{error}</div>
-    {:else if loading}
-      <div class="state-msg">{$t('common.loading')}</div>
-    {:else if rows.length === 0}
-      <div class="state-msg">{$t('leaderboard.noEntries')}</div>
-    {:else}
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>{$t('leaderboard.user')}</th>
-              <th class="num">Tokens</th>
-              <th class="num updated">{$t('leaderboard.updated')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each rows as entry}
-              <tr class:top={entry.rank <= 3}>
-                <td class="mono muted-rank">#{entry.rank}</td>
-                <td>
-                  <span class="user-cell">
-                    {#if entry.avatar_url}
-                      <img src={entry.avatar_url} alt="" class="avatar" />
-                    {:else}
-                      <span class="avatar placeholder">{avatarText(entry.display_name)}</span>
-                    {/if}
-                    <span class="user-name">{entry.display_name}</span>
-                  </span>
-                </td>
-                <td class="mono num" title={formatFullTokens(entry.total_tokens)}>{formatTokens(Number(entry.total_tokens))}</td>
-                <td class="num updated">{formatDate(entry.updated_at)}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-
-      {#if data.next_cursor}
-        <button class="load-more" on:click={loadMore} disabled={loadingMore}>
-          {loadingMore ? $t('leaderboard.loadingMore') : $t('leaderboard.loadMore')}
-        </button>
-      {/if}
-    {/if}
-  </section>
-
-  <aside class="card guide-card">
-    <div class="section-title">{$t('leaderboard.privacyTitle')}</div>
-    <p class="privacy-copy">{$t('leaderboard.privacy')}</p>
-  </aside>
-</div>
+<p class="privacy-note">{$t('leaderboard.privacy')}</p>
 
 <style>
   .leaderboard-header {
@@ -422,22 +414,11 @@
     gap: 1rem;
   }
 
-  .eyebrow {
-    display: block;
-    margin-bottom: 0.35rem;
-    font-family: var(--mono);
-    font-size: 0.6875rem;
-    font-weight: 650;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
   .site-link {
     min-height: 32px;
     padding: 0.45rem 0.75rem;
     border-radius: 6px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 0.8125rem;
@@ -447,7 +428,7 @@
 
   .site-link:hover {
     color: var(--text);
-    background: var(--surface);
+    background: var(--raised);
   }
 
   .period-tabs {
@@ -457,140 +438,10 @@
     max-width: 100%;
     margin-bottom: 1rem;
     padding: 0.25rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
     background: var(--surface);
     overflow-x: auto;
-  }
-
-  .local-panel {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.75rem 1rem;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.875rem;
-  }
-
-  .local-status {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.75rem;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .local-actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    min-width: 220px;
-  }
-
-  .auto-upload-panel {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.75rem 1rem;
-    align-items: center;
-    padding: 0.625rem 0 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .toggle-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.625rem;
-    align-items: center;
-    min-width: 0;
-    cursor: pointer;
-  }
-
-  .toggle-row input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .switch {
-    position: relative;
-    width: 34px;
-    height: 20px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
-    transition: background 160ms ease, border-color 160ms ease;
-  }
-
-  .switch::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--text-muted);
-    transition: transform 160ms ease;
-  }
-
-  .toggle-row input:checked + .switch {
-    border-color: var(--accent);
-    background: var(--accent);
-  }
-
-  .toggle-row input:checked + .switch::after {
-    background: var(--surface);
-    transform: translateX(14px);
-  }
-
-  .toggle-row input:focus-visible + .switch {
-    outline: 2px solid color-mix(in oklab, var(--accent) 40%, transparent);
-    outline-offset: 2px;
-  }
-
-  .toggle-row input:disabled + .switch {
-    opacity: 0.55;
-  }
-
-  .toggle-row strong {
-    display: block;
-    color: var(--text);
-    font-size: 0.8125rem;
-  }
-
-  .toggle-row small {
-    display: block;
-    margin-top: 0.2rem;
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    line-height: 1.4;
-  }
-
-  .interval-control {
-    display: inline-flex;
-    gap: 0.5rem;
-    align-items: center;
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    font-weight: 650;
-    white-space: nowrap;
-  }
-
-  .interval-control select {
-    min-height: 32px;
-    padding: 0 1.875rem 0 0.625rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text-secondary);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .interval-control select:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
   }
 
   .period-tab {
@@ -606,12 +457,17 @@
     cursor: pointer;
   }
 
-  .period-tab:hover,
-  .period-tab.active {
-    color: var(--accent);
-    background: var(--bg);
+  .period-tab:hover {
+    color: var(--text);
+    background: var(--raised);
   }
 
+  .period-tab.active {
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* ── Leaders podium ──────────────────────────────────────────────────── */
   .leaders {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -654,7 +510,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg);
+    background: var(--raised);
     color: var(--accent);
     font-size: 0.75rem;
     font-weight: 750;
@@ -669,16 +525,11 @@
     font-weight: 650;
   }
 
-  .content-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 1rem;
-    align-items: start;
-  }
-
+  /* ── Leaderboard table ───────────────────────────────────────────────── */
   .leaderboard-card {
     padding: 0;
     overflow: hidden;
+    margin-bottom: 1.5rem;
   }
 
   .table-meta {
@@ -686,7 +537,7 @@
     gap: 1rem;
     flex-wrap: wrap;
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-subtle);
     color: var(--text-muted);
     font-size: 0.75rem;
   }
@@ -725,7 +576,7 @@
     margin: 1rem auto;
     min-height: 32px;
     padding: 0 1rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
@@ -735,16 +586,35 @@
 
   .load-more:hover {
     color: var(--text);
-    background: var(--bg);
+    background: var(--raised);
   }
 
-  .guide-card {
+  /* ── Local panel (auth + upload) ─────────────────────────────────────── */
+  .local-panel {
     display: flex;
     flex-direction: column;
-    gap: 0.625rem;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 1rem 1.25rem;
   }
 
-  .auth-state,
+  .local-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .local-header .section-title {
+    margin-bottom: 0;
+  }
+
+  .local-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
   .auth-panel,
   .verify-box,
   .upload-status {
@@ -752,33 +622,32 @@
   }
 
   .auth-panel {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    display: flex;
+    align-items: center;
     gap: 0.625rem;
-    align-items: start;
     min-width: 0;
   }
 
   .status-dot {
-    width: 9px;
-    height: 9px;
-    margin-top: 0.3rem;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--text-muted);
+    flex-shrink: 0;
   }
 
   .auth-panel.logged-in .status-dot {
-    background: #16a34a;
+    background: var(--green);
   }
 
   .auth-title {
     color: var(--text);
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .auth-meta {
     min-width: 0;
-    margin-top: 0.125rem;
+    margin-left: 0.5rem;
     color: var(--text-muted);
     line-height: 1.45;
     overflow: hidden;
@@ -786,20 +655,120 @@
     white-space: nowrap;
   }
 
+  .auto-upload-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 0 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .toggle-row {
+    display: flex;
+    gap: 0.625rem;
+    align-items: center;
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .toggle-row input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .switch {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    border: 1px solid var(--border-medium);
+    border-radius: 999px;
+    background: var(--raised);
+    transition: background 160ms ease, border-color 160ms ease;
+    flex-shrink: 0;
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: transform 160ms ease, background 160ms ease;
+  }
+
+  .toggle-row input:checked + .switch {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .toggle-row input:checked + .switch::after {
+    background: oklch(0.99 0.002 175);
+    transform: translateX(14px);
+  }
+
+  .toggle-row input:focus-visible + .switch {
+    outline: 2px solid color-mix(in oklab, var(--accent) 40%, transparent);
+    outline-offset: 2px;
+  }
+
+  .toggle-row input:disabled + .switch {
+    opacity: 0.45;
+  }
+
+  .toggle-row strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.8125rem;
+  }
+
+  .toggle-row small {
+    display: block;
+    margin-top: 0.125rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .interval-control {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .interval-control select {
+    min-height: 32px;
+    padding: 0 1.875rem 0 0.625rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .interval-control select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
   .upload-status,
   .verify-box {
     display: grid;
     gap: 0.35rem;
     padding: 0.75rem;
-    border-radius: 8px;
-    background: var(--surface);
+    border-radius: 6px;
+    background: var(--raised);
     color: var(--text-muted);
-  }
-
-  .local-panel > .upload-status,
-  .local-panel > .verify-box,
-  .local-panel > .compact {
-    grid-column: 1 / -1;
   }
 
   .upload-status strong,
@@ -841,7 +810,7 @@
 
   .text-action:hover {
     color: var(--text-secondary);
-    background: var(--bg);
+    background: var(--raised);
   }
 
   .primary-action:disabled {
@@ -858,48 +827,51 @@
     padding: 0.625rem 0;
   }
 
-  .privacy-copy {
+  /* ── Privacy footer ──────────────────────────────────────────────────── */
+  .privacy-note {
     margin: 0;
+    padding: 0.5rem 0;
     color: var(--text-muted);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     line-height: 1.5;
   }
 
+  /* ── Mobile ──────────────────────────────────────────────────────────── */
   @media (max-width: 900px) {
-    .leaderboard-header,
-    .local-panel,
-    .content-grid {
-      grid-template-columns: 1fr;
-    }
-
     .leaderboard-header {
-      align-items: flex-start;
       flex-direction: column;
+      align-items: flex-start;
     }
 
     .leaders {
       grid-template-columns: 1fr;
     }
 
-    .local-actions {
-      min-width: 0;
-      align-items: stretch;
+    .local-header {
+      flex-direction: column;
+      align-items: flex-start;
     }
 
-    .local-status {
-      grid-template-columns: 1fr;
+    .local-actions {
+      width: 100%;
     }
 
     .primary-action {
       width: 100%;
     }
 
-    .auto-upload-panel {
-      grid-template-columns: 1fr;
+    .auth-panel {
+      flex-wrap: wrap;
+    }
+
+    .auto-upload-row {
+      flex-direction: column;
+      align-items: flex-start;
     }
 
     .interval-control {
       justify-content: space-between;
+      width: 100%;
     }
 
     .updated {
