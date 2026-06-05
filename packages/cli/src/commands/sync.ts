@@ -2,10 +2,12 @@ import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { getState, setState } from '../init.js'
 import { SyncOrchestrator, type SyncBackend, type SyncResult } from '../sync/index.js'
+import { CloudSyncOrchestrator, type CloudSyncResult } from '../sync/cloud-orchestrator.js'
 import { verifyConsent } from '../sync/consent.js'
 import { GitSyncBackend } from '../sync/git.js'
 import { S3SyncBackend } from '../sync/s3.js'
 import { loadConfig, buildConsentConfig, loadCredential, AIUSAGE_DIR } from '../config.js'
+import { hasCredentials } from '../leaderboard/credentials.js'
 import type { SyncProgress } from '../sync/runtime.js'
 
 function createBackend(config: import('../config.js').Config): SyncBackend | null {
@@ -52,13 +54,43 @@ function blockedResult(error: string): SyncResult {
 export async function runSync(
   db: Database.Database,
   options?: { onProgress?: (progress: SyncProgress) => void },
-): Promise<SyncResult> {
+): Promise<SyncResult | CloudSyncResult> {
   const config = loadConfig()
   if (!config?.sync) {
-    return failedResult('Cloud sync not configured. Run "aiusage init" first.')
+    return failedResult('Sync not configured. Run "aiusage init" first.')
   }
 
   const state = getState(AIUSAGE_DIR)
+
+  // Cloud sync doesn't use consent system — it uses device auth (HMAC)
+  if (config.sync.backend === 'cloud') {
+    if (!hasCredentials()) {
+      return failedResult('Not logged in. Run "aiusage login" first.')
+    }
+
+    const orchestrator = new CloudSyncOrchestrator(db, {
+      deviceInstanceId: state.deviceInstanceId,
+      onProgress: options?.onProgress,
+    })
+
+    const startedAt = Date.now()
+    const result = await orchestrator.sync()
+
+    const now = Date.now()
+    setState(AIUSAGE_DIR, {
+      lastSyncAt: now,
+      lastSyncStatus: result.status === 'ok' ? 'ok' : 'failed',
+      lastSyncError: result.error,
+      lastSyncTarget: 'cloud',
+      lastSyncUploaded: result.uploadedCount,
+      lastSyncPulled: result.pulledCount,
+      lastSyncDurationMs: now - startedAt,
+    })
+
+    return result
+  }
+
+  // GitHub/S3 sync uses consent system
   if (!state?.syncConsentAt || !state?.syncConsentTarget) {
     setState(AIUSAGE_DIR, { lastSyncStatus: 'blocked_pending_consent' })
     return blockedResult('Sync consent not provided. Run "aiusage init" to approve.')

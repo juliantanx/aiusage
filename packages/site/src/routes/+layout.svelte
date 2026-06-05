@@ -1,13 +1,46 @@
 <script>
   import { page } from '$app/stores'
+  import { goto, invalidateAll } from '$app/navigation'
   import { lang } from '$lib/lang'
 
   function toggleLang() {
     lang.toggle()
   }
 
+  function getCsrfToken() {
+    const match = document.cookie.match(/csrf_token=([^;]+)/)
+    return match ? match[1] : ''
+  }
+
+  let menuOpen = false
+
+  function toggleMenu() {
+    menuOpen = !menuOpen
+  }
+
+  function closeMenu() {
+    menuOpen = false
+  }
+
+  function handleClickOutside(e) {
+    if (menuOpen && !e.target.closest('.user-menu-wrap')) {
+      menuOpen = false
+    }
+  }
+
+  async function handleLogout() {
+    menuOpen = false
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'x-csrf-token': getCsrfToken() }
+    })
+    await invalidateAll()
+    goto('/login')
+  }
+
   $: isDocs = $page.url.pathname.startsWith('/docs')
   $: zh = $lang === 'zh'
+  $: user = $page.data.user
 </script>
 
 <svelte:head>
@@ -16,7 +49,7 @@
     ? '追踪 Claude Code、Codex、Cursor 等 AI 编程工具的 Token 用量、费用和使用模式。本地优先，隐私至上。'
     : 'Track token consumption, costs, and usage patterns across Claude Code, Codex, Cursor, and more. Local-first, privacy-respecting.'
   } />
-  <meta name="keywords" content="AIUsage, AI coding, token tracker, Claude Code, Codex, Cursor, OpenClaw, OpenCode, Hermes, Qoder, AI usage analytics, token consumption, cost tracking, local-first, AI programming tools, AI编程工具, Token用量, 费用追踪" />
+  <meta name="keywords" content="AIUsage, AI coding, Claude Code, Codex, Cursor, OpenClaw, OpenCode, Hermes, Qoder, AI usage analytics, token consumption, cost tracking, local-first, AI programming tools, AI编程工具, Token用量, 费用追踪" />
   <link rel="canonical" href="https://aiusage.jtanx.com{$page.url.pathname}" />
 
   <!-- Open Graph -->
@@ -86,6 +119,8 @@
   })}</script>`}
 </svelte:head>
 
+<svelte:window on:click={handleClickOutside} />
+
 <div class="site">
   <!-- Desktop header -->
   <header class="site-header">
@@ -102,6 +137,9 @@
         <a href="/docs" class="nav-link" class:active={$page.url.pathname.startsWith('/docs')}>
           {zh ? '文档' : 'Docs'}
         </a>
+        <a href="/leaderboard" class="nav-link" class:active={$page.url.pathname.startsWith('/leaderboard')}>
+          {zh ? '排行榜' : 'Leaderboard'}
+        </a>
       </nav>
 
       <div class="header-actions">
@@ -113,9 +151,39 @@
         <button class="lang-toggle" on:click={toggleLang} aria-label={zh ? 'Switch to English' : '切换到中文'}>
           {zh ? 'EN' : '中文'}
         </button>
-        <a href="https://www.npmjs.com/package/@juliantanx/aiusage" class="header-cta" target="_blank" rel="noopener">
-          {zh ? '安装' : 'Install'}
-        </a>
+        {#if user}
+          <div class="user-menu-wrap">
+            <button class="user-menu-trigger" on:click={toggleMenu} aria-expanded={menuOpen} aria-haspopup="true">
+              {#if user.avatar_url}
+                <img src={user.avatar_url} alt="" class="user-avatar" width="32" height="32" />
+              {:else}
+                <span class="user-avatar-fallback">{(user.display_name || user.username).charAt(0).toUpperCase()}</span>
+              {/if}
+            </button>
+            {#if menuOpen}
+              <div class="user-menu" role="menu">
+                <div class="user-menu-header">
+                  <span class="user-menu-name">{user.display_name || user.username}</span>
+                  <span class="user-menu-username">@{user.username}</span>
+                </div>
+                <div class="user-menu-divider"></div>
+                <a href="/settings" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                  {zh ? '设置' : 'Settings'}
+                </a>
+                <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                  {zh ? '上传状态' : 'Upload status'}
+                </a>
+                <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
+                  {zh ? '退出登录' : 'Sign out'}
+                </button>
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <a href="/login" class="header-cta">
+            {zh ? '登录' : 'Sign In'}
+          </a>
+        {/if}
       </div>
     </div>
   </header>
@@ -127,6 +195,9 @@
       <span class="brand-text">AIUsage</span>
     </a>
     <div class="mobile-actions">
+      <a href="/leaderboard" class="nav-link" class:active={$page.url.pathname.startsWith('/leaderboard')}>
+        {zh ? '榜' : 'Rank'}
+      </a>
       <a href="https://github.com/juliantanx/aiusage" class="github-btn" target="_blank" rel="noopener" aria-label="GitHub">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
@@ -135,9 +206,39 @@
       <button class="lang-toggle" on:click={toggleLang} aria-label={zh ? 'Switch to English' : '切换到中文'}>
         {zh ? 'EN' : '中文'}
       </button>
-      <a href="https://www.npmjs.com/package/@juliantanx/aiusage" class="header-cta" target="_blank" rel="noopener">
-        {zh ? '安装' : 'Install'}
-      </a>
+      {#if user}
+        <div class="user-menu-wrap">
+          <button class="user-menu-trigger" on:click={toggleMenu} aria-expanded={menuOpen} aria-haspopup="true">
+            {#if user.avatar_url}
+              <img src={user.avatar_url} alt="" class="user-avatar" width="28" height="28" />
+            {:else}
+              <span class="user-avatar-fallback small">{(user.display_name || user.username).charAt(0).toUpperCase()}</span>
+            {/if}
+          </button>
+          {#if menuOpen}
+            <div class="user-menu" role="menu">
+              <div class="user-menu-header">
+                <span class="user-menu-name">{user.display_name || user.username}</span>
+                <span class="user-menu-username">@{user.username}</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <a href="/settings" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                {zh ? '设置' : 'Settings'}
+              </a>
+              <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                {zh ? '上传状态' : 'Upload status'}
+              </a>
+              <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
+                {zh ? '退出登录' : 'Sign out'}
+              </button>
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <a href="/login" class="header-cta">
+          {zh ? '登录' : 'Sign In'}
+        </a>
+      {/if}
     </div>
   </div>
 
@@ -385,6 +486,115 @@
     background: var(--hover);
   }
 
+  .user-menu-wrap {
+    position: relative;
+  }
+
+  .user-menu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+  }
+
+  .user-menu-trigger:hover,
+  .user-menu-trigger[aria-expanded="true"] {
+    opacity: 1;
+  }
+
+  .user-avatar {
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .user-avatar-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .user-avatar-fallback.small {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
+  }
+
+  .user-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.08), 0 4px 12px oklch(0 0 0 / 0.04);
+    z-index: 200;
+    padding: 4px 0;
+  }
+
+  .user-menu-header {
+    padding: 10px 14px 8px;
+  }
+
+  .user-menu-name {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+  }
+
+  .user-menu-username {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.3;
+  }
+
+  .user-menu-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+  }
+
+  .user-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .user-menu-item:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .user-menu-item.danger:hover {
+    color: var(--rose);
+  }
+
   /* ── Mobile nav ─────────────────────────────────────────────────────────── */
   .mobile-nav-bar {
     display: none;
@@ -464,8 +674,7 @@
     margin-bottom: 0.75rem;
   }
 
-  .footer-col a,
-  .footer-col span {
+  .footer-col a {
     display: block;
     font-size: 0.875rem;
     color: var(--text-secondary);

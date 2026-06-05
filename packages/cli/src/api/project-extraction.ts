@@ -123,12 +123,9 @@ function extractProjectFromKnownToolPath(sourceFile: string): string | null {
   if (taskMatch) return `task/${taskMatch[1]}`
 
   if (normalized.includes('/.openclaw/')) {
-    const parts = normalized.split('/').filter(Boolean)
-    const sessionsIndex = parts.indexOf('sessions')
-    if (sessionsIndex > 1) {
-      const candidate = parts[sessionsIndex - 1]
-      if (!isSkippableDirectoryName(candidate)) return candidate
-    }
+    // Path: ~/.openclaw/agents/<agent_name>/sessions/<uuid>.jsonl
+    const agentMatch = normalized.match(/\.openclaw\/agents\/([^/]+)\//)
+    if (agentMatch) return `openclaw/${agentMatch[1]}`
   }
 
   if (normalized.includes('/.codex/') || normalized.includes('/.opencode/')) {
@@ -138,6 +135,12 @@ function extractProjectFromKnownToolPath(sourceFile: string): string | null {
   if (normalized.includes('/.qoder/logs/runs/')) {
     return 'unknown'
   }
+
+  // Hermes: sourceFile format is "dbPath:session:id:title" or "dbPath:session:id"
+  const hermesMatch = normalized.match(/:session:[^:]+:(.+)$/)
+  if (hermesMatch) return hermesMatch[1]
+  // Hermes without title
+  if (normalized.match(/:session:[^:]+$/)) return 'hermes'
 
   return null
 }

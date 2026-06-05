@@ -6,7 +6,7 @@
 
 **[aiusage.jtanx.com](https://aiusage.jtanx.com)** · English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
-Track token usage, cost, and sessions across **22 AI coding tools** in one local dashboard. No accounts. No telemetry. No cloud required.
+Track token usage, cost, and sessions across **22 AI coding tools** in one local dashboard. No account is required for local use. No telemetry. No cloud required.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage dashboard home" width="32%" />
@@ -40,8 +40,31 @@ Open `http://localhost:3847` to explore the dashboard.
 Your AI coding tools each log usage separately — different formats, different machines, no shared view. aiusage pulls it all into one local dashboard:
 
 - **One dashboard** for tokens, cost, model mix, and tool-call activity
-- **Multi-machine sync** via GitHub, S3, or R2 — entirely optional
+- **Multi-machine sync** via official cloud sync, GitHub, S3, or R2 — entirely optional
 - **Your data stays local** by default
+
+## Public Leaderboard
+
+AIUsage includes a public leaderboard for users who choose to share aggregate totals. Ranking supports both **token totals** and **cost**, with filtering by tool and model.
+
+- View the leaderboard at [aiusage.jtanx.com/leaderboard](https://aiusage.jtanx.com/leaderboard) or from the CLI with `aiusage leaderboard`.
+- Upload requires an account and an authorized CLI device: `aiusage login`, then `aiusage upload`.
+- Leaderboard uploads contain aggregate token totals for ranking periods. They do not include prompts, completions, source code, file paths, or local cost estimates.
+- Anonymous mode is available in [/settings](https://aiusage.jtanx.com/settings) to hide your identity on the leaderboard.
+
+## Site Account
+
+The official site at [aiusage.jtanx.com](https://aiusage.jtanx.com) provides an account system for leaderboard participation:
+
+- **Login**: Password, GitHub OAuth, or LINUX DO OAuth
+- **Profile** ([/settings](https://aiusage.jtanx.com/settings)): Username (30-day cooldown), display name, avatar, password, leaderboard visibility, anonymous mode
+- **Upload Status** ([/uploads](https://aiusage.jtanx.com/uploads)): View upload history, manage authorized devices
+- **Admin Dashboard** ([/admin](https://aiusage.jtanx.com/admin)): Upload moderation, user management, pricing tables, audit logs (admin role required)
+
+Responsibility split:
+
+- `@juliantanx/aiusage` handles local parsing, local dashboards, sync, terminal summaries, CLI authorization, and signed leaderboard uploads.
+- The official site handles public leaderboard browsing, accounts, profile settings, authorized devices, upload review status, and admin moderation.
 
 ## Documentation
 

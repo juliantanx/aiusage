@@ -13,6 +13,11 @@ import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
 import { ProgressReporter } from './progress.js'
 import { launchWidget } from './commands/widget.js'
+import { runLeaderboardLogin } from './commands/leaderboard-login.js'
+import { runLeaderboardUpload } from './commands/leaderboard-upload.js'
+import { runLeaderboardStatus } from './commands/leaderboard-status.js'
+import { runLeaderboardLogout } from './commands/leaderboard-logout.js'
+import { runLeaderboardView } from './commands/leaderboard-view.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
@@ -33,6 +38,13 @@ program
 // Default command: summary
 program
   .action(() => {
+    const unknownCommand = program.args.find((arg) => typeof arg === 'string')
+    if (unknownCommand) {
+      console.error(`error: unknown command '${unknownCommand}'`)
+      console.error(`Run 'aiusage --help' to see available commands.`)
+      process.exit(1)
+    }
+
     const db = createDatabase(DB_PATH)
     const state = getState(AIUSAGE_DIR)
     const summary = generateSummary(db, {
@@ -237,7 +249,7 @@ program
 program
   .command('init')
   .description('Configure cloud sync')
-  .option('--backend <backend>', 'Sync backend (github|s3|skip)')
+  .option('--backend <backend>', 'Sync backend (cloud|github|s3|skip)')
   .option('--repo <repo>', 'GitHub repository (format: username/repo-name)')
   .option('--token <token>', 'GitHub Personal Access Token')
   .option('--bucket <bucket>', 'S3 bucket name')
@@ -282,6 +294,49 @@ program
   .description('Start the system tray widget')
   .action(async () => {
     await launchWidget()
+  })
+
+// leaderboard command
+program
+  .command('leaderboard')
+  .description('View the public leaderboard')
+  .allowExcessArguments(false)
+  .option('-p, --period <period>', 'Period to view (daily|weekly|monthly|yearly|all_time)', 'daily')
+  .option('-m, --metric <metric>', 'Ranking metric (tokens|cost)', 'tokens')
+  .option('-s, --scope <scope>', 'Ranking scope (all|tool|model|tool_model)', 'all')
+  .option('--tool <tool>', 'Filter by tool')
+  .option('--model <model>', 'Filter by model')
+  .option('-l, --limit <limit>', 'Number of rows to show, max 50', '20')
+  .action(async (options) => {
+    await runLeaderboardView(options)
+  })
+
+program
+  .command('login')
+  .description('Authorize this device for leaderboard uploads')
+  .action(async () => {
+    await runLeaderboardLogin()
+  })
+
+program
+  .command('upload')
+  .description('Upload aggregate token data to the public leaderboard')
+  .action(async () => {
+    await runLeaderboardUpload()
+  })
+
+program
+  .command('upload-status')
+  .description('Show leaderboard upload status')
+  .action(async () => {
+    await runLeaderboardStatus()
+  })
+
+program
+  .command('logout')
+  .description('Remove local leaderboard credentials')
+  .action(async () => {
+    await runLeaderboardLogout()
   })
 
 // PM2 ecosystem config

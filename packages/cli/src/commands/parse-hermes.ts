@@ -34,6 +34,7 @@ interface SessionRow {
   reasoning_tokens: number
   estimated_cost_usd: number | null
   actual_cost_usd: number | null
+  title: string | null
 }
 
 interface MessageRow {
@@ -57,7 +58,7 @@ export function runParseHermes(
     .prepare(
       `SELECT id, model, billing_provider, started_at, ended_at,
               input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-              reasoning_tokens, estimated_cost_usd, actual_cost_usd,
+              reasoning_tokens, estimated_cost_usd, actual_cost_usd, title,
               COALESCE(ended_at, started_at) AS session_ts
        FROM sessions
        WHERE (ended_at IS NOT NULL OR input_tokens > 0 OR output_tokens > 0)
@@ -115,6 +116,13 @@ export function runParseHermes(
 
     const recordId = generateRecordId(deviceInstanceId, dbPath + ':' + session.id, ts)
 
+    // Use a per-session sourceFile so project extraction can differentiate sessions.
+    // Format: /path/to/state.db:session:<id>:<title>
+    const sessionTitle = (session.title || '').replace(/[/\\:]/g, '_').slice(0, 80)
+    const sourceFile = sessionTitle
+      ? `${dbPath}:session:${session.id}:${sessionTitle}`
+      : `${dbPath}:session:${session.id}`
+
     const record: StatsRecord = {
       id: recordId,
       ts,
@@ -132,7 +140,7 @@ export function runParseHermes(
       cost,
       costSource,
       sessionId: session.id,
-      sourceFile: dbPath,
+      sourceFile,
       device,
       deviceInstanceId,
       platform,

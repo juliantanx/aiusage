@@ -15,7 +15,9 @@ export interface StatusResult {
   viewCount: number
   recordCount: number
   syncStatus: string
+  syncBackend: string
   lastSyncAt?: number
+  lastSyncTarget?: string
 }
 
 function formatFileSize(bytes: number): string {
@@ -49,6 +51,7 @@ export function generateStatus(db: Database.Database): StatusResult {
 
   const config = loadConfig()
   const deviceName = config?.device || hostname() || state?.deviceInstanceId?.slice(0, 8) || 'unknown'
+  const syncBackend = config?.sync?.backend || 'none'
 
   return {
     version: '0.0.1',
@@ -60,6 +63,8 @@ export function generateStatus(db: Database.Database): StatusResult {
     viewCount,
     recordCount,
     syncStatus: state?.lastSyncStatus ?? 'not_configured',
+    syncBackend,
     lastSyncAt: state?.lastSyncAt,
+    lastSyncTarget: state?.lastSyncTarget,
   }
 }

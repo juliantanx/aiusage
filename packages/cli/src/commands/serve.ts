@@ -6,6 +6,7 @@ import { createApiServer } from '../api/server.js'
 import { runParse } from './parse.js'
 import { runSync } from './sync.js'
 import { cleanOldData } from './clean.js'
+import { uploadLeaderboardData } from './leaderboard-upload.js'
 import { getState } from '../init.js'
 import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
@@ -71,6 +72,7 @@ export function serve(options: ServeOptions): void {
     loadConfig,
     runParse,
     runCleanup: cleanOldData,
+    runLeaderboardUpload: (db) => uploadLeaderboardData(db, getState(AIUSAGE_DIR)?.deviceInstanceId).then(() => undefined),
   })
   runtimeSettings.start()
 

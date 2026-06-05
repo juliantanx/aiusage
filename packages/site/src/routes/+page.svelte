@@ -542,8 +542,8 @@
 <style>
   /* ── Shared ──────────────────────────────────────────────────────────────── */
   .reveal { opacity: 1; transform: translateY(0); }
-  .reveal.js-ready { opacity: 0; transform: translateY(20px); transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1); }
-  .reveal.js-ready.revealed { opacity: 1; transform: translateY(0); }
+  :global(.reveal.js-ready) { opacity: 0; transform: translateY(20px); transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1); }
+  :global(.reveal.js-ready.revealed) { opacity: 1; transform: translateY(0); }
   .section-inner { width: var(--content-width); margin: 0 auto; }
   .section-label {
     font-size: 1.75rem; font-weight: 700; letter-spacing: -0.025em;

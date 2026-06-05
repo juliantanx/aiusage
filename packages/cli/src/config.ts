@@ -14,7 +14,7 @@ export const SYNC_FIELDS = [
 ]
 
 export interface SyncConfig {
-  backend: 'github' | 's3'
+  backend: 'github' | 's3' | 'cloud'
   repo?: string
   bucket?: string
   prefix?: string
@@ -29,6 +29,8 @@ export interface Config {
   platform?: string                    // 'win32' | 'darwin' | 'linux'
   retentionDays?: number
   parseInterval?: number
+  leaderboardAutoUpload?: boolean
+  leaderboardUploadInterval?: number
   dashboardPollInterval?: number
   credentials?: Record<string, string>
   priceOverrides?: Record<string, PriceEntry>
@@ -60,6 +62,9 @@ export function saveConfig(config: Config): void {
 export function buildConsentConfig(config: Config): ConsentConfig | null {
   const sync = config.sync
   if (!sync) return null
+
+  // Cloud sync uses device auth (HMAC), not consent
+  if (sync.backend === 'cloud') return null
 
   const backend = sync.backend
   const target = backend === 'github'

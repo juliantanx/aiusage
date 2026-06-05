@@ -5,6 +5,8 @@ export interface SummaryOptions {
   device?: string
   tool?: string
   currentDeviceInstanceId?: string
+  startTs?: number
+  endTs?: number
 }
 
 export interface SummaryResult {
@@ -29,6 +31,14 @@ export function generateSummary(db: Database.Database, options?: SummaryOptions)
   const localOnlyFilter = "AND source_file NOT LIKE 'synced/%'"
   const toolWhere = options?.tool ? 'AND tool = @tool' : ''
   const toolParam = options?.tool ? { tool: options.tool } : {}
+  const timeWhere = [
+    typeof options?.startTs === 'number' ? 'AND ts >= @startTs' : '',
+    typeof options?.endTs === 'number' ? 'AND ts <= @endTs' : '',
+  ].filter(Boolean).join(' ')
+  const timeParam = {
+    ...(typeof options?.startTs === 'number' ? { startTs: options.startTs } : {}),
+    ...(typeof options?.endTs === 'number' ? { endTs: options.endTs } : {}),
+  }
 
   if (currentId && !device) {
     // All devices: UNION (exclude merged synced records from records to avoid double-counting)
@@ -38,23 +48,23 @@ export function generateSummary(db: Database.Database, options?: SummaryOptions)
         COALESCE(SUM(cost), 0) AS totalCost,
         COUNT(*) AS recordCount
       FROM (
-        SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM records WHERE 1=1 ${localOnlyFilter} ${toolWhere}
+        SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM records WHERE 1=1 ${localOnlyFilter} ${toolWhere} ${timeWhere}
         UNION ALL
-        SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM synced_records WHERE device_instance_id != @currentId ${toolWhere}
+        SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM synced_records WHERE device_instance_id != @currentId ${toolWhere} ${timeWhere}
       )`
-    totalsParams = { currentId, ...toolParam }
+    totalsParams = { currentId, ...toolParam, ...timeParam }
 
     byToolSql = `
       SELECT tool,
              SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
              SUM(cost) AS cost
       FROM (
-        SELECT tool, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM records WHERE 1=1 ${localOnlyFilter} ${toolWhere}
+        SELECT tool, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM records WHERE 1=1 ${localOnlyFilter} ${toolWhere} ${timeWhere}
         UNION ALL
-        SELECT tool, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM synced_records WHERE device_instance_id != @currentId ${toolWhere}
+        SELECT tool, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost FROM synced_records WHERE device_instance_id != @currentId ${toolWhere} ${timeWhere}
       )
       GROUP BY tool ORDER BY cost DESC`
-    byToolParams = { currentId, ...toolParam }
+    byToolParams = { currentId, ...toolParam, ...timeParam }
   } else if (currentId && device && device !== currentId) {
     // Specific other device
     totalsSql = `
@@ -62,16 +72,16 @@ export function generateSummary(db: Database.Database, options?: SummaryOptions)
         COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
         COALESCE(SUM(cost), 0) AS totalCost,
         COUNT(*) AS recordCount
-      FROM synced_records WHERE device_instance_id = @device ${toolWhere}`
-    totalsParams = { device, ...toolParam }
+      FROM synced_records WHERE device_instance_id = @device ${toolWhere} ${timeWhere}`
+    totalsParams = { device, ...toolParam, ...timeParam }
 
     byToolSql = `
       SELECT tool,
              SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
              SUM(cost) AS cost
-      FROM synced_records WHERE device_instance_id = @device ${toolWhere}
+      FROM synced_records WHERE device_instance_id = @device ${toolWhere} ${timeWhere}
       GROUP BY tool ORDER BY cost DESC`
-    byToolParams = { device, ...toolParam }
+    byToolParams = { device, ...toolParam, ...timeParam }
   } else {
     // Local only (current device specified or no currentId)
     totalsSql = `
@@ -79,16 +89,16 @@ export function generateSummary(db: Database.Database, options?: SummaryOptions)
         COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
         COALESCE(SUM(cost), 0) AS totalCost,
         COUNT(*) AS recordCount
-      FROM records WHERE 1=1 ${currentId ? localOnlyFilter : ''} ${toolWhere}`
-    totalsParams = { ...toolParam }
+      FROM records WHERE 1=1 ${currentId ? localOnlyFilter : ''} ${toolWhere} ${timeWhere}`
+    totalsParams = { ...toolParam, ...timeParam }
 
     byToolSql = `
       SELECT tool,
              SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
              SUM(cost) AS cost
-      FROM records WHERE 1=1 ${currentId ? localOnlyFilter : ''} ${toolWhere}
+      FROM records WHERE 1=1 ${currentId ? localOnlyFilter : ''} ${toolWhere} ${timeWhere}
       GROUP BY tool ORDER BY cost DESC`
-    byToolParams = { ...toolParam }
+    byToolParams = { ...toolParam, ...timeParam }
   }
 
   const totals = db.prepare(totalsSql).get(totalsParams) as { totalTokens: number; totalCost: number; recordCount: number }

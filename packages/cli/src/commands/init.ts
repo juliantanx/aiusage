@@ -2,9 +2,10 @@ import { platform } from 'node:os'
 import { generateConsentFingerprint } from '../sync/consent.js'
 import { setState, getState } from '../init.js'
 import { loadConfig, saveConfig, buildConsentConfig, AIUSAGE_DIR, type Config } from '../config.js'
+import { hasCredentials } from '../leaderboard/credentials.js'
 
 export interface InitOptions {
-  backend?: 'github' | 's3' | 'skip'
+  backend?: 'github' | 's3' | 'cloud' | 'skip'
   repo?: string
   bucket?: string
   prefix?: string
@@ -30,6 +31,30 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
     }
     saveConfig(config)
     return { success: true, message: 'Configuration saved without cloud sync.' }
+  }
+
+  if (options.backend === 'cloud') {
+    if (!hasCredentials()) {
+      return { success: false, message: 'Not logged in. Run "aiusage login" first.' }
+    }
+
+    const config: Config = {
+      sync: {
+        backend: 'cloud',
+      },
+      device: options.device ?? existingConfig?.device,
+      platform: existingConfig?.platform ?? platform(),
+      retentionDays: existingConfig?.retentionDays,
+      parseInterval: existingConfig?.parseInterval,
+      dashboardPollInterval: existingConfig?.dashboardPollInterval,
+      credentials: existingConfig?.credentials,
+    }
+
+    saveConfig(config)
+    return {
+      success: true,
+      message: 'Official cloud sync configured. Run "aiusage sync" to start syncing.',
+    }
   }
 
   if (options.backend === 'github') {

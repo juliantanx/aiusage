@@ -43,5 +43,7 @@ export function mapStatsRecordToSyncRecord(record: StatsRecord): SyncRecord {
     deviceInstanceId: record.deviceInstanceId,
     platform: record.platform,
     updatedAt: record.updatedAt,
+    sourceFile: record.sourceFile,
+    cwd: record.cwd,
   }
 }

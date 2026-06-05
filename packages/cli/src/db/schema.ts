@@ -128,7 +128,9 @@ export function createV1Schema(db: Database.Database): void {
       device            TEXT NOT NULL,
       device_instance_id TEXT NOT NULL,
       platform          TEXT NOT NULL DEFAULT '',
-      updated_at        INTEGER NOT NULL
+      updated_at        INTEGER NOT NULL,
+      source_file       TEXT NOT NULL DEFAULT '',
+      cwd               TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE sync_tombstones (
