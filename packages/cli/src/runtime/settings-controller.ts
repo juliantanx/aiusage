@@ -66,7 +66,7 @@ export class RuntimeSettingsController {
     this.leaderboardUploadTimer = null
 
     const config = this.loadConfigFn()
-    const parseInterval = Number(config?.parseInterval ?? 0)
+    const parseInterval = Number(config?.refreshInterval ?? config?.parseInterval ?? 0)
     const retentionDays = Number(config?.retentionDays ?? 0)
     const leaderboardUploadInterval = Number(config?.leaderboardUploadInterval ?? DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS)
 

@@ -1333,8 +1333,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, {
             device: rest.device ?? null,
             weekStart: rest.weekStart ?? 1,
-            dashboardPollInterval: rest.dashboardPollInterval ?? null,
-            parseInterval: rest.parseInterval ?? null,
+            refreshInterval: rest.refreshInterval ?? rest.dashboardPollInterval ?? rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
             leaderboardAutoUpload: rest.leaderboardAutoUpload ?? false,
             leaderboardUploadInterval: rest.leaderboardUploadInterval ?? null,
@@ -1387,13 +1386,15 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               }
             }
 
-            if ('dashboardPollInterval' in update) {
-              if (!update.dashboardPollInterval) delete existing.dashboardPollInterval
-              else existing.dashboardPollInterval = Number(update.dashboardPollInterval)
-            }
-            if ('parseInterval' in update) {
-              if (!update.parseInterval) delete existing.parseInterval
-              else existing.parseInterval = Number(update.parseInterval)
+            if ('refreshInterval' in update) {
+              if (!update.refreshInterval) {
+                delete existing.refreshInterval
+              } else {
+                existing.refreshInterval = Number(update.refreshInterval)
+              }
+              // Clean up legacy fields
+              delete existing.dashboardPollInterval
+              delete existing.parseInterval
             }
             if ('retentionDays' in update) {
               if (!update.retentionDays) delete existing.retentionDays

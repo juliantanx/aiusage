@@ -28,10 +28,13 @@ export interface Config {
   device?: string
   platform?: string                    // 'win32' | 'darwin' | 'linux'
   retentionDays?: number
+  refreshInterval?: number
+  /** @deprecated Use refreshInterval. Kept for migration only. */
   parseInterval?: number
+  /** @deprecated Use refreshInterval. Kept for migration only. */
+  dashboardPollInterval?: number
   leaderboardAutoUpload?: boolean
   leaderboardUploadInterval?: number
-  dashboardPollInterval?: number
   credentials?: Record<string, string>
   priceOverrides?: Record<string, PriceEntry>
   /** @deprecated Legacy source paths — use AIUSAGE_*_PATH env vars instead. Kept for migration only. */

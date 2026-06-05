@@ -11,8 +11,8 @@ describe('RuntimeSettingsController', () => {
     vi.restoreAllMocks()
   })
 
-  it('starts parse scheduling when parseInterval is positive', async () => {
-    const loadConfig = vi.fn(() => ({ parseInterval: 25 }))
+  it('starts scheduling when refreshInterval is positive', async () => {
+    const loadConfig = vi.fn(() => ({ refreshInterval: 25 }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
@@ -24,8 +24,8 @@ describe('RuntimeSettingsController', () => {
     expect(runCleanup).not.toHaveBeenCalled()
   })
 
-  it('does not schedule parse when parseInterval is blank or zero', async () => {
-    const loadConfig = vi.fn(() => ({ parseInterval: 0 }))
+  it('does not schedule when refreshInterval is blank or zero', async () => {
+    const loadConfig = vi.fn(() => ({ refreshInterval: 0 }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
@@ -36,9 +36,9 @@ describe('RuntimeSettingsController', () => {
     expect(runParse).not.toHaveBeenCalled()
   })
 
-  it('rebuilds parse scheduling on reload', async () => {
-    let parseInterval = 25
-    const loadConfig = vi.fn(() => ({ parseInterval }))
+  it('rebuilds scheduling on reload', async () => {
+    let refreshInterval = 25
+    const loadConfig = vi.fn(() => ({ refreshInterval }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
@@ -47,7 +47,7 @@ describe('RuntimeSettingsController', () => {
     await vi.advanceTimersByTimeAsync(25)
     expect(runParse).toHaveBeenCalledTimes(1)
 
-    parseInterval = 60
+    refreshInterval = 60
     controller.reload()
     await vi.advanceTimersByTimeAsync(59)
     expect(runParse).toHaveBeenCalledTimes(1)
@@ -57,7 +57,7 @@ describe('RuntimeSettingsController', () => {
 
   it('skips overlapping parse runs', async () => {
     let release!: () => void
-    const loadConfig = vi.fn(() => ({ parseInterval: 25 }))
+    const loadConfig = vi.fn(() => ({ refreshInterval: 25 }))
     const runParse = vi.fn(() => new Promise<void>((resolve) => { release = resolve }))
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
@@ -105,7 +105,7 @@ describe('RuntimeSettingsController', () => {
   })
 
   it('stops all timers on stop', async () => {
-    const loadConfig = vi.fn(() => ({ parseInterval: 25, retentionDays: 7 }))
+    const loadConfig = vi.fn(() => ({ refreshInterval: 25, retentionDays: 7 }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup, cleanupIntervalMs: 50 })
@@ -132,7 +132,7 @@ describe('RuntimeSettingsController', () => {
   })
 
   it('ignores reload before start', async () => {
-    const loadConfig = vi.fn(() => ({ parseInterval: 25 }))
+    const loadConfig = vi.fn(() => ({ refreshInterval: 25 }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
