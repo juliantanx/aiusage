@@ -18,6 +18,7 @@ import { runLeaderboardUpload } from './commands/leaderboard-upload.js'
 import { runLeaderboardStatus } from './commands/leaderboard-status.js'
 import { runLeaderboardLogout } from './commands/leaderboard-logout.js'
 import { runLeaderboardView } from './commands/leaderboard-view.js'
+import { runMenu } from './commands/menu.js'
 import { createDatabase } from './db/index.js'
 import { getState } from './init.js'
 import { AIUSAGE_DIR } from './config.js'
@@ -337,6 +338,14 @@ program
   .description('Remove local leaderboard credentials')
   .action(async () => {
     await runLeaderboardLogout()
+  })
+
+// menu command
+program
+  .command('menu')
+  .description('Interactive management menu')
+  .action(async () => {
+    await runMenu()
   })
 
 // PM2 ecosystem config
