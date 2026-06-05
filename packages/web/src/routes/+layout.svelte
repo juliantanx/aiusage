@@ -597,9 +597,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 2.5rem;
     min-width: 2.5rem;
     height: 2.5rem;
-    padding: 0 0.75rem;
+    padding: 0;
     border: 1px solid var(--border-subtle);
     border-radius: 999px;
     background: var(--surface);
