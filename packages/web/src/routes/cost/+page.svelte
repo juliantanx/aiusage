@@ -127,7 +127,7 @@
   }
   .hero-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -172,7 +172,7 @@
   }
   .label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 6px;
   }

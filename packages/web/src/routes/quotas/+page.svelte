@@ -287,7 +287,7 @@
 
   .query-time {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     white-space: nowrap;
   }
@@ -320,7 +320,7 @@
 
   .tier-reset {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
   }
 

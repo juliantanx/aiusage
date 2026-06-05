@@ -626,7 +626,7 @@
 
   .group-title {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -640,7 +640,7 @@
 
   .platform-badge {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     padding: 0.15rem 0.45rem;
     border-radius: 4px;
@@ -660,7 +660,7 @@
 
   .field-label {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -674,7 +674,7 @@
 
   .key-hint {
     font-family: var(--mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     background: var(--raised);
     padding: 0.05rem 0.3rem;
     border-radius: 3px;
@@ -683,7 +683,7 @@
   }
 
   .field-input {
-    font-family: 'Instrument Sans', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     font-size: 0.85rem;
     padding: 0 0.65rem;
     border: 1px solid var(--border-subtle);
@@ -784,7 +784,7 @@
 
   .rate-time {
     color: var(--text-muted);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     margin-left: 0.25rem;
   }
 
@@ -826,14 +826,14 @@
 
   .detected-tool-status {
     font-family: var(--mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     margin-left: auto;
   }
 
   .detected-tool-path {
     font-family: var(--mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     margin-top: 0.25rem;
     margin-left: 1.25rem;

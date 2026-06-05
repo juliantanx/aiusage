@@ -1170,9 +1170,7 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         <li><strong>{zh ? '微信' : 'WeChat'}</strong> — {zh ? '扫描 QR 码添加个人微信' : 'Scan QR code to add on WeChat'}</li>
         <li><strong>{zh ? '邮箱' : 'Email'}</strong> — hi@jtanx.com</li>
         <li><strong>Discord</strong> — {zh ? '社区服务器' : 'Community server'}</li>
-        <li><strong>WhatsApp</strong> — {zh ? '社区群组' : 'Community group'}</li>
-        <li><strong>Telegram</strong> — {zh ? '社区频道' : 'Community channel'}</li>
-        <li><strong>Facebook</strong> — facebook.com/juliantanx</li>
+        <li><strong>Telegram</strong> — {zh ? '社区群组' : 'Community group'}</li>
       </ul>
     </section>
 
