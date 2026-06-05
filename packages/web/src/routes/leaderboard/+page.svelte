@@ -10,12 +10,12 @@
     startLeaderboardAuth,
     uploadLeaderboardData,
   } from '$lib/api.js'
-  import { formatTokens } from '$lib/stores.js'
   import { t } from '$lib/i18n.js'
 
   const periods = ['daily', 'weekly', 'monthly', 'yearly', 'all_time']
 
   let activePeriod = 'daily'
+  let activePeriodStart = ''
   let siteUrl = 'https://aiusage.jtanx.com'
   let data = null
   let loading = true
@@ -41,6 +41,7 @@
 
   $: rows = data?.entries || []
   $: leaders = rows.slice(0, 3)
+  $: canGoNext = activePeriod !== 'all_time' && activePeriodStart && activePeriodStart < getCurrentPeriodStart(activePeriod)
   $: recentUpload = authStatus?.uploads?.[0] || null
   $: uploadSummary = uploadResult?.response?.snapshots
     ? {
@@ -49,6 +50,78 @@
         rejected: uploadResult.response.snapshots.filter(s => s.status === 'rejected').length,
       }
     : null
+
+  function getCurrentPeriodStart(periodType) {
+    const now = new Date()
+    switch (periodType) {
+      case 'daily':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+      case 'weekly': {
+        const day = now.getUTCDay()
+        const diff = day === 0 ? 6 : day - 1
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff)).toISOString()
+      }
+      case 'monthly':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+      case 'yearly':
+        return new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString()
+      case 'all_time':
+        return '1970-01-01T00:00:00.000Z'
+      default:
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    }
+  }
+
+  function shiftPeriodStart(periodStart, periodType, direction) {
+    const d = new Date(periodStart)
+    switch (periodType) {
+      case 'daily':
+        d.setUTCDate(d.getUTCDate() + direction)
+        break
+      case 'weekly':
+        d.setUTCDate(d.getUTCDate() + direction * 7)
+        break
+      case 'monthly':
+        d.setUTCMonth(d.getUTCMonth() + direction)
+        break
+      case 'yearly':
+        d.setUTCFullYear(d.getUTCFullYear() + direction)
+        break
+    }
+    return d.toISOString()
+  }
+
+  function formatPeriodLabel(periodStart, periodType) {
+    const d = new Date(periodStart)
+    if (!Number.isFinite(d.getTime())) return ''
+    switch (periodType) {
+      case 'daily':
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+      case 'weekly': {
+        const end = new Date(d)
+        end.setUTCDate(end.getUTCDate() + 6)
+        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
+        return `${d.toLocaleDateString(undefined, fmt)} – ${end.toLocaleDateString(undefined, fmt)}`
+      }
+      case 'monthly':
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', timeZone: 'UTC' })
+      case 'yearly':
+        return d.toLocaleDateString(undefined, { year: 'numeric', timeZone: 'UTC' })
+      default:
+        return ''
+    }
+  }
+
+  function syncUrl() {
+    const params = new URLSearchParams(window.location.search)
+    if (activePeriod !== 'daily') params.set('period', activePeriod)
+    else params.delete('period')
+    const currentStart = getCurrentPeriodStart(activePeriod)
+    if (activePeriodStart && activePeriodStart !== currentStart) params.set('period_start', activePeriodStart)
+    else params.delete('period_start')
+    const qs = params.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? '?' + qs : ''}`)
+  }
 
   function formatFullTokens(value) {
     const n = Number(value)
@@ -77,6 +150,7 @@
     try {
       const next = await fetchLeaderboard(siteUrl, {
         period_type: activePeriod,
+        period_start: activePeriodStart || undefined,
         cursor,
       })
       data = more && data
@@ -93,6 +167,18 @@
   function switchPeriod(period) {
     if (period === activePeriod || loading) return
     activePeriod = period
+    activePeriodStart = getCurrentPeriodStart(period)
+    syncUrl()
+    loadLeaderboard()
+  }
+
+  function goToPeriod(direction) {
+    if (activePeriod === 'all_time') return
+    if (direction === 1 && !canGoNext) return
+    activePeriodStart = shiftPeriodStart(activePeriodStart, activePeriod, direction)
+    const currentStart = getCurrentPeriodStart(activePeriod)
+    if (activePeriodStart > currentStart) activePeriodStart = currentStart
+    syncUrl()
     loadLeaderboard()
   }
 
@@ -203,6 +289,14 @@
   }
 
   onMount(async () => {
+    const params = new URLSearchParams(window.location.search)
+    const periodParam = params.get('period')
+    const periodStartParam = params.get('period_start')
+    if (periodParam && ['daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
+      activePeriod = periodParam
+    }
+    activePeriodStart = periodStartParam || getCurrentPeriodStart(activePeriod)
+
     const config = await fetchConfig().catch(() => null)
     if (config?.siteUrl) siteUrl = config.siteUrl
     if (config) {
@@ -237,6 +331,14 @@
   {/each}
 </div>
 
+{#if activePeriod !== 'all_time'}
+  <div class="period-nav">
+    <button class="nav-arrow" on:click={() => goToPeriod(-1)}>←</button>
+    <span class="period-label">{formatPeriodLabel(activePeriodStart, activePeriod)}</span>
+    <button class="nav-arrow" on:click={() => goToPeriod(1)} disabled={!canGoNext}>→</button>
+  </div>
+{/if}
+
 {#if leaders.length > 0}
   <div class="leaders">
     {#each leaders as entry}
@@ -248,7 +350,7 @@
           <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
         {/if}
         <span class="leader-name">{entry.display_name}</span>
-        <span class="leader-tokens mono">{formatTokens(Number(entry.total_tokens))}</span>
+        <span class="leader-tokens mono">{formatFullTokens(entry.total_tokens)}</span>
       </div>
     {/each}
   </div>
@@ -257,9 +359,6 @@
 <section class="card leaderboard-card">
   <div class="table-meta">
     <span>{$t(`leaderboard.periods.${activePeriod}`)}</span>
-    {#if data?.period_start}
-      <span>{$t('leaderboard.periodStart')}: {formatDate(data.period_start)}</span>
-    {/if}
     <span>{$t('leaderboard.showing')} {rows.length}</span>
   </div>
 
@@ -294,7 +393,7 @@
                   <span class="user-name">{entry.display_name}</span>
                 </span>
               </td>
-              <td class="mono num" title={formatFullTokens(entry.total_tokens)}>{formatTokens(Number(entry.total_tokens))}</td>
+              <td class="mono num">{formatFullTokens(entry.total_tokens)}</td>
               <td class="num updated">{formatDate(entry.updated_at)}</td>
             </tr>
           {/each}
@@ -465,6 +564,46 @@
   .period-tab.active {
     color: var(--accent);
     background: var(--accent-dim);
+  }
+
+  /* ── Period navigation ───────────────────────────────────────────────── */
+  .period-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .nav-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .nav-arrow:hover:not(:disabled) {
+    background: var(--raised);
+    color: var(--text);
+  }
+
+  .nav-arrow:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .period-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 120px;
+    text-align: center;
   }
 
   /* ── Leaders podium ──────────────────────────────────────────────────── */

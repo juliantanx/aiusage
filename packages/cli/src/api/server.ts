@@ -125,6 +125,9 @@ async function proxyLeaderboard(res: http.ServerResponse, url: URL): Promise<voi
   const upstream = new URL('/api/leaderboard', upstreamBase)
   upstream.searchParams.set('period_type', periodType)
 
+  const periodStart = url.searchParams.get('period_start')
+  if (periodStart) upstream.searchParams.set('period_start', periodStart)
+
   const cursor = url.searchParams.get('cursor')
   if (cursor) upstream.searchParams.set('cursor', cursor)
 
@@ -972,7 +975,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           const table = getPriceTable()
           const overrides = getUserOverrides()
           // Also include models from DB that have no pricing
-          const dbModels = db.prepare("SELECT DISTINCT model FROM records WHERE model != 'unknown' ORDER BY model").all() as any[]
+          const dbModels = db.prepare("SELECT model, COUNT(*) as usage_count FROM records WHERE model != 'unknown' GROUP BY model ORDER BY usage_count DESC, model ASC").all() as any[]
           const models = dbModels.map(r => {
             const model = r.model
             const exactPrice = table[model]

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
+  import { goto } from '$app/navigation'
   import { lang } from '$lib/lang'
 
   const periods = [
@@ -27,6 +28,7 @@
   let activeScope = 'all'
   let selectedTool = ''
   let selectedModel = ''
+  let activePeriodStart = ''
   let data = null
   let loading = true
   let loadingMore = false
@@ -45,19 +47,86 @@
   $: selectedChip = activeScope === 'tool' ? selectedTool : activeScope === 'model' ? selectedModel : ''
   $: visibleChips = chipsExpanded ? activeChips : activeChips.slice(0, 12)
   $: hasMoreChips = activeChips.length > 12
+  $: canGoNext = activePeriod !== 'all_time' && activePeriodStart && activePeriodStart < getCurrentPeriodStart(activePeriod)
+
+  function getCurrentPeriodStart(periodType) {
+    const now = new Date()
+    switch (periodType) {
+      case 'daily':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+      case 'weekly': {
+        const day = now.getUTCDay()
+        const diff = day === 0 ? 6 : day - 1
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff)).toISOString()
+      }
+      case 'monthly':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+      case 'yearly':
+        return new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString()
+      case 'all_time':
+        return '1970-01-01T00:00:00.000Z'
+      default:
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    }
+  }
+
+  function shiftPeriodStart(periodStart, periodType, direction) {
+    const d = new Date(periodStart)
+    switch (periodType) {
+      case 'daily':
+        d.setUTCDate(d.getUTCDate() + direction)
+        break
+      case 'weekly':
+        d.setUTCDate(d.getUTCDate() + direction * 7)
+        break
+      case 'monthly':
+        d.setUTCMonth(d.getUTCMonth() + direction)
+        break
+      case 'yearly':
+        d.setUTCFullYear(d.getUTCFullYear() + direction)
+        break
+    }
+    return d.toISOString()
+  }
+
+  function formatPeriodLabel(periodStart, periodType) {
+    const d = new Date(periodStart)
+    if (!Number.isFinite(d.getTime())) return ''
+    const locale = zh ? 'zh-CN' : 'en-US'
+    switch (periodType) {
+      case 'daily':
+        return d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+      case 'weekly': {
+        const end = new Date(d)
+        end.setUTCDate(end.getUTCDate() + 6)
+        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
+        return `${d.toLocaleDateString(locale, fmt)} – ${end.toLocaleDateString(locale, fmt)}`
+      }
+      case 'monthly':
+        return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', timeZone: 'UTC' })
+      case 'yearly':
+        return d.toLocaleDateString(locale, { year: 'numeric', timeZone: 'UTC' })
+      default:
+        return ''
+    }
+  }
+
+  function syncUrl() {
+    const params = new URLSearchParams()
+    if (activePeriod !== 'daily') params.set('period', activePeriod)
+    if (activeMetric !== 'tokens') params.set('metric', activeMetric)
+    if (activeScope !== 'all') params.set('scope', activeScope)
+    if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
+    if (activeScope === 'model' && selectedModel) params.set('model', selectedModel)
+    const currentStart = getCurrentPeriodStart(activePeriod)
+    if (activePeriodStart && activePeriodStart !== currentStart) params.set('period_start', activePeriodStart)
+    const qs = params.toString()
+    goto(`/leaderboard${qs ? '?' + qs : ''}`, { replaceState: true, keepFocus: true, noScroll: true })
+  }
 
   function periodLabel(key) {
     const period = periods.find(p => p.key === key)
     return zh ? period?.zh : period?.en
-  }
-
-  function formatTokens(n) {
-    const num = Number(n)
-    if (!Number.isFinite(num)) return '0'
-    if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B'
-    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M'
-    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
-    return num.toLocaleString()
   }
 
   function formatFullTokens(n) {
@@ -68,10 +137,6 @@
   function formatCost(n) {
     const num = Number(n)
     return Number.isFinite(num) ? '$' + num.toFixed(4) : '$0.0000'
-  }
-
-  function formatValue(entry) {
-    return activeMetric === 'cost' ? formatCost(entry.total_cost_usd) : formatTokens(entry.total_tokens)
   }
 
   function formatFullValue(entry) {
@@ -128,6 +193,7 @@
         period_type: activePeriod,
         metric: activeMetric
       })
+      if (activePeriodStart) params.set('period_start', activePeriodStart)
       const res = await fetch(`/api/leaderboard/filters?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -154,6 +220,7 @@
         metric: activeMetric,
         scope: activeScope
       })
+      if (activePeriodStart) params.set('period_start', activePeriodStart)
       if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
       if (activeScope === 'model' && selectedModel) params.set('model', selectedModel)
       if (cursor) params.set('cursor', cursor)
@@ -174,12 +241,15 @@
   function switchPeriod(period) {
     if (activePeriod === period || loading) return
     activePeriod = period
+    activePeriodStart = getCurrentPeriodStart(period)
+    syncUrl()
     loadFilters().then(() => loadLeaderboard())
   }
 
   function switchMetric(metric) {
     if (activeMetric === metric || loading) return
     activeMetric = metric
+    syncUrl()
     loadFilters().then(() => loadLeaderboard())
   }
 
@@ -192,6 +262,7 @@
       await loadFilters()
     }
     ensureScopeSelection(scope)
+    syncUrl()
     loadLeaderboard()
   }
 
@@ -201,7 +272,18 @@
     } else if (activeScope === 'model') {
       selectedModel = value
     }
+    syncUrl()
     loadLeaderboard()
+  }
+
+  function goToPeriod(direction) {
+    if (activePeriod === 'all_time') return
+    if (direction === 1 && !canGoNext) return
+    activePeriodStart = shiftPeriodStart(activePeriodStart, activePeriod, direction)
+    const currentStart = getCurrentPeriodStart(activePeriod)
+    if (activePeriodStart > currentStart) activePeriodStart = currentStart
+    syncUrl()
+    loadFilters().then(() => loadLeaderboard())
   }
 
   function loadMore() {
@@ -209,6 +291,27 @@
   }
 
   onMount(() => {
+    const params = $page.url.searchParams
+    const periodParam = params.get('period')
+    const metricParam = params.get('metric')
+    const scopeParam = params.get('scope')
+    const toolParam = params.get('tool')
+    const modelParam = params.get('model')
+    const periodStartParam = params.get('period_start')
+
+    if (periodParam && ['daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
+      activePeriod = periodParam
+    }
+    if (metricParam && ['tokens', 'cost'].includes(metricParam)) {
+      activeMetric = metricParam
+    }
+    if (scopeParam && ['all', 'tool', 'model'].includes(scopeParam)) {
+      activeScope = scopeParam
+    }
+    if (toolParam) selectedTool = toolParam
+    if (modelParam) selectedModel = modelParam
+    activePeriodStart = periodStartParam || getCurrentPeriodStart(activePeriod)
+
     loadFilters()
     loadLeaderboard()
   })
@@ -228,6 +331,14 @@
           </button>
         {/each}
       </div>
+
+      {#if activePeriod !== 'all_time'}
+        <div class="period-nav">
+          <button class="nav-arrow" on:click={() => goToPeriod(-1)} aria-label={zh ? '上一周期' : 'Previous period'}>←</button>
+          <span class="period-label">{formatPeriodLabel(activePeriodStart, activePeriod)}</span>
+          <button class="nav-arrow" on:click={() => goToPeriod(1)} disabled={!canGoNext} aria-label={zh ? '下一周期' : 'Next period'}>→</button>
+        </div>
+      {/if}
 
       <div class="control-row">
         <div class="toolbar compact" aria-label={zh ? '指标选择' : 'Metric'}>
@@ -282,7 +393,7 @@
               <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
             {/if}
             <span class="leader-name">{entry.display_name}</span>
-            <span class="leader-tokens">{formatValue(entry)}</span>
+            <span class="leader-tokens">{formatFullValue(entry)}</span>
           </div>
         {/each}
       </div>
@@ -293,9 +404,6 @@
         <span>{periodLabel(activePeriod)}</span>
         <span>{valueLabel}</span>
         <span>{scopes.find(s => s.key === activeScope)?.[zh ? 'zh' : 'en']}{selectedChip ? `: ${selectedChip}` : ''}</span>
-        {#if data?.period_start}
-          <span>{zh ? '周期开始' : 'Period start'}: {formatDate(data.period_start)}</span>
-        {/if}
         <span>{zh ? '已显示' : 'Showing'} {rows.length}</span>
       </div>
 
@@ -339,8 +447,8 @@
               {#if activeScope !== 'all'}
                 <span class="col-scope" role="cell" title={scopeValue(entry)}>{scopeValue(entry)}</span>
               {/if}
-              <span class="col-tokens" role="cell" title={formatFullValue(entry)}>
-                {formatValue(entry)}
+              <span class="col-tokens" role="cell">
+                {formatFullValue(entry)}
               </span>
               <span class="col-updated" role="cell">{formatDate(entry.updated_at)}</span>
             </div>
@@ -410,6 +518,34 @@
   }
   .pill:hover { background: var(--surface); color: var(--text); }
   .pill.active { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+
+  .period-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .nav-arrow:hover:not(:disabled) { background: var(--raised); color: var(--text); }
+  .nav-arrow:disabled { opacity: 0.35; cursor: not-allowed; }
+  .period-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 120px;
+    text-align: center;
+  }
 
   .chip-bar {
     display: flex;
