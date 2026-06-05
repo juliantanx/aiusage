@@ -116,7 +116,7 @@
   }
 
   function handleSettingsUpdated(event) {
-    globalRefreshMs = event?.detail?.dashboardPollInterval ?? 30000
+    globalRefreshMs = event?.detail?.refreshInterval ?? 30000
     startRefreshCycle()
   }
 
@@ -129,7 +129,7 @@
 
     try {
       const cfg = await fetchConfig()
-      if (cfg?.dashboardPollInterval) globalRefreshMs = cfg.dashboardPollInterval
+      if (cfg?.refreshInterval) globalRefreshMs = cfg.refreshInterval
     } catch {}
 
     await triggerRefresh().catch(() => {})

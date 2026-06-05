@@ -125,6 +125,9 @@ async function proxyLeaderboard(res: http.ServerResponse, url: URL): Promise<voi
   const upstream = new URL('/api/leaderboard', upstreamBase)
   upstream.searchParams.set('period_type', periodType)
 
+  const periodStart = url.searchParams.get('period_start')
+  if (periodStart) upstream.searchParams.set('period_start', periodStart)
+
   const cursor = url.searchParams.get('cursor')
   if (cursor) upstream.searchParams.set('cursor', cursor)
 
@@ -763,6 +766,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           LIMIT 1
         `).get(filterParams) as any
 
+        // Fetch cwd from the first record that has one
+        const cwdRow = db.prepare(`
+          SELECT cwd FROM records
+          WHERE session_id = @sessionId AND cwd != '' ${toolClause} ${deviceClause}
+          LIMIT 1
+        `).get(filterParams) as any
+        const cwd = cwdRow?.cwd || ''
+
         if (!meta) {
           json(res, { error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404)
           return
@@ -816,7 +827,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const toolCallCount = toolCallRows.length
 
         json(res, {
-          session: { ...meta, toolCallCount },
+          session: { ...meta, toolCallCount, cwd },
           records: records.map(r => ({
             ...r,
             toolCalls: toolCallsByRecord[r.id] ?? [],
@@ -964,7 +975,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           const table = getPriceTable()
           const overrides = getUserOverrides()
           // Also include models from DB that have no pricing
-          const dbModels = db.prepare("SELECT DISTINCT model FROM records WHERE model != 'unknown' ORDER BY model").all() as any[]
+          const dbModels = db.prepare("SELECT model, COUNT(*) as usage_count FROM records WHERE model != 'unknown' GROUP BY model ORDER BY usage_count DESC, model ASC").all() as any[]
           const models = dbModels.map(r => {
             const model = r.model
             const exactPrice = table[model]
@@ -1128,6 +1139,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, {
             loggedIn: true,
             deviceId: creds.device_id,
+            deviceName: status.deviceName ?? null,
+            user: status.user ?? null,
             obtainedAt: creds.obtained_at,
             siteUrl: getSiteUrl(),
             uploads: status.snapshots,
@@ -1298,6 +1311,40 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
+      // ── /api/tools ────────────────────────────────────────────────
+      if (url.pathname === '/api/tools' && req.method === 'GET') {
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
+        const dr = getDateRangeFilter(range, from, to, '', weekStart)
+
+        let rows: Array<{ tool: string; sessionCount: number }>
+
+        if (df.useUnion) {
+          rows = db.prepare(`
+            SELECT tool, COUNT(DISTINCT session_id) AS sessionCount FROM (
+              SELECT tool, session_id FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+              UNION ALL
+              SELECT tool, session_key AS session_id FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            ) GROUP BY tool ORDER BY sessionCount DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+        } else if (df.where) {
+          rows = db.prepare(`
+            SELECT tool, COUNT(DISTINCT session_key) AS sessionCount
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY tool ORDER BY sessionCount DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+        } else {
+          rows = db.prepare(`
+            SELECT tool, COUNT(DISTINCT session_id) AS sessionCount
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            GROUP BY tool ORDER BY sessionCount DESC
+          `).all({ ...dr.params }) as any[]
+        }
+
+        json(res, { tools: rows })
+        return
+      }
+
       // ── /api/config/credential ──────────────────────────────────────
       if (url.pathname === '/api/config/credential' && req.method === 'GET') {
         const ref = url.searchParams.get('ref')?.trim()
@@ -1325,8 +1372,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, {
             device: rest.device ?? null,
             weekStart: rest.weekStart ?? 1,
-            dashboardPollInterval: rest.dashboardPollInterval ?? null,
-            parseInterval: rest.parseInterval ?? null,
+            refreshInterval: rest.refreshInterval ?? rest.dashboardPollInterval ?? rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
             leaderboardAutoUpload: rest.leaderboardAutoUpload ?? false,
             leaderboardUploadInterval: rest.leaderboardUploadInterval ?? null,
@@ -1379,13 +1425,15 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               }
             }
 
-            if ('dashboardPollInterval' in update) {
-              if (!update.dashboardPollInterval) delete existing.dashboardPollInterval
-              else existing.dashboardPollInterval = Number(update.dashboardPollInterval)
-            }
-            if ('parseInterval' in update) {
-              if (!update.parseInterval) delete existing.parseInterval
-              else existing.parseInterval = Number(update.parseInterval)
+            if ('refreshInterval' in update) {
+              if (!update.refreshInterval) {
+                delete existing.refreshInterval
+              } else {
+                existing.refreshInterval = Number(update.refreshInterval)
+              }
+              // Clean up legacy fields
+              delete existing.dashboardPollInterval
+              delete existing.parseInterval
             }
             if ('retentionDays' in update) {
               if (!update.retentionDays) delete existing.retentionDays

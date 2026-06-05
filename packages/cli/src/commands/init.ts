@@ -25,8 +25,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays,
-      parseInterval: existingConfig?.parseInterval,
-      dashboardPollInterval: existingConfig?.dashboardPollInterval,
+      refreshInterval: existingConfig?.refreshInterval,
       credentials: existingConfig?.credentials,
     }
     saveConfig(config)
@@ -45,8 +44,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays,
-      parseInterval: existingConfig?.parseInterval,
-      dashboardPollInterval: existingConfig?.dashboardPollInterval,
+      refreshInterval: existingConfig?.refreshInterval,
       credentials: existingConfig?.credentials,
     }
 
@@ -74,8 +72,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays,
-      parseInterval: existingConfig?.parseInterval,
-      dashboardPollInterval: existingConfig?.dashboardPollInterval,
+      refreshInterval: existingConfig?.refreshInterval,
       credentials: {
         ...existingConfig?.credentials,
         [`github/${options.repo}/token`]: options.token,
@@ -125,8 +122,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
       retentionDays: existingConfig?.retentionDays,
-      parseInterval: existingConfig?.parseInterval,
-      dashboardPollInterval: existingConfig?.dashboardPollInterval,
+      refreshInterval: existingConfig?.refreshInterval,
       credentials: {
         ...existingConfig?.credentials,
         [`s3/${options.bucket}/accessKeyId`]: options.accessKeyId,

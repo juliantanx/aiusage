@@ -7,13 +7,21 @@
   let loading = true
   let loadError = null
 
-  // Form data — all strings for simplicity, coerced on save
-  let general = { device: '', weekStart: 1, dashboardPollInterval: '', parseInterval: '' }
+  // Unified form state for General + Data + Currency
+  let general = {
+    device: '', weekStart: 1, refreshInterval: '',
+    retentionDays: '',
+    displayCurrency: 'USD', exchangeRate: '',
+  }
   let detectedTools = []
+  let showNotFound = false
   let currentPlatform = ''
   let currentHostname = ''
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
+
+  $: activeTools = detectedTools.filter(t => t.status !== 'not_found')
+  $: notFoundTools = detectedTools.filter(t => t.status === 'not_found')
 
   // Sync form — credentialRef is derived automatically, never user-editable
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '' }
@@ -39,13 +47,9 @@
   let prevRepo = ''
   let prevBucket = ''
 
-  let dataSection = { retentionDays: '' }
   let effectiveDeviceName = ''
 
-  // Currency settings
-  // exchangeRate field stores USD→CNY (e.g. 7.30) for user display
-  // Config stores CNY→USD (e.g. 0.137) internally
-  let currency = { displayCurrency: 'USD', exchangeRate: '' }
+  // Exchange rate cache
   let cachedRate = 0.137 // CNY→USD, internal direction
   let cachedRateFetchedAt = null
   let rateRefreshing = false
@@ -58,8 +62,6 @@
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
   let syncSaving = false;    let syncError = '';    let syncSaved = false
-  let dataSaving = false;    let dataError = '';    let dataSaved = false
-  let currencySaving = false; let currencyError = ''; let currencySaved = false
 
   // Credential key derivation — must match sync.ts createBackend()
   function ghKey(repo)    { return `github/${repo}/token` }
@@ -100,8 +102,10 @@
       general = {
         device: cfg.device ?? '',
         weekStart: cfg.weekStart ?? 1,
-        dashboardPollInterval: cfg.dashboardPollInterval != null ? String(cfg.dashboardPollInterval) : '',
-        parseInterval: cfg.parseInterval != null ? String(cfg.parseInterval) : '',
+        refreshInterval: cfg.refreshInterval != null ? String(cfg.refreshInterval) : '',
+        retentionDays: cfg.retentionDays != null ? String(cfg.retentionDays) : '',
+        displayCurrency: cfg.displayCurrency || 'USD',
+        exchangeRate: cfg.exchangeRate ? (1 / cfg.exchangeRate).toFixed(4) : '',
       }
       detectedTools = toolsResult.tools ?? []
       currentPlatform = cfg.platform ?? ''
@@ -125,18 +129,11 @@
       s3AkidIsSet  = !!(syncData.bucket && keys.includes(s3AkidKey(syncData.bucket)))
       s3SakIsSet   = !!(syncData.bucket && keys.includes(s3SakKey(syncData.bucket)))
 
-      dataSection = { retentionDays: cfg.retentionDays != null ? String(cfg.retentionDays) : '' }
       effectiveDeviceName = cfg.device || currentHostname || 'hostname'
 
-      // Load currency settings
-      currency.displayCurrency = cfg.displayCurrency || 'USD'
       if (cfg.exchangeRateCache?.CNY_USD) {
         cachedRate = cfg.exchangeRateCache.CNY_USD
         cachedRateFetchedAt = cfg.exchangeRateCache.fetchedAt
-      }
-      // Show user-facing USD→CNY rate (invert stored CNY→USD)
-      if (cfg.exchangeRate) {
-        currency.exchangeRate = (1 / cfg.exchangeRate).toFixed(4)
       }
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
@@ -148,18 +145,29 @@
   async function saveGeneral() {
     generalSaving = true; generalError = ''
     try {
+      // Convert user-facing USD→CNY to internal CNY→USD
+      const userRate = general.exchangeRate ? Number(general.exchangeRate) : 0
+      const internalRate = userRate > 0 ? 1 / userRate : null
+
       await saveConfig({
         device: general.device || null,
         weekStart: Number(general.weekStart),
-        dashboardPollInterval: general.dashboardPollInterval ? Number(general.dashboardPollInterval) : null,
-        parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
+        refreshInterval: general.refreshInterval ? Number(general.refreshInterval) : null,
+        retentionDays: general.retentionDays ? Number(general.retentionDays) : null,
+        displayCurrency: general.displayCurrency,
+        exchangeRate: internalRate,
       })
       notifySettingsUpdated({
-        dashboardPollInterval: general.dashboardPollInterval ? Number(general.dashboardPollInterval) : null,
+        refreshInterval: general.refreshInterval ? Number(general.refreshInterval) : null,
         device: general.device || null,
-        parseInterval: general.parseInterval ? Number(general.parseInterval) : null,
       })
       effectiveDeviceName = general.device || currentHostname || 'hostname'
+      displayCurrency.set(general.displayCurrency)
+      if (internalRate) {
+        exchangeRate.set(internalRate)
+      } else {
+        exchangeRate.set(cachedRate)
+      }
       generalSaved = true
       setTimeout(() => { generalSaved = false }, 2000)
     } catch (e) {
@@ -227,47 +235,6 @@
     }
   }
 
-  async function saveData() {
-    dataSaving = true; dataError = ''
-    try {
-      await saveConfig({
-        retentionDays: dataSection.retentionDays ? Number(dataSection.retentionDays) : null,
-      })
-      dataSaved = true
-      setTimeout(() => { dataSaved = false }, 2000)
-    } catch (e) {
-      dataError = e instanceof Error ? e.message : 'Save failed'
-    } finally {
-      dataSaving = false
-    }
-  }
-
-  async function saveCurrency() {
-    currencySaving = true; currencyError = ''
-    try {
-      // Convert user-facing USD→CNY to internal CNY→USD
-      const userRate = currency.exchangeRate ? Number(currency.exchangeRate) : 0
-      const internalRate = userRate > 0 ? 1 / userRate : null
-      await saveConfig({
-        displayCurrency: currency.displayCurrency,
-        exchangeRate: internalRate,
-      })
-      displayCurrency.set(currency.displayCurrency)
-      if (internalRate) {
-        exchangeRate.set(internalRate)
-      } else {
-        // Use cached rate
-        exchangeRate.set(cachedRate)
-      }
-      currencySaved = true
-      setTimeout(() => { currencySaved = false }, 2000)
-    } catch (e) {
-      currencyError = e instanceof Error ? e.message : 'Save failed'
-    } finally {
-      currencySaving = false
-    }
-  }
-
   async function handleRefreshRate() {
     rateRefreshing = true
     try {
@@ -275,11 +242,11 @@
       cachedRate = result.rate
       cachedRateFetchedAt = result.fetchedAt
       // Update store if no manual override
-      if (!currency.exchangeRate) {
+      if (!general.exchangeRate) {
         exchangeRate.set(result.rate)
       }
     } catch (e) {
-      currencyError = e instanceof Error ? e.message : 'Refresh failed'
+      generalError = e instanceof Error ? e.message : 'Refresh failed'
     } finally {
       rateRefreshing = false
     }
@@ -351,8 +318,8 @@
   <title>{$t('settings.title')} — AIUsage</title>
 </svelte:head>
 
-<div class="header-row">
-  <h1 class="page-title">{$t('settings.title')}</h1>
+<div class="page-header">
+  <h1>{$t('settings.title')}</h1>
 </div>
 
 {#if loading}
@@ -362,7 +329,7 @@
 {:else}
   <div class="sections">
 
-    <!-- General -->
+    <!-- General (merged: general + data + currency) -->
     <div class="card">
       <div class="group-title">{$t('settings.general')}</div>
       <div class="fields">
@@ -379,13 +346,43 @@
           </select>
         </div>
         <div class="field">
-          <label class="field-label" for="field-poll-interval">{$t('settings.pollInterval')}</label>
-          <input id="field-poll-interval" type="number" bind:value={general.dashboardPollInterval} class="field-input" placeholder="e.g. 30000" min="1000" />
+          <label class="field-label" for="field-refresh-interval">{$t('settings.refreshInterval')}</label>
+          <input id="field-refresh-interval" type="number" bind:value={general.refreshInterval} class="field-input" placeholder="e.g. 30000" min="1000" />
         </div>
         <div class="field">
-          <label class="field-label" for="field-parse-interval">{$t('settings.parseInterval')}</label>
-          <input id="field-parse-interval" type="number" bind:value={general.parseInterval} class="field-input" placeholder="e.g. 5000" min="1000" />
+          <label class="field-label" for="field-retention-days">{$t('settings.retentionDays')}</label>
+          <input id="field-retention-days" type="number" bind:value={general.retentionDays} class="field-input" placeholder={$t('settings.retentionPlaceholder')} min="0" />
+          <div class="field-hint">{$t('settings.retentionHint')}</div>
         </div>
+        <div class="field">
+          <label class="field-label" for="field-display-currency">{$t('settings.displayCurrency')}</label>
+          <select id="field-display-currency" bind:value={general.displayCurrency} class="field-input">
+            <option value="USD">USD ($)</option>
+            <option value="CNY">CNY (¥)</option>
+          </select>
+        </div>
+        {#if general.displayCurrency === 'CNY'}
+          <div class="field">
+            <label class="field-label" for="field-exchange-rate">
+              {$t('settings.exchangeRate')} (1 USD = ? CNY)
+            </label>
+            <div class="rate-row">
+              <input id="field-exchange-rate" type="number" step="0.01" min="0"
+                bind:value={general.exchangeRate} class="field-input"
+                placeholder="Auto: {cachedRateUsdToCny}" />
+              <button type="button" class="btn-ghost" on:click={handleRefreshRate}
+                disabled={rateRefreshing}>
+                {rateRefreshing ? '...' : $t('settings.refreshRate')}
+              </button>
+            </div>
+            <div class="field-hint">
+              {$t('settings.exchangeRateHint')}
+              {#if rateLastUpdated}
+                <span class="rate-time">{$t('settings.rateLastUpdated')}: {rateLastUpdated}</span>
+              {/if}
+            </div>
+          </div>
+        {/if}
       </div>
       {#if generalError}<p class="section-error">{generalError}</p>{/if}
       <div class="section-footer">
@@ -403,20 +400,18 @@
           <span class="platform-badge">{PLATFORM_LABEL[currentPlatform] ?? currentPlatform}</span>
         {/if}
       </div>
-      <div class="field-hint" style="margin-bottom: 0.75rem">{$t('settings.detectedToolsHint')}</div>
+      <div class="field-hint" style="margin-bottom: 0.5rem">{$t('settings.detectedToolsHint')}</div>
       <div class="detected-tools-list">
-        {#each detectedTools as tool}
-          <div class="detected-tool" class:found={tool.status === 'found'} class:not-found={tool.status === 'not_found'}>
+        {#each activeTools as tool}
+          <div class="detected-tool">
             <div class="detected-tool-header">
-              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'} class:gray={tool.status === 'not_found'}></span>
+              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'}></span>
               <span class="detected-tool-name">{tool.label}</span>
               <span class="detected-tool-status">
                 {#if tool.status === 'found'}
                   {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
-                {:else if tool.status === 'empty'}
-                  {$t('settings.toolEmpty')}
                 {:else}
-                  {$t('settings.toolNotFound')}
+                  {$t('settings.toolEmpty')}
                 {/if}
               </span>
             </div>
@@ -429,13 +424,32 @@
             {/if}
           </div>
         {/each}
+        {#if notFoundTools.length}
+          <button class="not-found-toggle" on:click={() => showNotFound = !showNotFound}>
+            <span class="not-found-chevron" class:open={showNotFound}>&#9654;</span>
+            {$t('settings.toolNotFound')} ({notFoundTools.length})
+          </button>
+          {#if showNotFound}
+            {#each notFoundTools as tool}
+              <div class="detected-tool not-found">
+                <div class="detected-tool-header">
+                  <span class="status-dot gray"></span>
+                  <span class="detected-tool-name">{tool.label}</span>
+                </div>
+                {#if tool.path}
+                  <div class="detected-tool-path">{tool.path}</div>
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        {/if}
       </div>
     </div>
 
     <!-- Sync -->
     <div class="card">
       <div class="group-title">{$t('settings.sync')}</div>
-      <div class="field-hint">{$t('settings.syncHint')}</div>
+      <div class="field-hint" style="margin-bottom: 0.75rem">{$t('settings.syncHint')}</div>
       <div class="fields">
         <div class="field">
           <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
@@ -528,100 +542,28 @@
       </div>
     </div>
 
-    <!-- Data -->
-    <div class="card">
-      <div class="group-title">{$t('settings.data')}</div>
-      <div class="fields">
-        <div class="field">
-          <label class="field-label" for="field-retention-days">{$t('settings.retentionDays')}</label>
-          <div class="field-hint">{$t('settings.retentionHint')}</div>
-          <input id="field-retention-days" type="number" bind:value={dataSection.retentionDays} class="field-input" placeholder={$t('settings.retentionPlaceholder')} min="0" />
-        </div>
-      </div>
-      {#if dataError}<p class="section-error">{dataError}</p>{/if}
-      <div class="section-footer">
-        <button class="btn-save" class:saved={dataSaved} on:click={saveData} disabled={dataSaving}>
-          {btnLabel(dataSaving, dataSaved, $t('settings.save'), $t('settings.saved'))}
-        </button>
-      </div>
-    </div>
-
-    <!-- Currency -->
-    <div class="card">
-      <div class="group-title">{$t('settings.currency')}</div>
-      <div class="fields">
-        <div class="field">
-          <label class="field-label" for="field-display-currency">{$t('settings.displayCurrency')}</label>
-          <select id="field-display-currency" bind:value={currency.displayCurrency} class="field-input">
-            <option value="USD">USD ($)</option>
-            <option value="CNY">CNY (¥)</option>
-          </select>
-        </div>
-        {#if currency.displayCurrency === 'CNY'}
-          <div class="field">
-            <label class="field-label" for="field-exchange-rate">
-              {$t('settings.exchangeRate')} (1 USD = ? CNY)
-            </label>
-            <div class="rate-row">
-              <input id="field-exchange-rate" type="number" step="0.01" min="0"
-                bind:value={currency.exchangeRate} class="field-input"
-                placeholder="Auto: {cachedRateUsdToCny}" />
-              <button type="button" class="btn-ghost" on:click={handleRefreshRate}
-                disabled={rateRefreshing}>
-                {rateRefreshing ? '...' : $t('settings.refreshRate')}
-              </button>
-            </div>
-            <div class="field-hint">
-              {$t('settings.exchangeRateHint')}
-              {#if rateLastUpdated}
-                <span class="rate-time">{$t('settings.rateLastUpdated')}: {rateLastUpdated}</span>
-              {/if}
-            </div>
-          </div>
-        {/if}
-      </div>
-      {#if currencyError}<p class="section-error">{currencyError}</p>{/if}
-      <div class="section-footer">
-        <button class="btn-save" class:saved={currencySaved} on:click={saveCurrency} disabled={currencySaving}>
-          {btnLabel(currencySaving, currencySaved, $t('settings.save'), $t('settings.saved'))}
-        </button>
-      </div>
-    </div>
-
   </div>
 {/if}
 
 <style>
-  .header-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 1.5rem;
-  }
-  .page-title {
-    font-family: var(--mono);
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text);
-  }
-
   .sections {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    max-width: none;
   }
 
   .card {
     background: var(--surface);
     border-radius: 8px;
     padding: 1.25rem;
-    transition: background 0.2s;
   }
 
   .group-title-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .group-title {
@@ -631,7 +573,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .group-title-row .group-title {
@@ -651,11 +593,11 @@
 
   .fields {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
   }
 
-  .field { display: flex; flex-direction: column; gap: 0.25rem; }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; }
   .field.full { grid-column: 1 / -1; }
 
   .field-label {
@@ -669,7 +611,6 @@
   .field-hint {
     font-size: 0.75rem;
     color: var(--text-muted);
-    margin-top: -0.1rem;
   }
 
   .key-hint {
@@ -690,7 +631,7 @@
     border-radius: 6px;
     background: var(--raised);
     color: var(--text);
-    transition: border-color 0.2s;
+    transition: border-color 0.15s;
     width: 100%;
     height: 32px;
   }
@@ -703,7 +644,7 @@
   select.field-input { cursor: pointer; appearance: auto; }
 
   .section-error {
-    margin-top: 0.75rem;
+    margin-top: 0.5rem;
     font-size: 0.8rem;
     color: var(--rose);
   }
@@ -711,8 +652,8 @@
   .section-footer {
     display: flex;
     justify-content: flex-end;
-    margin-top: 1rem;
-    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.625rem;
     border-top: 1px solid var(--border-subtle);
   }
 
@@ -720,14 +661,14 @@
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
-    padding: 0.45rem 1.1rem;
+    padding: 0.375rem 1rem;
     border: 1px solid var(--accent);
     border-radius: 6px;
     background: var(--accent);
     color: var(--surface);
     cursor: pointer;
-    transition: background 0.2s;
-    min-width: 72px;
+    transition: background 0.15s;
+    min-width: 64px;
   }
   .btn-save:hover:not(:disabled) {
     background: var(--accent-hover);
@@ -756,14 +697,14 @@
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
-    padding: 0.45rem 0.9rem;
+    padding: 0.375rem 0.75rem;
     border: none;
     border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
     white-space: nowrap;
-    transition: color 0.2s;
+    transition: color 0.15s;
   }
 
   .btn-ghost:hover {
@@ -791,11 +732,11 @@
   .detected-tools-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.375rem;
   }
 
   .detected-tool {
-    padding: 0.6rem 0.75rem;
+    padding: 0.5rem 0.625rem;
     border-radius: 6px;
     background: var(--raised);
     border: 1px solid var(--border-subtle);
@@ -808,8 +749,8 @@
   }
 
   .status-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -831,12 +772,49 @@
     margin-left: auto;
   }
 
+  .not-found-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 550;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    padding: 0.375rem 0.25rem;
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+  .not-found-toggle:hover {
+    color: var(--text-secondary);
+  }
+
+  .not-found-chevron {
+    font-size: 0.5rem;
+    transition: transform 0.15s;
+    display: inline-block;
+  }
+  .not-found-chevron.open {
+    transform: rotate(90deg);
+  }
+
+  .detected-tool.not-found {
+    opacity: 0.6;
+  }
+
   .detected-tool-path {
     font-family: var(--mono);
     font-size: 0.75rem;
     color: var(--text-secondary);
-    margin-top: 0.25rem;
+    margin-top: 0.2rem;
     margin-left: 1.25rem;
     word-break: break-all;
+  }
+
+  @media (max-width: 640px) {
+    .fields {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

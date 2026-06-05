@@ -189,7 +189,7 @@ describe('PUT /api/config', () => {
       const res = await fetch(`${callbackUrl}/api/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parseInterval: 0, retentionDays: null }),
+        body: JSON.stringify({ refreshInterval: 0, retentionDays: null }),
       })
 
       expect(res.status).toBe(200)
@@ -201,16 +201,16 @@ describe('PUT /api/config', () => {
     }
   })
 
-  it('removes parseInterval and retentionDays when saving zero-like values', async () => {
+  it('removes refreshInterval and retentionDays when saving zero-like values', async () => {
     vi.mocked(loadConfig).mockReturnValue({
-      parseInterval: 60,
+      refreshInterval: 60,
       retentionDays: 30,
     } as any)
 
     const res = await fetch(`${baseUrl}/api/config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parseInterval: 0, retentionDays: 0 }),
+      body: JSON.stringify({ refreshInterval: 0, retentionDays: 0 }),
     })
 
     expect(res.status).toBe(200)

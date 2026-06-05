@@ -79,6 +79,13 @@ export interface UploadResponse {
 }
 
 export interface LeaderboardStatusResponse {
+  user?: {
+    id: string
+    username: string
+    display_name: string
+    avatar_url: string | null
+  } | null
+  deviceName?: string | null
   snapshots: Array<{
     period_type: string
     period_start: string

@@ -1,9 +1,11 @@
 <script>
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
+  import { goto } from '$app/navigation'
   import { lang } from '$lib/lang'
 
   const periods = [
+    { key: 'last_30_days', zh: '近 30 天', en: 'Last 30 days' },
     { key: 'daily', zh: '今日', en: 'Daily' },
     { key: 'weekly', zh: '本周', en: 'Weekly' },
     { key: 'monthly', zh: '本月', en: 'Monthly' },
@@ -22,11 +24,12 @@
     { key: 'model', zh: '模型', en: 'Model' }
   ]
 
-  let activePeriod = 'daily'
+  let activePeriod = 'last_30_days'
   let activeMetric = 'tokens'
   let activeScope = 'all'
   let selectedTool = ''
   let selectedModel = ''
+  let activePeriodStart = ''
   let data = null
   let loading = true
   let loadingMore = false
@@ -39,25 +42,104 @@
   $: zh = $lang === 'zh'
   $: user = $page.data.user
   $: rows = data?.entries || []
-  $: leaders = rows.slice(0, 3)
   $: valueLabel = activeMetric === 'cost' ? (zh ? '费用' : 'Cost') : 'Tokens'
+  $: secondaryValueLabel = activeMetric === 'cost' ? 'Tokens' : (zh ? '费用' : 'Cost')
+  $: topValue = rows.length > 0 ? numericValue(rows[0]) : 0
   $: activeChips = activeScope === 'tool' ? availableTools : activeScope === 'model' ? availableModels : []
   $: selectedChip = activeScope === 'tool' ? selectedTool : activeScope === 'model' ? selectedModel : ''
   $: visibleChips = chipsExpanded ? activeChips : activeChips.slice(0, 12)
   $: hasMoreChips = activeChips.length > 12
+  $: canGoNext = activePeriod !== 'all_time' && activePeriodStart && activePeriodStart < getCurrentPeriodStart(activePeriod)
+
+  function getCurrentPeriodStart(periodType) {
+    const now = new Date()
+    switch (periodType) {
+      case 'daily':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+      case 'last_30_days':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 29)).toISOString()
+      case 'weekly': {
+        const day = now.getUTCDay()
+        const diff = day === 0 ? 6 : day - 1
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff)).toISOString()
+      }
+      case 'monthly':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+      case 'yearly':
+        return new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString()
+      case 'all_time':
+        return '1970-01-01T00:00:00.000Z'
+      default:
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    }
+  }
+
+  function shiftPeriodStart(periodStart, periodType, direction) {
+    const d = new Date(periodStart)
+    switch (periodType) {
+      case 'daily':
+        d.setUTCDate(d.getUTCDate() + direction)
+        break
+      case 'last_30_days':
+        d.setUTCDate(d.getUTCDate() + direction * 30)
+        break
+      case 'weekly':
+        d.setUTCDate(d.getUTCDate() + direction * 7)
+        break
+      case 'monthly':
+        d.setUTCMonth(d.getUTCMonth() + direction)
+        break
+      case 'yearly':
+        d.setUTCFullYear(d.getUTCFullYear() + direction)
+        break
+    }
+    return d.toISOString()
+  }
+
+  function formatPeriodLabel(periodStart, periodType) {
+    const d = new Date(periodStart)
+    if (!Number.isFinite(d.getTime())) return ''
+    const locale = zh ? 'zh-CN' : 'en-US'
+    switch (periodType) {
+      case 'daily':
+        return d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+      case 'last_30_days': {
+        const end = new Date(d)
+        end.setUTCDate(end.getUTCDate() + 29)
+        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
+        return `${d.toLocaleDateString(locale, fmt)} - ${end.toLocaleDateString(locale, fmt)}`
+      }
+      case 'weekly': {
+        const end = new Date(d)
+        end.setUTCDate(end.getUTCDate() + 6)
+        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
+        return `${d.toLocaleDateString(locale, fmt)} – ${end.toLocaleDateString(locale, fmt)}`
+      }
+      case 'monthly':
+        return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', timeZone: 'UTC' })
+      case 'yearly':
+        return d.toLocaleDateString(locale, { year: 'numeric', timeZone: 'UTC' })
+      default:
+        return ''
+    }
+  }
+
+  function syncUrl() {
+    const params = new URLSearchParams()
+    if (activePeriod !== 'last_30_days') params.set('period', activePeriod)
+    if (activeMetric !== 'tokens') params.set('metric', activeMetric)
+    if (activeScope !== 'all') params.set('scope', activeScope)
+    if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
+    if (activeScope === 'model' && selectedModel) params.set('model', selectedModel)
+    const currentStart = getCurrentPeriodStart(activePeriod)
+    if (activePeriodStart && activePeriodStart !== currentStart) params.set('period_start', activePeriodStart)
+    const qs = params.toString()
+    goto(`/leaderboard${qs ? '?' + qs : ''}`, { replaceState: true, keepFocus: true, noScroll: true })
+  }
 
   function periodLabel(key) {
     const period = periods.find(p => p.key === key)
     return zh ? period?.zh : period?.en
-  }
-
-  function formatTokens(n) {
-    const num = Number(n)
-    if (!Number.isFinite(num)) return '0'
-    if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B'
-    if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M'
-    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
-    return num.toLocaleString()
   }
 
   function formatFullTokens(n) {
@@ -70,12 +152,22 @@
     return Number.isFinite(num) ? '$' + num.toFixed(4) : '$0.0000'
   }
 
-  function formatValue(entry) {
-    return activeMetric === 'cost' ? formatCost(entry.total_cost_usd) : formatTokens(entry.total_tokens)
-  }
-
   function formatFullValue(entry) {
     return activeMetric === 'cost' ? formatCost(entry.total_cost_usd) : formatFullTokens(entry.total_tokens)
+  }
+
+  function formatSecondaryValue(entry) {
+    return activeMetric === 'cost' ? formatFullTokens(entry.total_tokens) : formatCost(entry.total_cost_usd)
+  }
+
+  function numericValue(entry) {
+    const n = Number(activeMetric === 'cost' ? entry.total_cost_usd : entry.total_tokens)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  function shareOfTop(entry) {
+    if (!topValue) return 0
+    return Math.max(0, Math.min(100, numericValue(entry) / topValue * 100))
   }
 
   function scopeValue(entry) {
@@ -128,6 +220,7 @@
         period_type: activePeriod,
         metric: activeMetric
       })
+      if (activePeriodStart) params.set('period_start', activePeriodStart)
       const res = await fetch(`/api/leaderboard/filters?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -154,6 +247,7 @@
         metric: activeMetric,
         scope: activeScope
       })
+      if (activePeriodStart) params.set('period_start', activePeriodStart)
       if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
       if (activeScope === 'model' && selectedModel) params.set('model', selectedModel)
       if (cursor) params.set('cursor', cursor)
@@ -174,12 +268,15 @@
   function switchPeriod(period) {
     if (activePeriod === period || loading) return
     activePeriod = period
+    activePeriodStart = getCurrentPeriodStart(period)
+    syncUrl()
     loadFilters().then(() => loadLeaderboard())
   }
 
   function switchMetric(metric) {
     if (activeMetric === metric || loading) return
     activeMetric = metric
+    syncUrl()
     loadFilters().then(() => loadLeaderboard())
   }
 
@@ -192,6 +289,7 @@
       await loadFilters()
     }
     ensureScopeSelection(scope)
+    syncUrl()
     loadLeaderboard()
   }
 
@@ -201,7 +299,18 @@
     } else if (activeScope === 'model') {
       selectedModel = value
     }
+    syncUrl()
     loadLeaderboard()
+  }
+
+  function goToPeriod(direction) {
+    if (activePeriod === 'all_time') return
+    if (direction === 1 && !canGoNext) return
+    activePeriodStart = shiftPeriodStart(activePeriodStart, activePeriod, direction)
+    const currentStart = getCurrentPeriodStart(activePeriod)
+    if (activePeriodStart > currentStart) activePeriodStart = currentStart
+    syncUrl()
+    loadFilters().then(() => loadLeaderboard())
   }
 
   function loadMore() {
@@ -209,6 +318,27 @@
   }
 
   onMount(() => {
+    const params = $page.url.searchParams
+    const periodParam = params.get('period')
+    const metricParam = params.get('metric')
+    const scopeParam = params.get('scope')
+    const toolParam = params.get('tool')
+    const modelParam = params.get('model')
+    const periodStartParam = params.get('period_start')
+
+    if (periodParam && ['last_30_days', 'daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
+      activePeriod = periodParam
+    }
+    if (metricParam && ['tokens', 'cost'].includes(metricParam)) {
+      activeMetric = metricParam
+    }
+    if (scopeParam && ['all', 'tool', 'model'].includes(scopeParam)) {
+      activeScope = scopeParam
+    }
+    if (toolParam) selectedTool = toolParam
+    if (modelParam) selectedModel = modelParam
+    activePeriodStart = periodStartParam || getCurrentPeriodStart(activePeriod)
+
     loadFilters()
     loadLeaderboard()
   })
@@ -221,12 +351,22 @@
 <section class="lb-page">
   <div class="lb-container">
     <div class="ranking-controls">
-      <div class="toolbar" aria-label={zh ? '周期选择' : 'Period'}>
-        {#each periods as p}
-          <button class="pill" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
-            {zh ? p.zh : p.en}
-          </button>
-        {/each}
+      <div class="control-row primary">
+        <div class="toolbar" aria-label={zh ? '周期选择' : 'Period'}>
+          {#each periods as p}
+            <button class="pill" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
+              {zh ? p.zh : p.en}
+            </button>
+          {/each}
+        </div>
+
+        {#if activePeriod !== 'all_time'}
+          <div class="period-nav">
+            <button class="nav-arrow" on:click={() => goToPeriod(-1)} aria-label={zh ? '上一周期' : 'Previous period'}>←</button>
+            <span class="period-label">{formatPeriodLabel(activePeriodStart, activePeriod)}</span>
+            <button class="nav-arrow" on:click={() => goToPeriod(1)} disabled={!canGoNext} aria-label={zh ? '下一周期' : 'Next period'}>→</button>
+          </div>
+        {/if}
       </div>
 
       <div class="control-row">
@@ -265,26 +405,32 @@
 
     {#if data?.current_user}
       <div class="me-row">
+        <span class="me-label">{zh ? '我的排名' : 'My rank'}</span>
         <span class="me-rank">#{data.current_user.rank}</span>
-        <span class="me-name">{data.current_user.display_name}</span>
-        <span class="me-tokens">{formatFullValue(data.current_user)} {activeMetric === 'tokens' ? 'tokens' : ''}</span>
-      </div>
-    {/if}
-
-    {#if leaders.length > 0}
-      <div class="leaders" aria-label={zh ? '前三名' : 'Top three'}>
-        {#each leaders as entry}
-          <div class="leader">
-            <span class="leader-rank">#{entry.rank}</span>
-            {#if entry.avatar_url}
-              <img src={entry.avatar_url} alt="" class="leader-avatar" />
-            {:else}
-              <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
-            {/if}
-            <span class="leader-name">{entry.display_name}</span>
-            <span class="leader-tokens">{formatValue(entry)}</span>
-          </div>
-        {/each}
+        <span class="me-user">
+          {#if data.current_user.avatar_url}
+            <img src={data.current_user.avatar_url} alt="" class="avatar" />
+          {:else}
+            <span class="avatar-placeholder">{avatarText(data.current_user.display_name)}</span>
+          {/if}
+          <span class="me-name">{data.current_user.display_name}</span>
+        </span>
+        <span class="me-stat">
+          <small>{valueLabel}</small>
+          <strong>{formatFullValue(data.current_user)}</strong>
+        </span>
+        <span class="me-stat secondary">
+          <small>{secondaryValueLabel}</small>
+          <strong>{formatSecondaryValue(data.current_user)}</strong>
+        </span>
+        <span class="me-stat compact-stat">
+          <small>{zh ? '较第一名' : 'vs #1'}</small>
+          <strong>{shareOfTop(data.current_user).toFixed(1)}%</strong>
+        </span>
+        <span class="me-stat updated">
+          <small>{zh ? '更新' : 'Updated'}</small>
+          <strong>{formatDate(data.current_user.updated_at)}</strong>
+        </span>
       </div>
     {/if}
 
@@ -293,9 +439,6 @@
         <span>{periodLabel(activePeriod)}</span>
         <span>{valueLabel}</span>
         <span>{scopes.find(s => s.key === activeScope)?.[zh ? 'zh' : 'en']}{selectedChip ? `: ${selectedChip}` : ''}</span>
-        {#if data?.period_start}
-          <span>{zh ? '周期开始' : 'Period start'}: {formatDate(data.period_start)}</span>
-        {/if}
         <span>{zh ? '已显示' : 'Showing'} {rows.length}</span>
       </div>
 
@@ -323,6 +466,8 @@
               <span class="col-scope" role="columnheader">{activeScope === 'tool' ? (zh ? '工具' : 'Tool') : (zh ? '模型' : 'Model')}</span>
             {/if}
             <span class="col-tokens" role="columnheader">{valueLabel}</span>
+            <span class="col-secondary" role="columnheader">{secondaryValueLabel}</span>
+            <span class="col-share" role="columnheader">{zh ? '较第一名' : 'vs #1'}</span>
             <span class="col-updated" role="columnheader">{zh ? '更新' : 'Updated'}</span>
           </div>
           {#each rows as entry}
@@ -339,8 +484,15 @@
               {#if activeScope !== 'all'}
                 <span class="col-scope" role="cell" title={scopeValue(entry)}>{scopeValue(entry)}</span>
               {/if}
-              <span class="col-tokens" role="cell" title={formatFullValue(entry)}>
-                {formatValue(entry)}
+              <span class="col-tokens" role="cell">
+                {formatFullValue(entry)}
+              </span>
+              <span class="col-secondary" role="cell">{formatSecondaryValue(entry)}</span>
+              <span class="col-share" role="cell" aria-label={`${shareOfTop(entry).toFixed(1)}%`}>
+                <span class="share-track" aria-hidden="true">
+                  <span class="share-fill" style={`width: ${shareOfTop(entry)}%`}></span>
+                </span>
+                <span class="share-text">{shareOfTop(entry).toFixed(1)}%</span>
               </span>
               <span class="col-updated" role="cell">{formatDate(entry.updated_at)}</span>
             </div>
@@ -369,20 +521,23 @@
 </section>
 
 <style>
-  .lb-page { padding: 24px 0 64px; }
-  .lb-container { width: min(var(--content-width), 1040px); margin: 0 auto; }
+  .lb-page { padding: 16px 0 48px; }
+  .lb-container { width: min(calc(100vw - 32px), 1280px); margin: 0 auto; }
 
   .ranking-controls {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
+    gap: 8px;
+    margin-bottom: 12px;
   }
   .control-row {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  .control-row.primary {
+    justify-content: space-between;
   }
   .toolbar {
     display: flex;
@@ -411,11 +566,40 @@
   .pill:hover { background: var(--surface); color: var(--text); }
   .pill.active { background: var(--surface); color: var(--accent); box-shadow: inset 0 0 0 1px var(--border-subtle); }
 
+  .period-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .nav-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .nav-arrow:hover:not(:disabled) { background: var(--raised); color: var(--text); }
+  .nav-arrow:disabled { opacity: 0.35; cursor: not-allowed; }
+  .period-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 120px;
+    text-align: center;
+  }
+
   .chip-bar {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    max-height: 72px;
+    gap: 4px;
+    max-height: 60px;
     overflow: hidden;
     transition: max-height 0.2s ease-out;
   }
@@ -451,55 +635,28 @@
 
   .me-row {
     display: grid;
-    grid-template-columns: 72px 1fr auto;
+    grid-template-columns: auto 64px minmax(160px, 1fr) minmax(130px, auto) minmax(104px, auto) minmax(76px, auto) minmax(110px, auto);
     align-items: center;
     gap: 12px;
-    margin-bottom: 16px;
-    padding: 12px 16px;
+    margin-bottom: 10px;
+    padding: 10px 14px;
     border-radius: 8px;
     background: var(--accent-dim);
     color: var(--text);
   }
-  .me-rank, .me-tokens { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .me-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+  }
+  .me-rank, .me-stat strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .me-rank { color: var(--accent); font-weight: 750; }
+  .me-user { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
   .me-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .me-tokens { color: var(--text-secondary); font-size: 0.8125rem; }
-
-  .leaders {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 20px;
-  }
-  .leader {
-    display: grid;
-    grid-template-columns: auto 32px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
-    min-height: 56px;
-    padding: 12px;
-    border-radius: 8px;
-    background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--border-subtle);
-  }
-  .leader-rank { font-family: var(--mono); color: var(--text-muted); font-size: 0.8125rem; }
-  .leader-avatar, .leader-avatar.placeholder {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-  .leader-avatar.placeholder {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--raised);
-    color: var(--accent);
-    font-size: 0.8125rem;
-    font-weight: 750;
-  }
-  .leader-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-  .leader-tokens { font-family: var(--mono); font-size: 0.8125rem; color: var(--text-secondary); }
+  .me-stat { display: grid; gap: 2px; justify-items: end; min-width: 0; }
+  .me-stat small { color: var(--text-muted); font-size: 0.6875rem; font-weight: 650; }
+  .me-stat strong { color: var(--text); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .me-stat.secondary strong, .me-stat.updated strong { color: var(--text-secondary); font-weight: 600; }
 
   .table-wrap {
     border: 1px solid var(--border-subtle);
@@ -511,8 +668,8 @@
   .table-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 10px 16px;
+    gap: 14px;
+    padding: 8px 14px;
     border-bottom: 1px solid var(--border-subtle);
     color: var(--text-muted);
     font-size: 0.75rem;
@@ -520,18 +677,19 @@
 
   .lb-row {
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr) 144px 144px;
+    grid-template-columns: 64px minmax(180px, 1fr) minmax(128px, 160px) minmax(104px, 132px) minmax(116px, 140px) minmax(116px, 140px);
     align-items: center;
-    min-height: 48px;
-    padding: 0 16px;
+    column-gap: 12px;
+    min-height: 42px;
+    padding: 0 14px;
     border-bottom: 1px solid var(--border-subtle);
   }
-  .lb-row.has-scope { grid-template-columns: 72px minmax(0, 1fr) minmax(140px, 220px) 144px 144px; }
+  .lb-row.has-scope { grid-template-columns: 64px minmax(150px, 1fr) minmax(150px, 240px) minmax(128px, 160px) minmax(104px, 132px) minmax(116px, 140px) minmax(116px, 140px); }
   .lb-row:last-child { border-bottom: 0; }
   .lb-row:not(.header):hover { background: var(--raised); }
   .lb-row.top { background: oklch(0.55 0.12 175 / 0.035); }
   .lb-row.header {
-    min-height: 40px;
+    min-height: 34px;
     background: var(--raised);
     color: var(--text-muted);
     font-size: 0.6875rem;
@@ -540,17 +698,44 @@
     text-transform: uppercase;
   }
 
-  .col-rank, .col-tokens { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .col-rank, .col-tokens, .col-secondary, .col-share { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .col-rank { color: var(--text-secondary); font-weight: 650; }
   .col-user { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
   .user-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .col-scope { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.8125rem; }
   .col-tokens { text-align: right; font-weight: 650; }
+  .col-secondary { color: var(--text-secondary); text-align: right; font-size: 0.8125rem; }
+  .col-share {
+    display: grid;
+    grid-template-columns: minmax(56px, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
   .col-updated { color: var(--text-muted); text-align: right; font-size: 0.8125rem; }
 
+  .lb-row.header .col-share {
+    display: block;
+  }
+
+  .share-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--raised);
+    overflow: hidden;
+  }
+  .share-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  .share-text { text-align: right; }
+
   .avatar, .avatar-placeholder {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -566,7 +751,7 @@
   }
 
   .state {
-    padding: 48px 16px;
+    padding: 40px 16px;
     text-align: center;
     color: var(--text-muted);
     font-size: 0.875rem;
@@ -578,7 +763,7 @@
 
   .load-more {
     display: block;
-    margin: 16px auto;
+    margin: 12px auto;
     min-height: 32px;
     padding: 0 16px;
     border: 1px solid var(--border-medium);
@@ -596,7 +781,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
-    margin-top: 16px;
+    margin-top: 12px;
     color: var(--text-secondary);
     font-size: 0.8125rem;
   }
@@ -613,17 +798,25 @@
 
   @media (max-width: 760px) {
     .lb-page { padding-top: 16px; }
-    .leaders { grid-template-columns: 1fr; }
     .control-row { flex-direction: column; align-items: stretch; }
+    .control-row.primary { justify-content: flex-start; }
     .toolbar { width: 100%; }
+    .period-nav { justify-content: space-between; }
     .chip-bar { max-height: 60px; }
     .table-meta { flex-wrap: wrap; gap: 8px 14px; }
-    .lb-row { grid-template-columns: 52px minmax(0, 1fr) 92px; padding: 0 12px; }
-    .lb-row.has-scope { grid-template-columns: 52px minmax(0, 1fr) 92px; }
+    .lb-row { grid-template-columns: 52px minmax(0, 1fr) 104px; padding: 0 12px; }
+    .lb-row.has-scope { grid-template-columns: 52px minmax(0, 1fr) 104px; }
     .col-scope { display: none; }
+    .col-secondary { display: none; }
+    .col-share { display: none; }
+    .lb-row.header .col-share { display: none; }
     .col-updated { display: none; }
-    .me-row { grid-template-columns: 56px 1fr; }
-    .me-tokens { grid-column: 2; }
+    .me-row { grid-template-columns: 1fr auto; gap: 8px 10px; }
+    .me-label { grid-column: 1 / -1; }
+    .me-rank { grid-column: 1; }
+    .me-user { grid-column: 1 / -1; }
+    .me-stat { justify-items: start; }
+    .me-stat.updated { display: none; }
     .role-note { grid-template-columns: 1fr; }
   }
 </style>

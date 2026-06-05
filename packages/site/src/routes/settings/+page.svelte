@@ -3,12 +3,13 @@
   import { lang } from '$lib/lang'
 
   $: zh = $lang === 'zh'
+  const initialProfile = $page.data.profile
   $: me = $page.data.profile
 
-  let editUsername = me?.username || ''
-  let editDisplayName = me?.display_name || ''
+  let editUsername = initialProfile?.username || ''
+  let editDisplayName = initialProfile?.display_name || ''
   let avatarUploading = false
-  let avatarPreviewSrc = me?.avatar_url || ''
+  let avatarPreviewSrc = initialProfile?.avatar_url || ''
   let fileInput
   let profileMsg = ''
   let profileError = ''
@@ -21,13 +22,32 @@
   let pwError = ''
   let pwSaving = false
 
-  let lbVisibility = me?.leaderboard_visibility || 'public'
-  let lbAnonymous = me?.leaderboard_anonymous || false
+  let lbVisibility = initialProfile?.leaderboard_visibility || 'public'
+  let lbAnonymous = initialProfile?.leaderboard_anonymous || false
   let lbMsg = ''
   let lbError = ''
   let lbSaving = false
+  let activeSection = 'profile'
 
   const COOLDOWN_DAYS = 30
+
+  $: settingsSections = [
+    {
+      id: 'profile',
+      title: zh ? '个人资料' : 'Profile',
+      desc: zh ? '头像、用户名和公开显示名称。' : 'Avatar, username, and public display name.'
+    },
+    {
+      id: 'password',
+      title: me?.has_password ? (zh ? '修改密码' : 'Change Password') : (zh ? '设置密码' : 'Set Password'),
+      desc: zh ? '账号登录凭据。' : 'Account sign-in credentials.'
+    },
+    {
+      id: 'leaderboard',
+      title: zh ? '排行榜设置' : 'Leaderboard',
+      desc: zh ? '公开可见性和匿名展示。' : 'Public visibility and anonymous display.'
+    }
+  ]
 
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
@@ -232,163 +252,239 @@
 
 <div class="settings-page">
   <div class="settings-container">
-    <h1>{zh ? '设置' : 'Settings'}</h1>
+    <div class="settings-header">
+      <h1>{zh ? '设置' : 'Settings'}</h1>
+      <p>{zh ? '管理账号资料、安全和排行榜展示方式。' : 'Manage account profile, security, and leaderboard display.'}</p>
+    </div>
 
     {#if $page.url.searchParams.get('bound')}
       <div class="success-msg">{zh ? '已成功关联' : 'Successfully linked'} {$page.url.searchParams.get('bound')} {zh ? '账号' : 'account'}!</div>
     {/if}
 
-    <section class="settings-section">
-      <h2>{zh ? '个人资料' : 'Profile'}</h2>
-      <p class="section-desc">{zh ? '更新你的公开资料信息。' : 'Update your public profile information.'}</p>
-
-      {#if profileMsg}
-        <div class="success-msg">{profileMsg}</div>
-      {/if}
-      {#if profileError}
-        <div class="error-msg">{profileError}</div>
-      {/if}
-
-      <div class="profile-avatar-section">
-        <div class="avatar-preview" class:uploading={avatarUploading}>
-          {#if avatarPreviewSrc}
-            <img src={avatarPreviewSrc} alt="Avatar" />
-          {:else}
-            <span class="avatar-placeholder">{(editDisplayName || editUsername || '?')[0].toUpperCase()}</span>
-          {/if}
-          {#if avatarUploading}
-            <div class="avatar-spinner"></div>
-          {/if}
-        </div>
-        <div class="avatar-actions">
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" bind:this={fileInput} on:change={handleAvatarSelect} hidden />
-          <button type="button" class="btn-secondary" on:click={triggerFileSelect} disabled={avatarUploading}>
-            {avatarPreviewSrc ? (zh ? '更换' : 'Change') : (zh ? '上传' : 'Upload')}
+    <div class="settings-shell">
+      <aside class="settings-menu" aria-label={zh ? '设置分类' : 'Settings sections'}>
+        {#each settingsSections as item}
+          <button
+            type="button"
+            class:active={activeSection === item.id}
+            aria-current={activeSection === item.id ? 'page' : undefined}
+            on:click={() => activeSection = item.id}
+          >
+            <span>{item.title}</span>
+            <small>{item.desc}</small>
           </button>
-          {#if avatarPreviewSrc}
-            <button type="button" class="btn-text-danger" on:click={handleAvatarRemove} disabled={avatarUploading}>
-              {zh ? '移除' : 'Remove'}
-            </button>
-          {/if}
-          <span class="avatar-hint">{zh ? 'JPEG、PNG、WebP 或 GIF，最大 5MB。' : 'JPEG, PNG, WebP, or GIF. Max 5MB.'}</span>
-        </div>
-      </div>
+        {/each}
+      </aside>
 
-      <form class="profile-form" on:submit|preventDefault={handleProfileSave}>
-        <div class="field">
-          <label for="edit-username">{zh ? '用户名' : 'Username'}</label>
-          <input id="edit-username" type="text" bind:value={editUsername} required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" disabled={!usernameCanChange} />
-          {#if usernameCooldownDate}
-            <span class="field-hint field-hint-warn">
-              {zh
-                ? `用户名每 ${COOLDOWN_DAYS} 天只能修改一次，${formatDate(usernameCooldownDate.toISOString())} 后可再次修改。`
-                : `Username can only be changed once every ${COOLDOWN_DAYS} days. Available after ${formatDate(usernameCooldownDate.toISOString())}.`}
-            </span>
-          {:else}
-            <span class="field-hint">
-              {zh
-                ? `修改后旧用户名将被保留 ${COOLDOWN_DAYS} 天，期间他人无法使用。`
-                : `After changing, your old username will be reserved for ${COOLDOWN_DAYS} days.`}
-            </span>
-          {/if}
-        </div>
-        <div class="field">
-          <label for="edit-display-name">{zh ? '显示名称' : 'Display Name'}</label>
-          <input id="edit-display-name" type="text" bind:value={editDisplayName} required minlength="1" maxlength="64" />
-        </div>
-        <div class="field">
-          <label for="profile-email">{zh ? '邮箱' : 'Email'}</label>
-          <input id="profile-email" type="email" value={me?.email || ''} disabled />
-          <span class="field-hint">{zh ? '邮箱暂不支持修改。' : 'Email cannot be changed yet.'}</span>
-        </div>
-        <button type="submit" class="btn-primary" disabled={profileSaving}>
-          {profileSaving ? (zh ? '保存中...' : 'Saving...') : (zh ? '保存资料' : 'Save Profile')}
-        </button>
-      </form>
-    </section>
+      <div class="settings-panel">
+        {#if activeSection === 'profile'}
+          <section class="settings-section">
+            <h2>{zh ? '个人资料' : 'Profile'}</h2>
+            <p class="section-desc">{zh ? '更新你的公开资料信息。' : 'Update your public profile information.'}</p>
 
-    <section class="settings-section">
-      <h2>{me?.has_password ? (zh ? '修改密码' : 'Change Password') : (zh ? '设置密码' : 'Set Password')}</h2>
-      <p class="section-desc">
-        {me?.has_password
-          ? (zh ? '更新你的账号密码。' : 'Update your account password.')
-          : (zh ? '设置密码后可使用用户名或邮箱登录。' : 'Set a password so you can also sign in with your username or email.')}
-      </p>
+            {#if profileMsg}
+              <div class="success-msg">{profileMsg}</div>
+            {/if}
+            {#if profileError}
+              <div class="error-msg">{profileError}</div>
+            {/if}
 
-      {#if pwMsg}
-        <div class="success-msg">{pwMsg}</div>
-      {/if}
-      {#if pwError}
-        <div class="error-msg">{pwError}</div>
-      {/if}
+            <div class="profile-avatar-section">
+              <div class="avatar-preview" class:uploading={avatarUploading}>
+                {#if avatarPreviewSrc}
+                  <img src={avatarPreviewSrc} alt="Avatar" />
+                {:else}
+                  <span class="avatar-placeholder">{(editDisplayName || editUsername || '?')[0].toUpperCase()}</span>
+                {/if}
+                {#if avatarUploading}
+                  <div class="avatar-spinner"></div>
+                {/if}
+              </div>
+              <div class="avatar-actions">
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" bind:this={fileInput} on:change={handleAvatarSelect} hidden />
+                <button type="button" class="btn-secondary" on:click={triggerFileSelect} disabled={avatarUploading}>
+                  {avatarPreviewSrc ? (zh ? '更换' : 'Change') : (zh ? '上传' : 'Upload')}
+                </button>
+                {#if avatarPreviewSrc}
+                  <button type="button" class="btn-text-danger" on:click={handleAvatarRemove} disabled={avatarUploading}>
+                    {zh ? '移除' : 'Remove'}
+                  </button>
+                {/if}
+                <span class="avatar-hint">{zh ? 'JPEG、PNG、WebP 或 GIF，最大 5MB。' : 'JPEG, PNG, WebP, or GIF. Max 5MB.'}</span>
+              </div>
+            </div>
 
-      <form class="pw-form" on:submit|preventDefault={handlePasswordSave}>
-        {#if me?.has_password}
-          <div class="field">
-            <label for="current-pw">{zh ? '当前密码' : 'Current Password'}</label>
-            <input id="current-pw" type="password" bind:value={currentPassword} required autocomplete="current-password" />
-          </div>
+            <form class="settings-form" on:submit|preventDefault={handleProfileSave}>
+              <div class="field">
+                <label for="edit-username">{zh ? '用户名' : 'Username'}</label>
+                <input id="edit-username" type="text" bind:value={editUsername} required minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" disabled={!usernameCanChange} />
+                {#if usernameCooldownDate}
+                  <span class="field-hint field-hint-warn">
+                    {zh
+                      ? `用户名每 ${COOLDOWN_DAYS} 天只能修改一次，${formatDate(usernameCooldownDate.toISOString())} 后可再次修改。`
+                      : `Username can only be changed once every ${COOLDOWN_DAYS} days. Available after ${formatDate(usernameCooldownDate.toISOString())}.`}
+                  </span>
+                {:else}
+                  <span class="field-hint">
+                    {zh
+                      ? `修改后旧用户名将被保留 ${COOLDOWN_DAYS} 天，期间他人无法使用。`
+                      : `After changing, your old username will be reserved for ${COOLDOWN_DAYS} days.`}
+                  </span>
+                {/if}
+              </div>
+              <div class="field">
+                <label for="edit-display-name">{zh ? '显示名称' : 'Display Name'}</label>
+                <input id="edit-display-name" type="text" bind:value={editDisplayName} required minlength="1" maxlength="64" />
+              </div>
+              <div class="field">
+                <label for="profile-email">{zh ? '邮箱' : 'Email'}</label>
+                <input id="profile-email" type="email" value={me?.email || ''} disabled />
+                <span class="field-hint">{zh ? '邮箱暂不支持修改。' : 'Email cannot be changed yet.'}</span>
+              </div>
+              <button type="submit" class="btn-primary" disabled={profileSaving}>
+                {profileSaving ? (zh ? '保存中...' : 'Saving...') : (zh ? '保存资料' : 'Save Profile')}
+              </button>
+            </form>
+          </section>
+        {:else if activeSection === 'password'}
+          <section class="settings-section">
+            <h2>{me?.has_password ? (zh ? '修改密码' : 'Change Password') : (zh ? '设置密码' : 'Set Password')}</h2>
+            <p class="section-desc">
+              {me?.has_password
+                ? (zh ? '更新你的账号密码。' : 'Update your account password.')
+                : (zh ? '设置密码后可使用用户名或邮箱登录。' : 'Set a password so you can also sign in with your username or email.')}
+            </p>
+
+            {#if pwMsg}
+              <div class="success-msg">{pwMsg}</div>
+            {/if}
+            {#if pwError}
+              <div class="error-msg">{pwError}</div>
+            {/if}
+
+            <form class="settings-form" on:submit|preventDefault={handlePasswordSave}>
+              {#if me?.has_password}
+                <div class="field">
+                  <label for="current-pw">{zh ? '当前密码' : 'Current Password'}</label>
+                  <input id="current-pw" type="password" bind:value={currentPassword} required autocomplete="current-password" />
+                </div>
+              {/if}
+              <div class="field">
+                <label for="new-pw">{zh ? '新密码' : 'New Password'}</label>
+                <input id="new-pw" type="password" bind:value={newPassword} required minlength="8" autocomplete="new-password" />
+              </div>
+              <div class="field">
+                <label for="confirm-pw">{zh ? '确认密码' : 'Confirm Password'}</label>
+                <input id="confirm-pw" type="password" bind:value={confirmPassword} required minlength="8" autocomplete="new-password" />
+              </div>
+              <button type="submit" class="btn-primary" disabled={pwSaving}>
+                {pwSaving ? (zh ? '保存中...' : 'Saving...') : me?.has_password ? (zh ? '更新密码' : 'Update Password') : (zh ? '设置密码' : 'Set Password')}
+              </button>
+            </form>
+          </section>
+        {:else}
+          <section class="settings-section">
+            <h2>{zh ? '排行榜设置' : 'Leaderboard Settings'}</h2>
+            <p class="section-desc">{zh ? '控制你在公开排行榜上的显示方式。' : 'Control how you appear on the public leaderboard.'}</p>
+
+            {#if lbMsg}
+              <div class="success-msg">{lbMsg}</div>
+            {/if}
+            {#if lbError}
+              <div class="error-msg">{lbError}</div>
+            {/if}
+
+            <form class="settings-form" on:submit|preventDefault={handleLeaderboardSave}>
+              <div class="field">
+                <label for="lb-visibility">{zh ? '排行榜可见性' : 'Leaderboard Visibility'}</label>
+                <select id="lb-visibility" bind:value={lbVisibility}>
+                  <option value="public">{zh ? '公开' : 'Public'}</option>
+                  <option value="private">{zh ? '不参与排行' : 'Private (hidden from leaderboard)'}</option>
+                </select>
+                <span class="field-hint">{zh ? '设为私有后，你的数据将不会出现在公开排行榜上。' : 'When set to private, your data will not appear on the public leaderboard.'}</span>
+              </div>
+              <div class="field">
+                <label class="checkbox-label">
+                  <input type="checkbox" bind:checked={lbAnonymous} />
+                  <span>{zh ? '匿名参与排行榜' : 'Participate anonymously'}</span>
+                </label>
+                <span class="field-hint">{zh ? '开启后，排行榜将隐藏你的用户名和头像。' : 'When enabled, your username and avatar will be hidden on the leaderboard.'}</span>
+              </div>
+              <button type="submit" class="btn-primary" disabled={lbSaving}>
+                {lbSaving ? (zh ? '保存中...' : 'Saving...') : (zh ? '保存设置' : 'Save Settings')}
+              </button>
+            </form>
+          </section>
         {/if}
-        <div class="field">
-          <label for="new-pw">{zh ? '新密码' : 'New Password'}</label>
-          <input id="new-pw" type="password" bind:value={newPassword} required minlength="8" autocomplete="new-password" />
-        </div>
-        <div class="field">
-          <label for="confirm-pw">{zh ? '确认密码' : 'Confirm Password'}</label>
-          <input id="confirm-pw" type="password" bind:value={confirmPassword} required minlength="8" autocomplete="new-password" />
-        </div>
-        <button type="submit" class="btn-primary" disabled={pwSaving}>
-          {pwSaving ? (zh ? '保存中...' : 'Saving...') : me?.has_password ? (zh ? '更新密码' : 'Update Password') : (zh ? '设置密码' : 'Set Password')}
-        </button>
-      </form>
-    </section>
-
-    <section class="settings-section">
-      <h2>{zh ? '排行榜设置' : 'Leaderboard Settings'}</h2>
-      <p class="section-desc">{zh ? '控制你在公开排行榜上的显示方式。' : 'Control how you appear on the public leaderboard.'}</p>
-
-      {#if lbMsg}
-        <div class="success-msg">{lbMsg}</div>
-      {/if}
-      {#if lbError}
-        <div class="error-msg">{lbError}</div>
-      {/if}
-
-      <form class="lb-form" on:submit|preventDefault={handleLeaderboardSave}>
-        <div class="field">
-          <label for="lb-visibility">{zh ? '排行榜可见性' : 'Leaderboard Visibility'}</label>
-          <select id="lb-visibility" bind:value={lbVisibility}>
-            <option value="public">{zh ? '公开' : 'Public'}</option>
-            <option value="private">{zh ? '不参与排行' : 'Private (hidden from leaderboard)'}</option>
-          </select>
-          <span class="field-hint">{zh ? '设为私有后，你的数据将不会出现在公开排行榜上。' : 'When set to private, your data will not appear on the public leaderboard.'}</span>
-        </div>
-        <div class="field">
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={lbAnonymous} />
-            <span>{zh ? '匿名参与排行榜' : 'Participate anonymously'}</span>
-          </label>
-          <span class="field-hint">{zh ? '开启后，排行榜将隐藏你的用户名和头像。' : 'When enabled, your username and avatar will be hidden on the leaderboard.'}</span>
-        </div>
-        <button type="submit" class="btn-primary" disabled={lbSaving}>
-          {lbSaving ? (zh ? '保存中...' : 'Saving...') : (zh ? '保存设置' : 'Save Settings')}
-        </button>
-      </form>
-    </section>
+      </div>
+    </div>
 
   </div>
 </div>
 
 <style>
-  .settings-page { padding: 2rem 0; }
-  .settings-container { width: var(--content-width); margin: 0 auto; max-width: 800px; }
-  h1 { font-size: 2rem; font-weight: 700; margin-bottom: 2rem; }
-  .settings-section { margin-bottom: 3rem; }
+  .settings-page { padding: 2rem 0 4rem; }
+  .settings-container { width: var(--content-width); margin: 0 auto; max-width: 1040px; }
+  .settings-header { margin-bottom: 1.5rem; }
+  h1 { font-size: 2rem; font-weight: 700; margin: 0 0 0.375rem; }
+  .settings-header p { margin: 0; color: var(--text-muted); font-size: 0.875rem; }
+  .settings-shell {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+  .settings-menu {
+    position: sticky;
+    top: 88px;
+    display: grid;
+    gap: 0.375rem;
+    padding: 0.375rem;
+    border-radius: 8px;
+    background: var(--raised);
+  }
+  .settings-menu button {
+    display: grid;
+    gap: 0.25rem;
+    width: 100%;
+    padding: 0.75rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+  }
+  .settings-menu button:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .settings-menu button.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border-subtle);
+  }
+  .settings-menu span {
+    font-size: 0.875rem;
+    font-weight: 650;
+  }
+  .settings-menu small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+  .settings-panel {
+    min-width: 0;
+    padding: 1.25rem;
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .settings-section { margin: 0; }
   .settings-section h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
   .section-desc { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem; }
   .success-msg { background: var(--green-dim); color: var(--green); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1.5rem; }
   .error-msg { background: oklch(0.55 0.22 25 / 0.08); color: var(--rose); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
-  .profile-form { max-width: 400px; }
+  .settings-form { max-width: 440px; }
   .profile-avatar-section { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
   .avatar-preview { position: relative; width: 72px; height: 72px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center; }
   .avatar-preview.uploading { opacity: 0.5; }
@@ -408,10 +504,6 @@
   .field-hint { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
   .field-hint-warn { color: var(--amber); }
   .field input:disabled { opacity: 0.5; cursor: not-allowed; }
-  .pw-form { max-width: 400px; }
-  .lb-form { max-width: 400px; }
-  .lb-form select { width: 100%; padding: 0.5rem 0.75rem; font-size: 0.875rem; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg); color: var(--text); outline: none; }
-  .lb-form select:focus { border-color: var(--accent); }
   .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
   .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
   .field { margin-bottom: 1rem; }
@@ -421,4 +513,28 @@
   .btn-primary { padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; color: oklch(0.99 0.002 85); background: var(--accent); border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  @media (max-width: 760px) {
+    .settings-page { padding-top: 1rem; }
+    .settings-shell { grid-template-columns: 1fr; gap: 1rem; }
+    .settings-menu {
+      position: static;
+      display: flex;
+      overflow-x: auto;
+      padding: 0.25rem;
+    }
+    .settings-menu button {
+      min-width: 0;
+      flex: 1 1 0;
+      padding: 0.625rem 0.5rem;
+      text-align: center;
+    }
+    .settings-menu small {
+      display: none;
+    }
+    .settings-panel { padding: 1rem; }
+    .profile-avatar-section {
+      align-items: flex-start;
+    }
+  }
 </style>
