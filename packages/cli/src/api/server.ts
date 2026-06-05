@@ -763,6 +763,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           LIMIT 1
         `).get(filterParams) as any
 
+        // Fetch cwd from the first record that has one
+        const cwdRow = db.prepare(`
+          SELECT cwd FROM records
+          WHERE session_id = @sessionId AND cwd != '' ${toolClause} ${deviceClause}
+          LIMIT 1
+        `).get(filterParams) as any
+        const cwd = cwdRow?.cwd || ''
+
         if (!meta) {
           json(res, { error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404)
           return
@@ -816,7 +824,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const toolCallCount = toolCallRows.length
 
         json(res, {
-          session: { ...meta, toolCallCount },
+          session: { ...meta, toolCallCount, cwd },
           records: records.map(r => ({
             ...r,
             toolCalls: toolCallsByRecord[r.id] ?? [],

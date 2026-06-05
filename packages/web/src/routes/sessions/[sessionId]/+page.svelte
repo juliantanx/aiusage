@@ -70,6 +70,13 @@
       <span class="meta-label mono">{formatDateTime(session.firstTs)}</span>
       <span class="meta-sub">{session.tool}</span>
     </div>
+    {#if session.cwd}
+      <div class="meta-divider"></div>
+      <div class="meta-item meta-item-path">
+        <span class="meta-key">{$t('sessions.detail.meta.path')}</span>
+        <span class="meta-val mono path-val" title={session.cwd}>{session.cwd}</span>
+      </div>
+    {/if}
     <div class="meta-divider"></div>
     <div class="meta-item">
       <span class="meta-key">{$t('sessions.detail.meta.model')}</span>
@@ -205,6 +212,18 @@
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--text);
+  }
+  .meta-item-path {
+    min-width: 0;
+  }
+  .path-val {
+    font-size: 0.8rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 360px;
+    color: var(--text-secondary);
   }
 
   .timeline {
