@@ -14,10 +14,14 @@
     displayCurrency: 'USD', exchangeRate: '',
   }
   let detectedTools = []
+  let showNotFound = false
   let currentPlatform = ''
   let currentHostname = ''
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
+
+  $: activeTools = detectedTools.filter(t => t.status !== 'not_found')
+  $: notFoundTools = detectedTools.filter(t => t.status === 'not_found')
 
   // Sync form — credentialRef is derived automatically, never user-editable
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '' }
@@ -314,8 +318,8 @@
   <title>{$t('settings.title')} — AIUsage</title>
 </svelte:head>
 
-<div class="header-row">
-  <h1 class="page-title">{$t('settings.title')}</h1>
+<div class="page-header">
+  <h1>{$t('settings.title')}</h1>
 </div>
 
 {#if loading}
@@ -398,18 +402,16 @@
       </div>
       <div class="field-hint" style="margin-bottom: 0.5rem">{$t('settings.detectedToolsHint')}</div>
       <div class="detected-tools-list">
-        {#each detectedTools as tool}
-          <div class="detected-tool" class:found={tool.status === 'found'} class:not-found={tool.status === 'not_found'}>
+        {#each activeTools as tool}
+          <div class="detected-tool">
             <div class="detected-tool-header">
-              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'} class:gray={tool.status === 'not_found'}></span>
+              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'}></span>
               <span class="detected-tool-name">{tool.label}</span>
               <span class="detected-tool-status">
                 {#if tool.status === 'found'}
                   {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
-                {:else if tool.status === 'empty'}
-                  {$t('settings.toolEmpty')}
                 {:else}
-                  {$t('settings.toolNotFound')}
+                  {$t('settings.toolEmpty')}
                 {/if}
               </span>
             </div>
@@ -422,11 +424,30 @@
             {/if}
           </div>
         {/each}
+        {#if notFoundTools.length}
+          <button class="not-found-toggle" on:click={() => showNotFound = !showNotFound}>
+            <span class="not-found-chevron" class:open={showNotFound}>&#9654;</span>
+            {$t('settings.toolNotFound')} ({notFoundTools.length})
+          </button>
+          {#if showNotFound}
+            {#each notFoundTools as tool}
+              <div class="detected-tool not-found">
+                <div class="detected-tool-header">
+                  <span class="status-dot gray"></span>
+                  <span class="detected-tool-name">{tool.label}</span>
+                </div>
+                {#if tool.path}
+                  <div class="detected-tool-path">{tool.path}</div>
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        {/if}
       </div>
     </div>
 
     <!-- Sync -->
-    <div class="card card-sync">
+    <div class="card">
       <div class="group-title">{$t('settings.sync')}</div>
       <div class="field-hint" style="margin-bottom: 0.75rem">{$t('settings.syncHint')}</div>
       <div class="fields">
@@ -525,32 +546,17 @@
 {/if}
 
 <style>
-  .header-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 1.25rem;
-  }
-  .page-title {
-    font-family: var(--mono);
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text);
-  }
-
   .sections {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: none;
   }
 
   .card {
     background: var(--surface);
     border-radius: 8px;
-    padding: 1rem 1.25rem;
-  }
-
-  .card-sync {
-    grid-column: 1 / -1;
+    padding: 1.25rem;
   }
 
   .group-title-row {
@@ -587,7 +593,7 @@
 
   .fields {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
   }
 
@@ -766,6 +772,37 @@
     margin-left: auto;
   }
 
+  .not-found-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 550;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    padding: 0.375rem 0.25rem;
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+  .not-found-toggle:hover {
+    color: var(--text-secondary);
+  }
+
+  .not-found-chevron {
+    font-size: 0.5rem;
+    transition: transform 0.15s;
+    display: inline-block;
+  }
+  .not-found-chevron.open {
+    transform: rotate(90deg);
+  }
+
+  .detected-tool.not-found {
+    opacity: 0.6;
+  }
+
   .detected-tool-path {
     font-family: var(--mono);
     font-size: 0.75rem;
@@ -775,12 +812,9 @@
     word-break: break-all;
   }
 
-  @media (max-width: 800px) {
-    .sections {
+  @media (max-width: 640px) {
+    .fields {
       grid-template-columns: 1fr;
-    }
-    .card-sync {
-      grid-column: 1;
     }
   }
 </style>
