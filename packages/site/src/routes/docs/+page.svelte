@@ -72,7 +72,13 @@
         { id: 'widget-tray', en: 'Tray Icon', zh: '托盘图标' },
       ]
     },
-    { id: 'windows', en: 'Windows Launcher', zh: 'Windows 启动器', children: [] },
+    { id: 'manager', en: 'Interactive Menu', zh: '交互式菜单',
+      children: [
+        { id: 'mgr-usage', en: 'Usage', zh: '使用方式' },
+        { id: 'mgr-groups', en: 'Command Groups', zh: '命令分组' },
+        { id: 'mgr-shortcut', en: 'Desktop Shortcut', zh: '桌面快捷方式' },
+      ]
+    },
     { id: 'account', en: 'Site Account', zh: '站点账号',
       children: [
         { id: 'account-register', en: 'Registration & Login', zh: '注册与登录' },
@@ -925,28 +931,69 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       </Callout>
     </section>
 
-    <!-- ══════ Windows Launcher ══════ -->
-    <section id="windows">
+    <!-- ══════ Interactive Menu ══════ -->
+    <section id="manager">
       <div class="sec-head">
         <span class="sec-idx">16</span>
-        <h2>{zh ? 'Windows 启动器' : 'Windows Launcher'}</h2>
+        <h2>{zh ? '交互式菜单' : 'Interactive Menu'}</h2>
       </div>
       <p>{zh
-        ? '项目根目录提供了 windows-dashboard.bat 脚本，方便 Windows 用户通过双击启动仪表盘，无需手动输入命令。'
-        : 'The project root includes a windows-dashboard.bat script for Windows users to launch the dashboard by double-clicking, without typing CLI commands.'
+        ? 'aiusage 内置交互式管理菜单，涵盖所有 CLI 命令，通过数字选择即可操作，无需记忆命令和参数。支持 Windows、macOS 和 Linux。'
+        : 'aiusage includes a built-in interactive management menu covering all CLI commands. Navigate by selecting numbers — no need to memorize commands or flags. Works on Windows, macOS, and Linux.'
       }</p>
-      <ul>
-        <li><strong>{zh ? '交互菜单' : 'Interactive Menu'}</strong> — {zh ? '双击运行后可选择 Start / Stop / Restart / Update / Status' : 'Double-click to choose Start / Stop / Restart / Update / Status'}</li>
-        <li><strong>{zh ? '命令行模式' : 'Command-line Mode'}</strong> — <code>windows-dashboard.bat start</code>、<code>stop</code>、<code>status</code></li>
-        <li><strong>{zh ? '自动检测' : 'Auto-detection'}</strong> — {zh ? '自动检测已运行的仪表盘端口，避免重复启动' : 'Auto-detects running dashboard port to avoid duplicate instances'}</li>
-        <li><strong>{zh ? '自动打开浏览器' : 'Browser Auto-open'}</strong> — {zh ? '启动后自动打开浏览器访问仪表盘' : 'Automatically opens the dashboard in your browser after start'}</li>
-      </ul>
-      <Callout type="info">
-        {zh
-          ? '如果尚未安装 aiusage，脚本会提示自动执行 npm install -g @juliantanx/aiusage。'
-          : 'If aiusage is not installed, the script will prompt to run npm install -g @juliantanx/aiusage automatically.'
-        }
-      </Callout>
+      <CodeBlock code="aiusage menu" lang="bash" />
+    </section>
+
+    <section id="mgr-usage">
+      <h3>{zh ? '使用方式' : 'Usage'}</h3>
+      <p>{zh
+        ? '运行 aiusage menu 进入主菜单，选择分组后进入子菜单，子菜单内选择具体命令。输入 0 返回上级，输入 6 退出。'
+        : 'Run aiusage menu to enter the main menu. Select a group to open its submenu, then pick a command. Press 0 to go back, 6 to exit.'
+      }</p>
+      <CodeBlock code={`========================================
+  AI Usage Manager (aiusage)
+========================================
+
+  Dashboard: RUNNING  http://localhost:3847
+
+  [1] Dashboard      (serve/stop/restart/open)
+  [2] Data           (parse/summary/export/clean/reset/recalc)
+  [3] Sync           (init/sync)
+  [4] Leaderboard    (view/login/upload/status/logout)
+  [5] System         (status/widget/pm2/update)
+  [6] Exit`} lang="text" />
+    </section>
+
+    <section id="mgr-groups">
+      <h3>{zh ? '命令分组' : 'Command Groups'}</h3>
+      <DocsTable
+        headers={zh ? ['分组', '包含命令', '说明'] : ['Group', 'Commands', 'Description']}
+        rows={[
+          ['Dashboard', 'serve, stop, restart, open', zh ? '仪表盘服务管理与浏览器打开' : 'Dashboard server management and browser launch'],
+          ['Data', 'parse, summary, export, clean, reset, recalc', zh ? '数据解析、查看、导出与清理' : 'Parse, view, export, and clean data'],
+          ['Sync', 'init, sync', zh ? '配置与执行多设备同步' : 'Configure and run multi-device sync'],
+          ['Leaderboard', 'leaderboard, login, upload, upload-status, logout', zh ? '排行榜查看与数据上传' : 'View leaderboard and upload data'],
+          ['System', 'status, widget, pm2-setup, pm2-start, update', zh ? '系统信息、小组件、后台服务与更新' : 'System info, widget, background services, and updates'],
+        ]}
+      />
+    </section>
+
+    <section id="mgr-shortcut">
+      <h3>{zh ? '桌面快捷方式' : 'Desktop Shortcut'}</h3>
+      <p>{zh
+        ? 'Windows 用户可创建桌面快捷方式，双击即可打开交互菜单：'
+        : 'Windows users can create a desktop shortcut to launch the menu by double-clicking:'
+      }</p>
+      <ol>
+        <li>{zh ? '右键桌面 → 新建 → 快捷方式' : 'Right-click Desktop → New → Shortcut'}</li>
+        <li>{zh ? '目标输入：' : 'Target:'} <code>cmd /k aiusage menu</code></li>
+        <li>{zh ? '命名为 "AI Usage Manager"' : 'Name it "AI Usage Manager"'}</li>
+      </ol>
+      <p>{zh
+        ? 'macOS / Linux 用户可添加 shell alias：'
+        : 'macOS / Linux users can add a shell alias:'
+      }</p>
+      <CodeBlock code={'alias aim="aiusage menu"'} lang="bash" />
     </section>
 
     <!-- ══════ Site Account ══════ -->
