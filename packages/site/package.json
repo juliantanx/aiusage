@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "svelte-kit sync && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "svelte-kit sync && vitest run",
     "db:migrate": "tsx src/lib/server/db/migrate.ts",
     "db:seed": "tsx src/lib/server/db/seed.ts"
   },
