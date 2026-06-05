@@ -5,6 +5,7 @@
   import { lang } from '$lib/lang'
 
   const periods = [
+    { key: 'last_30_days', zh: '近 30 天', en: 'Last 30 days' },
     { key: 'daily', zh: '今日', en: 'Daily' },
     { key: 'weekly', zh: '本周', en: 'Weekly' },
     { key: 'monthly', zh: '本月', en: 'Monthly' },
@@ -23,7 +24,7 @@
     { key: 'model', zh: '模型', en: 'Model' }
   ]
 
-  let activePeriod = 'daily'
+  let activePeriod = 'last_30_days'
   let activeMetric = 'tokens'
   let activeScope = 'all'
   let selectedTool = ''
@@ -55,6 +56,8 @@
     switch (periodType) {
       case 'daily':
         return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+      case 'last_30_days':
+        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 29)).toISOString()
       case 'weekly': {
         const day = now.getUTCDay()
         const diff = day === 0 ? 6 : day - 1
@@ -77,6 +80,9 @@
       case 'daily':
         d.setUTCDate(d.getUTCDate() + direction)
         break
+      case 'last_30_days':
+        d.setUTCDate(d.getUTCDate() + direction * 30)
+        break
       case 'weekly':
         d.setUTCDate(d.getUTCDate() + direction * 7)
         break
@@ -97,6 +103,12 @@
     switch (periodType) {
       case 'daily':
         return d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+      case 'last_30_days': {
+        const end = new Date(d)
+        end.setUTCDate(end.getUTCDate() + 29)
+        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
+        return `${d.toLocaleDateString(locale, fmt)} - ${end.toLocaleDateString(locale, fmt)}`
+      }
       case 'weekly': {
         const end = new Date(d)
         end.setUTCDate(end.getUTCDate() + 6)
@@ -114,7 +126,7 @@
 
   function syncUrl() {
     const params = new URLSearchParams()
-    if (activePeriod !== 'daily') params.set('period', activePeriod)
+    if (activePeriod !== 'last_30_days') params.set('period', activePeriod)
     if (activeMetric !== 'tokens') params.set('metric', activeMetric)
     if (activeScope !== 'all') params.set('scope', activeScope)
     if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
@@ -314,7 +326,7 @@
     const modelParam = params.get('model')
     const periodStartParam = params.get('period_start')
 
-    if (periodParam && ['daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
+    if (periodParam && ['last_30_days', 'daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
       activePeriod = periodParam
     }
     if (metricParam && ['tokens', 'cost'].includes(metricParam)) {
@@ -395,8 +407,30 @@
       <div class="me-row">
         <span class="me-label">{zh ? '我的排名' : 'My rank'}</span>
         <span class="me-rank">#{data.current_user.rank}</span>
-        <span class="me-name">{data.current_user.display_name}</span>
-        <span class="me-tokens">{formatFullValue(data.current_user)} {activeMetric === 'tokens' ? 'tokens' : ''}</span>
+        <span class="me-user">
+          {#if data.current_user.avatar_url}
+            <img src={data.current_user.avatar_url} alt="" class="avatar" />
+          {:else}
+            <span class="avatar-placeholder">{avatarText(data.current_user.display_name)}</span>
+          {/if}
+          <span class="me-name">{data.current_user.display_name}</span>
+        </span>
+        <span class="me-stat">
+          <small>{valueLabel}</small>
+          <strong>{formatFullValue(data.current_user)}</strong>
+        </span>
+        <span class="me-stat secondary">
+          <small>{secondaryValueLabel}</small>
+          <strong>{formatSecondaryValue(data.current_user)}</strong>
+        </span>
+        <span class="me-stat compact-stat">
+          <small>{zh ? '较第一名' : 'vs #1'}</small>
+          <strong>{shareOfTop(data.current_user).toFixed(1)}%</strong>
+        </span>
+        <span class="me-stat updated">
+          <small>{zh ? '更新' : 'Updated'}</small>
+          <strong>{formatDate(data.current_user.updated_at)}</strong>
+        </span>
       </div>
     {/if}
 
@@ -601,7 +635,7 @@
 
   .me-row {
     display: grid;
-    grid-template-columns: auto 72px minmax(0, 1fr) auto;
+    grid-template-columns: auto 64px minmax(160px, 1fr) minmax(130px, auto) minmax(104px, auto) minmax(76px, auto) minmax(110px, auto);
     align-items: center;
     gap: 12px;
     margin-bottom: 10px;
@@ -615,10 +649,14 @@
     font-size: 0.75rem;
     font-weight: 650;
   }
-  .me-rank, .me-tokens { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .me-rank, .me-stat strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .me-rank { color: var(--accent); font-weight: 750; }
+  .me-user { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
   .me-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .me-tokens { color: var(--text-secondary); font-size: 0.8125rem; }
+  .me-stat { display: grid; gap: 2px; justify-items: end; min-width: 0; }
+  .me-stat small { color: var(--text-muted); font-size: 0.6875rem; font-weight: 650; }
+  .me-stat strong { color: var(--text); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .me-stat.secondary strong, .me-stat.updated strong { color: var(--text-secondary); font-weight: 600; }
 
   .table-wrap {
     border: 1px solid var(--border-subtle);
@@ -773,11 +811,12 @@
     .col-share { display: none; }
     .lb-row.header .col-share { display: none; }
     .col-updated { display: none; }
-    .me-row { grid-template-columns: 1fr auto; gap: 6px 10px; }
+    .me-row { grid-template-columns: 1fr auto; gap: 8px 10px; }
     .me-label { grid-column: 1 / -1; }
     .me-rank { grid-column: 1; }
-    .me-name { grid-column: 2; text-align: right; }
-    .me-tokens { grid-column: 1 / -1; }
+    .me-user { grid-column: 1 / -1; }
+    .me-stat { justify-items: start; }
+    .me-stat.updated { display: none; }
     .role-note { grid-template-columns: 1fr; }
   }
 </style>

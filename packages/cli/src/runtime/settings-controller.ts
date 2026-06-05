@@ -11,7 +11,7 @@ export interface RuntimeSettingsControllerOptions {
 }
 
 const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
-const DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS = 24 * 60 * 60 * 1000
+const DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
 
 export class RuntimeSettingsController {
   private readonly db: Database.Database

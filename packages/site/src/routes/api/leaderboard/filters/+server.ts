@@ -7,17 +7,19 @@ import { getUserFromEvent } from '$lib/server/auth/session.js'
 export const GET: RequestHandler = async (event) => {
   try {
     const user = await getUserFromEvent(event)
-    const periodType = event.url.searchParams.get('period_type') || 'daily'
+    const periodType = event.url.searchParams.get('period_type') || 'last_30_days'
     const metric = event.url.searchParams.get('metric') || 'tokens'
     const periodStart = event.url.searchParams.get('period_start') || getCurrentPeriodStart(periodType)
     const valueColumn = metric === 'cost' ? sql`total_cost_usd` : sql`total_tokens`
+    const periodFilter = periodType === 'last_30_days'
+      ? sql`period_type = 'daily'::period_type AND period_start >= ${periodStart} AND period_start < ${addUtcDays(periodStart, 30)}`
+      : sql`period_type = ${periodType}::period_type AND period_start = ${periodStart}`
 
     const [tools, models] = await Promise.all([
       sql`
         SELECT tool
         FROM leaderboard_metrics
-        WHERE period_type = ${periodType}::period_type
-          AND period_start = ${periodStart}
+        WHERE ${periodFilter}
           AND scope_type = 'tool'
           AND tool IS NOT NULL
           AND visibility = 'public'
@@ -30,8 +32,7 @@ export const GET: RequestHandler = async (event) => {
       sql`
         SELECT model
         FROM leaderboard_metrics
-        WHERE period_type = ${periodType}::period_type
-          AND period_start = ${periodStart}
+        WHERE ${periodFilter}
           AND scope_type = 'model'
           AND model IS NOT NULL
           AND visibility = 'public'
@@ -50,4 +51,10 @@ export const GET: RequestHandler = async (event) => {
     console.error('Leaderboard filters query failed:', err)
     return json({ tools: [], models: [] })
   }
+}
+
+function addUtcDays(iso: string, days: number): string {
+  const date = new Date(iso)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString()
 }

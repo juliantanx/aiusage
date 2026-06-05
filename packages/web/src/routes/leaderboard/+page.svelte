@@ -21,19 +21,25 @@
   let uploadBusy = false
   let uploadResult = null
   let autoUploadEnabled = false
-  let autoUploadInterval = '86400000'
+  let autoUploadInterval = '604800000'
   let autoUploadSaving = false
+  const defaultAutoUploadInterval = 604800000
 
   const autoUploadIntervals = [
-    { value: '43200000', labelKey: 'leaderboard.autoUploadIntervals.twelveHours' },
     { value: '86400000', labelKey: 'leaderboard.autoUploadIntervals.daily' },
     { value: '604800000', labelKey: 'leaderboard.autoUploadIntervals.weekly' },
+    { value: '2592000000', labelKey: 'leaderboard.autoUploadIntervals.monthly' },
   ]
 
   $: recentUpload = authStatus?.uploads?.[0] || null
   $: accountName = authStatus?.user?.display_name || authStatus?.user?.username || ''
   $: accountInitial = (accountName || 'A').charAt(0).toUpperCase()
-  $: deviceName = authStatus?.deviceName || authStatus?.deviceId || ''
+  $: readableDeviceName = authStatus?.deviceName || (authStatus?.loggedIn ? $t('leaderboard.authorizedDevice') : '')
+  $: latestUploadTime = recentUpload?.created_at || null
+  $: nextUploadTime = autoUploadEnabled && latestUploadTime
+    ? new Date(new Date(latestUploadTime).getTime() + Number(autoUploadInterval || defaultAutoUploadInterval))
+    : null
+  $: selectedIntervalLabel = autoUploadIntervals.find(option => option.value === autoUploadInterval)?.labelKey || 'leaderboard.autoUploadIntervals.weekly'
   $: uploadSummary = uploadResult?.response?.snapshots
     ? {
         accepted: uploadResult.response.snapshots.filter(s => s.status === 'accepted').length,
@@ -51,6 +57,11 @@
     const d = new Date(value)
     if (Number.isNaN(d.getTime())) return '-'
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  function formatUploadStatus(upload) {
+    if (!upload) return $t('leaderboard.noUploads')
+    return `${upload.period_type} · ${upload.status}`
   }
 
   async function loadAuthStatus() {
@@ -144,7 +155,7 @@
     try {
       await saveConfig({
         leaderboardAutoUpload: enabled,
-        leaderboardUploadInterval: Number(interval) || 86400000,
+        leaderboardUploadInterval: Number(interval) || defaultAutoUploadInterval,
       })
       autoUploadEnabled = enabled
       autoUploadInterval = interval
@@ -160,7 +171,7 @@
     if (config?.siteUrl) siteUrl = config.siteUrl
     if (config) {
       autoUploadEnabled = config.leaderboardAutoUpload === true
-      autoUploadInterval = String(config.leaderboardUploadInterval || 86400000)
+      autoUploadInterval = String(config.leaderboardUploadInterval || defaultAutoUploadInterval)
     }
     await loadAuthStatus()
   })
@@ -209,7 +220,7 @@
       </div>
       <div class="status-item">
         <span>{$t('leaderboard.device')}</span>
-        <strong>{authStatus.loggedIn ? deviceName : '-'}</strong>
+        <strong title={authStatus.deviceId || ''}>{authStatus.loggedIn ? readableDeviceName : '-'}</strong>
       </div>
       <div class="status-item">
         <span>{$t('leaderboard.authorizedAt')}</span>
@@ -217,7 +228,13 @@
       </div>
       <div class="status-item">
         <span>{$t('leaderboard.uploadStatus')}</span>
-        <strong>{recentUpload ? `${recentUpload.period_type} · ${recentUpload.status}` : $t('leaderboard.noUploads')}</strong>
+        <strong>{formatUploadStatus(recentUpload)}</strong>
+        <small>{latestUploadTime ? formatDate(latestUploadTime) : $t('leaderboard.noUploadTime')}</small>
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.nextUpload')}</span>
+        <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
+        <small>{autoUploadEnabled ? $t(selectedIntervalLabel) : $t('leaderboard.enableAutoUploadHint')}</small>
       </div>
     </div>
   {/if}
@@ -250,7 +267,7 @@
           {authStatus.loggedIn ? (accountName || $t('leaderboard.loggedIn')) : $t('leaderboard.notLoggedIn')}
         </div>
         {#if authStatus.loggedIn}
-          <div class="auth-meta mono">{authStatus.deviceId}</div>
+          <div class="auth-meta">{readableDeviceName}</div>
         {:else}
           <div class="auth-meta">{$t('leaderboard.webLoginHint')}</div>
         {/if}
@@ -286,11 +303,22 @@
     </label>
   </div>
 
+  <div class="auto-upload-meta">
+    <div>
+      <span>{$t('leaderboard.nextUpload')}</span>
+      <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
+    </div>
+    <div>
+      <span>{$t('leaderboard.uploadLimits')}</span>
+      <strong>{$t('leaderboard.uploadLimitsSummary')}</strong>
+    </div>
+  </div>
+
   {#if recentUpload}
     <div class="upload-status">
       <span>{$t('leaderboard.lastUpload')}</span>
-      <strong>{recentUpload.period_type} · {recentUpload.status}</strong>
-      <span>{formatFullTokens(recentUpload.total_tokens)} tokens</span>
+      <strong>{formatUploadStatus(recentUpload)}</strong>
+      <span>{formatFullTokens(recentUpload.total_tokens)} tokens · {formatDate(recentUpload.created_at)}</span>
     </div>
   {/if}
 
@@ -351,7 +379,7 @@
 
   .status-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.75rem;
   }
 
@@ -377,6 +405,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .status-item small {
+    display: block;
+    min-width: 0;
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    overflow: hidden;
+    line-height: 1.35;
   }
 
   .account-line {
@@ -493,6 +531,37 @@
     gap: 1rem;
     padding: 0.625rem 0 0;
     border-top: 1px solid var(--border-subtle);
+  }
+
+  .auto-upload-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .auto-upload-meta div {
+    min-width: 0;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background: var(--raised);
+  }
+
+  .auto-upload-meta span {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+  }
+
+  .auto-upload-meta strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    line-height: 1.45;
   }
 
   .toggle-row {
@@ -698,6 +767,10 @@
     .auto-upload-row {
       flex-direction: column;
       align-items: flex-start;
+    }
+
+    .auto-upload-meta {
+      grid-template-columns: 1fr;
     }
 
     .interval-control {
