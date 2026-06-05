@@ -31,6 +31,7 @@
         { path: '/quotas',     key: 'nav.quotas',    icon: '▣' },
         { path: '/leaderboard', key: 'nav.leaderboard', icon: '#' },
         { path: '/pricing',    key: 'nav.pricing',   icon: '¤' },
+        { path: '/support',    key: 'nav.support',   icon: '@' },
         { path: '/settings',   key: 'nav.settings',  icon: '◉' },
       ]
     }
