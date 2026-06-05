@@ -3,12 +3,13 @@
   import { lang } from '$lib/lang'
 
   $: zh = $lang === 'zh'
+  const initialProfile = $page.data.profile
   $: me = $page.data.profile
 
-  let editUsername = me?.username || ''
-  let editDisplayName = me?.display_name || ''
+  let editUsername = initialProfile?.username || ''
+  let editDisplayName = initialProfile?.display_name || ''
   let avatarUploading = false
-  let avatarPreviewSrc = me?.avatar_url || ''
+  let avatarPreviewSrc = initialProfile?.avatar_url || ''
   let fileInput
   let profileMsg = ''
   let profileError = ''
@@ -21,8 +22,8 @@
   let pwError = ''
   let pwSaving = false
 
-  let lbVisibility = me?.leaderboard_visibility || 'public'
-  let lbAnonymous = me?.leaderboard_anonymous || false
+  let lbVisibility = initialProfile?.leaderboard_visibility || 'public'
+  let lbAnonymous = initialProfile?.leaderboard_anonymous || false
   let lbMsg = ''
   let lbError = ''
   let lbSaving = false

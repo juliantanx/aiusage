@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { requireUser } from '$lib/server/auth/session.js'
+import { invalidateLeaderboardCache } from '$lib/server/leaderboard/query.js'
 
 const USERNAME_COOLDOWN_DAYS = 30
 
@@ -95,6 +96,9 @@ export const PUT: RequestHandler = async (event) => {
   }
   if (leaderboardAnonymous !== undefined) {
     await sql`UPDATE users SET leaderboard_anonymous = ${leaderboardAnonymous}, updated_at = NOW() WHERE id = ${user.id}`
+  }
+  if (hasLeaderboardUpdates) {
+    invalidateLeaderboardCache()
   }
 
   // Reserve old username for 30 days

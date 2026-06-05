@@ -67,7 +67,10 @@ export async function queryLeaderboard(options: {
   if (!options.cursor) {
     const cached = cache.get(key)
     if (cached && cached.expiresAt > Date.now()) {
-      return { ...cached.data, current_user: null } // Re-fetch current_user separately
+      return {
+        ...cached.data,
+        current_user: await getCurrentUserRanking(options),
+      }
     }
   }
 
@@ -106,75 +109,7 @@ export async function queryLeaderboard(options: {
   const page = entries.slice(0, PAGE_SIZE)
   const nextCursor = hasMore && page.length > 0 ? encodeCursor(page[page.length - 1].rn) : null
 
-  let currentUser: RankingEntry | null = null
-  if (options.currentUserId) {
-    const userEntry = await sql`
-      SELECT
-        lm.user_id,
-        u.display_name,
-        u.avatar_url,
-        lm.scope_type,
-        lm.tool,
-        lm.model,
-        lm.total_tokens::text,
-        lm.total_cost_usd::text,
-        lm.updated_at::text
-      FROM leaderboard_metrics lm
-      JOIN users u ON u.id = lm.user_id
-      WHERE lm.period_type = ${options.periodType}::period_type
-        AND lm.period_start = ${options.periodStart}
-        AND lm.scope_type = ${options.scope}
-        AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
-        AND (${options.model}::text IS NULL OR lm.model = ${options.model})
-        AND lm.user_id = ${options.currentUserId}
-        AND lm.visibility = 'public'
-    ` as Array<Omit<RankingEntry, 'rank'>>
-
-    if (userEntry[0]) {
-      const ue = userEntry[0]
-      const rankResult = await sql`
-        SELECT COUNT(*) + 1 as rank
-        FROM leaderboard_metrics lm
-        JOIN users u ON u.id = lm.user_id
-        WHERE lm.period_type = ${options.periodType}::period_type
-          AND lm.period_start = ${options.periodStart}
-          AND lm.scope_type = ${options.scope}
-          AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
-          AND (${options.model}::text IS NULL OR lm.model = ${options.model})
-          AND lm.visibility = 'public'
-          AND u.status = 'active'
-          AND u.leaderboard_visibility = 'public'
-          AND (
-            ${
-              options.metric === 'cost'
-                ? sql`lm.total_cost_usd > ${ue.total_cost_usd}`
-                : sql`lm.total_tokens > ${ue.total_tokens}`
-            }
-            OR (
-              ${
-                options.metric === 'cost'
-                  ? sql`lm.total_cost_usd = ${ue.total_cost_usd}`
-                  : sql`lm.total_tokens = ${ue.total_tokens}`
-              }
-              AND lm.updated_at < ${ue.updated_at}
-            )
-            OR (
-              ${
-                options.metric === 'cost'
-                  ? sql`lm.total_cost_usd = ${ue.total_cost_usd}`
-                  : sql`lm.total_tokens = ${ue.total_tokens}`
-              }
-              AND lm.updated_at = ${ue.updated_at}
-              AND lm.user_id < ${ue.user_id}
-            )
-          )
-      `
-      currentUser = {
-        rank: Number((rankResult[0] as { rank: bigint }).rank),
-        ...ue,
-      }
-    }
-  }
+  const currentUser = await getCurrentUserRanking(options)
 
   const result: LeaderboardResponse = {
     entries: page.map(row => toRankingEntry(row)),
@@ -208,6 +143,88 @@ function toRankingEntry(row: RankingEntry & { rn: string }): RankingEntry {
     total_tokens: row.total_tokens,
     total_cost_usd: row.total_cost_usd,
     updated_at: row.updated_at,
+  }
+}
+
+async function getCurrentUserRanking(options: {
+  periodType: string
+  periodStart: string
+  metric: RankingMetric
+  scope: RankingScope
+  tool: string | null
+  model: string | null
+  currentUserId: string | null
+}): Promise<RankingEntry | null> {
+  if (!options.currentUserId) return null
+
+  const userEntry = await sql`
+    SELECT
+      CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(lm.user_id), 1, 8) ELSE lm.user_id END AS user_id,
+      CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
+      CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
+      lm.scope_type,
+      lm.tool,
+      lm.model,
+      lm.total_tokens::text,
+      lm.total_cost_usd::text,
+      lm.updated_at::text
+    FROM leaderboard_metrics lm
+    JOIN users u ON u.id = lm.user_id
+    WHERE lm.period_type = ${options.periodType}::period_type
+      AND lm.period_start = ${options.periodStart}
+      AND lm.scope_type = ${options.scope}
+      AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
+      AND (${options.model}::text IS NULL OR lm.model = ${options.model})
+      AND lm.user_id = ${options.currentUserId}
+      AND lm.visibility = 'public'
+      AND u.status = 'active'
+      AND u.leaderboard_visibility = 'public'
+  ` as Array<Omit<RankingEntry, 'rank'>>
+
+  if (!userEntry[0]) return null
+
+  const ue = userEntry[0]
+  const rankResult = await sql`
+    SELECT COUNT(*) + 1 as rank
+    FROM leaderboard_metrics lm
+    JOIN users u ON u.id = lm.user_id
+    WHERE lm.period_type = ${options.periodType}::period_type
+      AND lm.period_start = ${options.periodStart}
+      AND lm.scope_type = ${options.scope}
+      AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
+      AND (${options.model}::text IS NULL OR lm.model = ${options.model})
+      AND lm.visibility = 'public'
+      AND u.status = 'active'
+      AND u.leaderboard_visibility = 'public'
+      AND (
+        ${
+          options.metric === 'cost'
+            ? sql`lm.total_cost_usd > ${ue.total_cost_usd}`
+            : sql`lm.total_tokens > ${ue.total_tokens}`
+        }
+        OR (
+          ${
+            options.metric === 'cost'
+              ? sql`lm.total_cost_usd = ${ue.total_cost_usd}`
+              : sql`lm.total_tokens = ${ue.total_tokens}`
+          }
+          AND lm.updated_at < ${ue.updated_at}
+        )
+        OR (
+          ${
+            options.metric === 'cost'
+              ? sql`lm.total_cost_usd = ${ue.total_cost_usd}`
+              : sql`lm.total_tokens = ${ue.total_tokens}`
+          }
+          AND lm.updated_at = ${ue.updated_at}
+          AND lm.user_id < ${options.currentUserId}
+        )
+      )
+  `
+
+  return {
+    rank: Number((rankResult[0] as { rank: bigint }).rank),
+    ...ue,
   }
 }
 

@@ -1139,6 +1139,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, {
             loggedIn: true,
             deviceId: creds.device_id,
+            deviceName: status.deviceName ?? null,
+            user: status.user ?? null,
             obtainedAt: creds.obtained_at,
             siteUrl: getSiteUrl(),
             uploads: status.snapshots,

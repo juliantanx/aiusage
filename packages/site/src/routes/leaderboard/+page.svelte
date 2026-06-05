@@ -41,8 +41,9 @@
   $: zh = $lang === 'zh'
   $: user = $page.data.user
   $: rows = data?.entries || []
-  $: leaders = rows.slice(0, 3)
   $: valueLabel = activeMetric === 'cost' ? (zh ? '费用' : 'Cost') : 'Tokens'
+  $: secondaryValueLabel = activeMetric === 'cost' ? 'Tokens' : (zh ? '费用' : 'Cost')
+  $: topValue = rows.length > 0 ? numericValue(rows[0]) : 0
   $: activeChips = activeScope === 'tool' ? availableTools : activeScope === 'model' ? availableModels : []
   $: selectedChip = activeScope === 'tool' ? selectedTool : activeScope === 'model' ? selectedModel : ''
   $: visibleChips = chipsExpanded ? activeChips : activeChips.slice(0, 12)
@@ -141,6 +142,20 @@
 
   function formatFullValue(entry) {
     return activeMetric === 'cost' ? formatCost(entry.total_cost_usd) : formatFullTokens(entry.total_tokens)
+  }
+
+  function formatSecondaryValue(entry) {
+    return activeMetric === 'cost' ? formatFullTokens(entry.total_tokens) : formatCost(entry.total_cost_usd)
+  }
+
+  function numericValue(entry) {
+    const n = Number(activeMetric === 'cost' ? entry.total_cost_usd : entry.total_tokens)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  function shareOfTop(entry) {
+    if (!topValue) return 0
+    return Math.max(0, Math.min(100, numericValue(entry) / topValue * 100))
   }
 
   function scopeValue(entry) {
@@ -324,21 +339,23 @@
 <section class="lb-page">
   <div class="lb-container">
     <div class="ranking-controls">
-      <div class="toolbar" aria-label={zh ? '周期选择' : 'Period'}>
-        {#each periods as p}
-          <button class="pill" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
-            {zh ? p.zh : p.en}
-          </button>
-        {/each}
-      </div>
-
-      {#if activePeriod !== 'all_time'}
-        <div class="period-nav">
-          <button class="nav-arrow" on:click={() => goToPeriod(-1)} aria-label={zh ? '上一周期' : 'Previous period'}>←</button>
-          <span class="period-label">{formatPeriodLabel(activePeriodStart, activePeriod)}</span>
-          <button class="nav-arrow" on:click={() => goToPeriod(1)} disabled={!canGoNext} aria-label={zh ? '下一周期' : 'Next period'}>→</button>
+      <div class="control-row primary">
+        <div class="toolbar" aria-label={zh ? '周期选择' : 'Period'}>
+          {#each periods as p}
+            <button class="pill" class:active={activePeriod === p.key} on:click={() => switchPeriod(p.key)}>
+              {zh ? p.zh : p.en}
+            </button>
+          {/each}
         </div>
-      {/if}
+
+        {#if activePeriod !== 'all_time'}
+          <div class="period-nav">
+            <button class="nav-arrow" on:click={() => goToPeriod(-1)} aria-label={zh ? '上一周期' : 'Previous period'}>←</button>
+            <span class="period-label">{formatPeriodLabel(activePeriodStart, activePeriod)}</span>
+            <button class="nav-arrow" on:click={() => goToPeriod(1)} disabled={!canGoNext} aria-label={zh ? '下一周期' : 'Next period'}>→</button>
+          </div>
+        {/if}
+      </div>
 
       <div class="control-row">
         <div class="toolbar compact" aria-label={zh ? '指标选择' : 'Metric'}>
@@ -376,26 +393,10 @@
 
     {#if data?.current_user}
       <div class="me-row">
+        <span class="me-label">{zh ? '我的排名' : 'My rank'}</span>
         <span class="me-rank">#{data.current_user.rank}</span>
         <span class="me-name">{data.current_user.display_name}</span>
         <span class="me-tokens">{formatFullValue(data.current_user)} {activeMetric === 'tokens' ? 'tokens' : ''}</span>
-      </div>
-    {/if}
-
-    {#if leaders.length > 0}
-      <div class="leaders" aria-label={zh ? '前三名' : 'Top three'}>
-        {#each leaders as entry}
-          <div class="leader">
-            <span class="leader-rank">#{entry.rank}</span>
-            {#if entry.avatar_url}
-              <img src={entry.avatar_url} alt="" class="leader-avatar" />
-            {:else}
-              <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
-            {/if}
-            <span class="leader-name">{entry.display_name}</span>
-            <span class="leader-tokens">{formatFullValue(entry)}</span>
-          </div>
-        {/each}
       </div>
     {/if}
 
@@ -431,6 +432,8 @@
               <span class="col-scope" role="columnheader">{activeScope === 'tool' ? (zh ? '工具' : 'Tool') : (zh ? '模型' : 'Model')}</span>
             {/if}
             <span class="col-tokens" role="columnheader">{valueLabel}</span>
+            <span class="col-secondary" role="columnheader">{secondaryValueLabel}</span>
+            <span class="col-share" role="columnheader">{zh ? '较第一名' : 'vs #1'}</span>
             <span class="col-updated" role="columnheader">{zh ? '更新' : 'Updated'}</span>
           </div>
           {#each rows as entry}
@@ -449,6 +452,13 @@
               {/if}
               <span class="col-tokens" role="cell">
                 {formatFullValue(entry)}
+              </span>
+              <span class="col-secondary" role="cell">{formatSecondaryValue(entry)}</span>
+              <span class="col-share" role="cell" aria-label={`${shareOfTop(entry).toFixed(1)}%`}>
+                <span class="share-track" aria-hidden="true">
+                  <span class="share-fill" style={`width: ${shareOfTop(entry)}%`}></span>
+                </span>
+                <span class="share-text">{shareOfTop(entry).toFixed(1)}%</span>
               </span>
               <span class="col-updated" role="cell">{formatDate(entry.updated_at)}</span>
             </div>
@@ -477,20 +487,23 @@
 </section>
 
 <style>
-  .lb-page { padding: 24px 0 64px; }
-  .lb-container { width: min(var(--content-width), 1040px); margin: 0 auto; }
+  .lb-page { padding: 16px 0 48px; }
+  .lb-container { width: min(calc(100vw - 32px), 1280px); margin: 0 auto; }
 
   .ranking-controls {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
+    gap: 8px;
+    margin-bottom: 12px;
   }
   .control-row {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  .control-row.primary {
+    justify-content: space-between;
   }
   .toolbar {
     display: flex;
@@ -523,6 +536,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
   }
   .nav-arrow {
     display: inline-flex;
@@ -550,8 +564,8 @@
   .chip-bar {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    max-height: 72px;
+    gap: 4px;
+    max-height: 60px;
     overflow: hidden;
     transition: max-height 0.2s ease-out;
   }
@@ -587,55 +601,24 @@
 
   .me-row {
     display: grid;
-    grid-template-columns: 72px 1fr auto;
+    grid-template-columns: auto 72px minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
-    margin-bottom: 16px;
-    padding: 12px 16px;
+    margin-bottom: 10px;
+    padding: 10px 14px;
     border-radius: 8px;
     background: var(--accent-dim);
     color: var(--text);
+  }
+  .me-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
   }
   .me-rank, .me-tokens { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .me-rank { color: var(--accent); font-weight: 750; }
   .me-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .me-tokens { color: var(--text-secondary); font-size: 0.8125rem; }
-
-  .leaders {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 20px;
-  }
-  .leader {
-    display: grid;
-    grid-template-columns: auto 32px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
-    min-height: 56px;
-    padding: 12px;
-    border-radius: 8px;
-    background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--border-subtle);
-  }
-  .leader-rank { font-family: var(--mono); color: var(--text-muted); font-size: 0.8125rem; }
-  .leader-avatar, .leader-avatar.placeholder {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-  }
-  .leader-avatar.placeholder {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--raised);
-    color: var(--accent);
-    font-size: 0.8125rem;
-    font-weight: 750;
-  }
-  .leader-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-  .leader-tokens { font-family: var(--mono); font-size: 0.8125rem; color: var(--text-secondary); }
 
   .table-wrap {
     border: 1px solid var(--border-subtle);
@@ -647,8 +630,8 @@
   .table-meta {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 10px 16px;
+    gap: 14px;
+    padding: 8px 14px;
     border-bottom: 1px solid var(--border-subtle);
     color: var(--text-muted);
     font-size: 0.75rem;
@@ -656,18 +639,19 @@
 
   .lb-row {
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr) 144px 144px;
+    grid-template-columns: 64px minmax(180px, 1fr) minmax(128px, 160px) minmax(104px, 132px) minmax(116px, 140px) minmax(116px, 140px);
     align-items: center;
-    min-height: 48px;
-    padding: 0 16px;
+    column-gap: 12px;
+    min-height: 42px;
+    padding: 0 14px;
     border-bottom: 1px solid var(--border-subtle);
   }
-  .lb-row.has-scope { grid-template-columns: 72px minmax(0, 1fr) minmax(140px, 220px) 144px 144px; }
+  .lb-row.has-scope { grid-template-columns: 64px minmax(150px, 1fr) minmax(150px, 240px) minmax(128px, 160px) minmax(104px, 132px) minmax(116px, 140px) minmax(116px, 140px); }
   .lb-row:last-child { border-bottom: 0; }
   .lb-row:not(.header):hover { background: var(--raised); }
   .lb-row.top { background: oklch(0.55 0.12 175 / 0.035); }
   .lb-row.header {
-    min-height: 40px;
+    min-height: 34px;
     background: var(--raised);
     color: var(--text-muted);
     font-size: 0.6875rem;
@@ -676,17 +660,44 @@
     text-transform: uppercase;
   }
 
-  .col-rank, .col-tokens { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .col-rank, .col-tokens, .col-secondary, .col-share { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .col-rank { color: var(--text-secondary); font-weight: 650; }
   .col-user { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
   .user-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .col-scope { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.8125rem; }
   .col-tokens { text-align: right; font-weight: 650; }
+  .col-secondary { color: var(--text-secondary); text-align: right; font-size: 0.8125rem; }
+  .col-share {
+    display: grid;
+    grid-template-columns: minmax(56px, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
   .col-updated { color: var(--text-muted); text-align: right; font-size: 0.8125rem; }
 
+  .lb-row.header .col-share {
+    display: block;
+  }
+
+  .share-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--raised);
+    overflow: hidden;
+  }
+  .share-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  .share-text { text-align: right; }
+
   .avatar, .avatar-placeholder {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -702,7 +713,7 @@
   }
 
   .state {
-    padding: 48px 16px;
+    padding: 40px 16px;
     text-align: center;
     color: var(--text-muted);
     font-size: 0.875rem;
@@ -714,7 +725,7 @@
 
   .load-more {
     display: block;
-    margin: 16px auto;
+    margin: 12px auto;
     min-height: 32px;
     padding: 0 16px;
     border: 1px solid var(--border-medium);
@@ -732,7 +743,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
-    margin-top: 16px;
+    margin-top: 12px;
     color: var(--text-secondary);
     font-size: 0.8125rem;
   }
@@ -749,17 +760,24 @@
 
   @media (max-width: 760px) {
     .lb-page { padding-top: 16px; }
-    .leaders { grid-template-columns: 1fr; }
     .control-row { flex-direction: column; align-items: stretch; }
+    .control-row.primary { justify-content: flex-start; }
     .toolbar { width: 100%; }
+    .period-nav { justify-content: space-between; }
     .chip-bar { max-height: 60px; }
     .table-meta { flex-wrap: wrap; gap: 8px 14px; }
-    .lb-row { grid-template-columns: 52px minmax(0, 1fr) 92px; padding: 0 12px; }
-    .lb-row.has-scope { grid-template-columns: 52px minmax(0, 1fr) 92px; }
+    .lb-row { grid-template-columns: 52px minmax(0, 1fr) 104px; padding: 0 12px; }
+    .lb-row.has-scope { grid-template-columns: 52px minmax(0, 1fr) 104px; }
     .col-scope { display: none; }
+    .col-secondary { display: none; }
+    .col-share { display: none; }
+    .lb-row.header .col-share { display: none; }
     .col-updated { display: none; }
-    .me-row { grid-template-columns: 56px 1fr; }
-    .me-tokens { grid-column: 2; }
+    .me-row { grid-template-columns: 1fr auto; gap: 6px 10px; }
+    .me-label { grid-column: 1 / -1; }
+    .me-rank { grid-column: 1; }
+    .me-name { grid-column: 2; text-align: right; }
+    .me-tokens { grid-column: 1 / -1; }
     .role-note { grid-template-columns: 1fr; }
   }
 </style>

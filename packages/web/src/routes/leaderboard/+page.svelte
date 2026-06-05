@@ -3,7 +3,6 @@
   import {
     completeLeaderboardAuth,
     fetchConfig,
-    fetchLeaderboard,
     fetchLeaderboardAuthStatus,
     logoutLeaderboardAuth,
     saveConfig,
@@ -12,15 +11,7 @@
   } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
 
-  const periods = ['daily', 'weekly', 'monthly', 'yearly', 'all_time']
-
-  let activePeriod = 'daily'
-  let activePeriodStart = ''
   let siteUrl = 'https://aiusage.jtanx.com'
-  let data = null
-  let loading = true
-  let loadingMore = false
-  let error = ''
   let authLoading = true
   let authBusy = false
   let authError = ''
@@ -39,10 +30,10 @@
     { value: '604800000', labelKey: 'leaderboard.autoUploadIntervals.weekly' },
   ]
 
-  $: rows = data?.entries || []
-  $: leaders = rows.slice(0, 3)
-  $: canGoNext = activePeriod !== 'all_time' && activePeriodStart && activePeriodStart < getCurrentPeriodStart(activePeriod)
   $: recentUpload = authStatus?.uploads?.[0] || null
+  $: accountName = authStatus?.user?.display_name || authStatus?.user?.username || ''
+  $: accountInitial = (accountName || 'A').charAt(0).toUpperCase()
+  $: deviceName = authStatus?.deviceName || authStatus?.deviceId || ''
   $: uploadSummary = uploadResult?.response?.snapshots
     ? {
         accepted: uploadResult.response.snapshots.filter(s => s.status === 'accepted').length,
@@ -50,78 +41,6 @@
         rejected: uploadResult.response.snapshots.filter(s => s.status === 'rejected').length,
       }
     : null
-
-  function getCurrentPeriodStart(periodType) {
-    const now = new Date()
-    switch (periodType) {
-      case 'daily':
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-      case 'weekly': {
-        const day = now.getUTCDay()
-        const diff = day === 0 ? 6 : day - 1
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diff)).toISOString()
-      }
-      case 'monthly':
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
-      case 'yearly':
-        return new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString()
-      case 'all_time':
-        return '1970-01-01T00:00:00.000Z'
-      default:
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-    }
-  }
-
-  function shiftPeriodStart(periodStart, periodType, direction) {
-    const d = new Date(periodStart)
-    switch (periodType) {
-      case 'daily':
-        d.setUTCDate(d.getUTCDate() + direction)
-        break
-      case 'weekly':
-        d.setUTCDate(d.getUTCDate() + direction * 7)
-        break
-      case 'monthly':
-        d.setUTCMonth(d.getUTCMonth() + direction)
-        break
-      case 'yearly':
-        d.setUTCFullYear(d.getUTCFullYear() + direction)
-        break
-    }
-    return d.toISOString()
-  }
-
-  function formatPeriodLabel(periodStart, periodType) {
-    const d = new Date(periodStart)
-    if (!Number.isFinite(d.getTime())) return ''
-    switch (periodType) {
-      case 'daily':
-        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
-      case 'weekly': {
-        const end = new Date(d)
-        end.setUTCDate(end.getUTCDate() + 6)
-        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
-        return `${d.toLocaleDateString(undefined, fmt)} – ${end.toLocaleDateString(undefined, fmt)}`
-      }
-      case 'monthly':
-        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', timeZone: 'UTC' })
-      case 'yearly':
-        return d.toLocaleDateString(undefined, { year: 'numeric', timeZone: 'UTC' })
-      default:
-        return ''
-    }
-  }
-
-  function syncUrl() {
-    const params = new URLSearchParams(window.location.search)
-    if (activePeriod !== 'daily') params.set('period', activePeriod)
-    else params.delete('period')
-    const currentStart = getCurrentPeriodStart(activePeriod)
-    if (activePeriodStart && activePeriodStart !== currentStart) params.set('period_start', activePeriodStart)
-    else params.delete('period_start')
-    const qs = params.toString()
-    window.history.replaceState({}, '', `${window.location.pathname}${qs ? '?' + qs : ''}`)
-  }
 
   function formatFullTokens(value) {
     const n = Number(value)
@@ -132,58 +51,6 @@
     const d = new Date(value)
     if (Number.isNaN(d.getTime())) return '-'
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  }
-
-  function avatarText(name) {
-    return (name || 'A').trim().charAt(0).toUpperCase()
-  }
-
-  async function loadLeaderboard(cursor) {
-    const more = Boolean(cursor)
-    if (more) loadingMore = true
-    else {
-      loading = true
-      data = null
-    }
-    error = ''
-
-    try {
-      const next = await fetchLeaderboard(siteUrl, {
-        period_type: activePeriod,
-        period_start: activePeriodStart || undefined,
-        cursor,
-      })
-      data = more && data
-        ? { ...next, entries: [...data.entries, ...next.entries] }
-        : next
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load leaderboard'
-    } finally {
-      loading = false
-      loadingMore = false
-    }
-  }
-
-  function switchPeriod(period) {
-    if (period === activePeriod || loading) return
-    activePeriod = period
-    activePeriodStart = getCurrentPeriodStart(period)
-    syncUrl()
-    loadLeaderboard()
-  }
-
-  function goToPeriod(direction) {
-    if (activePeriod === 'all_time') return
-    if (direction === 1 && !canGoNext) return
-    activePeriodStart = shiftPeriodStart(activePeriodStart, activePeriod, direction)
-    const currentStart = getCurrentPeriodStart(activePeriod)
-    if (activePeriodStart > currentStart) activePeriodStart = currentStart
-    syncUrl()
-    loadLeaderboard()
-  }
-
-  function loadMore() {
-    if (data?.next_cursor) loadLeaderboard(data.next_cursor)
   }
 
   async function loadAuthStatus() {
@@ -263,7 +130,7 @@
     uploadResult = null
     try {
       uploadResult = await uploadLeaderboardData()
-      await Promise.all([loadAuthStatus(), loadLeaderboard()])
+      await loadAuthStatus()
     } catch (e) {
       authError = e instanceof Error ? e.message : 'Upload failed'
     } finally {
@@ -289,21 +156,13 @@
   }
 
   onMount(async () => {
-    const params = new URLSearchParams(window.location.search)
-    const periodParam = params.get('period')
-    const periodStartParam = params.get('period_start')
-    if (periodParam && ['daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
-      activePeriod = periodParam
-    }
-    activePeriodStart = periodStartParam || getCurrentPeriodStart(activePeriod)
-
     const config = await fetchConfig().catch(() => null)
     if (config?.siteUrl) siteUrl = config.siteUrl
     if (config) {
       autoUploadEnabled = config.leaderboardAutoUpload === true
       autoUploadInterval = String(config.leaderboardUploadInterval || 86400000)
     }
-    await Promise.all([loadLeaderboard(), loadAuthStatus()])
+    await loadAuthStatus()
   })
 
   onDestroy(clearAuthPoll)
@@ -323,89 +182,44 @@
   </a>
 </div>
 
-<div class="period-tabs" aria-label={$t('leaderboard.period')}>
-  {#each periods as period}
-    <button class="period-tab" class:active={activePeriod === period} on:click={() => switchPeriod(period)}>
-      {$t(`leaderboard.periods.${period}`)}
-    </button>
-  {/each}
-</div>
-
-{#if activePeriod !== 'all_time'}
-  <div class="period-nav">
-    <button class="nav-arrow" on:click={() => goToPeriod(-1)}>←</button>
-    <span class="period-label">{formatPeriodLabel(activePeriodStart, activePeriod)}</span>
-    <button class="nav-arrow" on:click={() => goToPeriod(1)} disabled={!canGoNext}>→</button>
-  </div>
-{/if}
-
-{#if leaders.length > 0}
-  <div class="leaders">
-    {#each leaders as entry}
-      <div class="leader">
-        <span class="leader-rank">#{entry.rank}</span>
-        {#if entry.avatar_url}
-          <img src={entry.avatar_url} alt="" class="leader-avatar" />
-        {:else}
-          <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
-        {/if}
-        <span class="leader-name">{entry.display_name}</span>
-        <span class="leader-tokens mono">{formatFullTokens(entry.total_tokens)}</span>
-      </div>
-    {/each}
-  </div>
-{/if}
-
-<section class="card leaderboard-card">
-  <div class="table-meta">
-    <span>{$t(`leaderboard.periods.${activePeriod}`)}</span>
-    <span>{$t('leaderboard.showing')} {rows.length}</span>
-  </div>
-
-  {#if error}
-    <div class="state-msg error">{error}</div>
-  {:else if loading}
+<section class="card status-card">
+  {#if authLoading}
     <div class="state-msg">{$t('common.loading')}</div>
-  {:else if rows.length === 0}
-    <div class="state-msg">{$t('leaderboard.noEntries')}</div>
   {:else}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>{$t('leaderboard.user')}</th>
-            <th class="num">Tokens</th>
-            <th class="num updated">{$t('leaderboard.updated')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each rows as entry}
-            <tr class:top={entry.rank <= 3}>
-              <td class="mono muted-rank">#{entry.rank}</td>
-              <td>
-                <span class="user-cell">
-                  {#if entry.avatar_url}
-                    <img src={entry.avatar_url} alt="" class="avatar" />
-                  {:else}
-                    <span class="avatar placeholder">{avatarText(entry.display_name)}</span>
-                  {/if}
-                  <span class="user-name">{entry.display_name}</span>
-                </span>
-              </td>
-              <td class="mono num">{formatFullTokens(entry.total_tokens)}</td>
-              <td class="num updated">{formatDate(entry.updated_at)}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+    <div class="status-grid">
+      <div class="status-item">
+        <span>{$t('leaderboard.account')}</span>
+        {#if authStatus.loggedIn}
+          <div class="account-line">
+            {#if authStatus.user?.avatar_url}
+              <img class="account-avatar" src={authStatus.user.avatar_url} alt="" width="28" height="28" />
+            {:else}
+              <span class="account-avatar fallback">{accountInitial}</span>
+            {/if}
+            <span class="account-copy">
+              <strong>{accountName || $t('leaderboard.loggedIn')}</strong>
+              {#if authStatus.user?.username && authStatus.user.username !== accountName}
+                <small>@{authStatus.user.username}</small>
+              {/if}
+            </span>
+          </div>
+        {:else}
+          <strong>{$t('leaderboard.notLoggedIn')}</strong>
+        {/if}
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.device')}</span>
+        <strong>{authStatus.loggedIn ? deviceName : '-'}</strong>
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.authorizedAt')}</span>
+        <strong>{authStatus.loggedIn ? formatDate(authStatus.obtainedAt) : '-'}</strong>
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.uploadStatus')}</span>
+        <strong>{recentUpload ? `${recentUpload.period_type} · ${recentUpload.status}` : $t('leaderboard.noUploads')}</strong>
+      </div>
     </div>
-
-    {#if data.next_cursor}
-      <button class="load-more" on:click={loadMore} disabled={loadingMore}>
-        {loadingMore ? $t('leaderboard.loadingMore') : $t('leaderboard.loadMore')}
-      </button>
-    {/if}
   {/if}
 </section>
 
@@ -433,7 +247,7 @@
       <span class="status-dot"></span>
       <div>
         <div class="auth-title">
-          {authStatus.loggedIn ? $t('leaderboard.loggedIn') : $t('leaderboard.notLoggedIn')}
+          {authStatus.loggedIn ? (accountName || $t('leaderboard.loggedIn')) : $t('leaderboard.notLoggedIn')}
         </div>
         {#if authStatus.loggedIn}
           <div class="auth-meta mono">{authStatus.deviceId}</div>
@@ -530,202 +344,80 @@
     background: var(--raised);
   }
 
-  .period-tabs {
-    display: flex;
-    gap: 0.25rem;
-    width: fit-content;
-    max-width: 100%;
+  .status-card {
     margin-bottom: 1rem;
-    padding: 0.25rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: var(--surface);
-    overflow-x: auto;
+    padding: 1rem 1.25rem;
   }
 
-  .period-tab {
-    min-height: 30px;
-    padding: 0 0.75rem;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-    font-weight: 650;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  .period-tab:hover {
-    color: var(--text);
-    background: var(--raised);
-  }
-
-  .period-tab.active {
-    color: var(--accent);
-    background: var(--accent-dim);
-  }
-
-  /* ── Period navigation ───────────────────────────────────────────────── */
-  .period-nav {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .nav-arrow {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    cursor: pointer;
-  }
-
-  .nav-arrow:hover:not(:disabled) {
-    background: var(--raised);
-    color: var(--text);
-  }
-
-  .nav-arrow:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .period-label {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--text);
-    min-width: 120px;
-    text-align: center;
-  }
-
-  /* ── Leaders podium ──────────────────────────────────────────────────── */
-  .leaders {
+  .status-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.75rem;
-    margin-bottom: 1rem;
   }
 
-  .leader {
-    display: grid;
-    grid-template-columns: auto 32px minmax(0, 1fr) auto;
+  .status-item {
+    min-width: 0;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background: var(--raised);
+  }
+
+  .status-item span {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+  }
+
+  .status-item strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .account-line {
+    display: flex;
     align-items: center;
     gap: 0.625rem;
-    min-height: 56px;
-    padding: 0.75rem;
-    border-radius: 8px;
-    background: var(--surface);
+    min-width: 0;
   }
 
-  .leader-rank,
-  .leader-tokens {
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-  }
-
-  .leader-avatar,
-  .avatar {
+  .account-avatar {
     width: 28px;
     height: 28px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
   }
 
-  .leader-avatar {
-    width: 32px;
-    height: 32px;
-  }
-
-  .placeholder {
+  .account-avatar.fallback {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--raised);
     color: var(--accent);
     font-size: 0.75rem;
-    font-weight: 750;
+    font-weight: 800;
   }
 
-  .leader-name,
-  .user-name {
+  .account-copy {
     min-width: 0;
+    display: grid;
+    gap: 0.125rem;
+  }
+
+  .account-copy small {
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 650;
-  }
-
-  /* ── Leaderboard table ───────────────────────────────────────────────── */
-  .leaderboard-card {
-    padding: 0;
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-  }
-
-  .table-meta {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-subtle);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-  }
-
-  .table-scroll {
-    overflow-x: auto;
-  }
-
-  th,
-  td {
-    white-space: nowrap;
-  }
-
-  .num {
-    text-align: right;
-  }
-
-  .muted-rank {
-    color: var(--text-muted);
-    font-weight: 650;
-  }
-
-  tr.top {
-    background: color-mix(in oklab, var(--accent) 6%, transparent);
-  }
-
-  .user-cell {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.625rem;
-    min-width: 0;
-  }
-
-  .load-more {
-    display: block;
-    margin: 1rem auto;
-    min-height: 32px;
-    padding: 0 1rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 650;
-    cursor: pointer;
-  }
-
-  .load-more:hover {
-    color: var(--text);
-    background: var(--raised);
   }
 
   /* ── Local panel (auth + upload) ─────────────────────────────────────── */
@@ -982,7 +674,7 @@
       align-items: flex-start;
     }
 
-    .leaders {
+    .status-grid {
       grid-template-columns: 1fr;
     }
 
@@ -1013,8 +705,5 @@
       width: 100%;
     }
 
-    .updated {
-      display: none;
-    }
   }
 </style>
