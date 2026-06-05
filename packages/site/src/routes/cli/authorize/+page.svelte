@@ -1,12 +1,15 @@
 <script>
   import { page } from '$app/stores'
   import { onMount } from 'svelte'
+  import { lang } from '$lib/lang'
 
   let userCode = ''
   let loading = false
   let error = ''
   let approved = false
   let notLoggedIn = false
+  $: zh = $lang === 'zh'
+  $: loginHref = `/login?redirect=${encodeURIComponent(`/cli/authorize?code=${userCode}`)}`
 
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
@@ -14,11 +17,11 @@
   }
 
   onMount(async () => {
-    const res = await fetch('/api/leaderboard?period_type=daily')
+    userCode = $page.url.searchParams.get('code') || ''
+    const res = await fetch('/api/me')
     if (res.status === 401) {
       notLoggedIn = true
     }
-    userCode = $page.url.searchParams.get('code') || ''
   })
 
   async function approveDevice() {
@@ -37,11 +40,16 @@
       if (res.ok) {
         approved = true
       } else {
-        const data = await res.json()
-        error = data.error || 'Failed to approve'
+        const data = await res.json().catch(() => null)
+        if (res.status === 401) {
+          notLoggedIn = true
+          error = ''
+        } else {
+          error = data?.error || data?.message || (zh ? `授权失败（HTTP ${res.status}）` : `Failed to approve (HTTP ${res.status})`)
+        }
       }
     } catch {
-      error = 'Network error'
+      error = zh ? '网络错误' : 'Network error'
     } finally {
       loading = false
     }
@@ -49,43 +57,45 @@
 </script>
 
 <svelte:head>
-  <title>Authorize CLI Device — AIUsage</title>
+  <title>{zh ? '授权 CLI 设备' : 'Authorize CLI Device'} — AIUsage</title>
 </svelte:head>
 
 <div class="authorize-page">
   <div class="authorize-card">
     {#if notLoggedIn}
-      <h1>Sign In Required</h1>
-      <p>You need to sign in before authorizing a CLI device.</p>
-      <a href="/login?redirect=/cli/authorize?code={userCode}" class="btn-primary">Sign In</a>
+      <h1>{zh ? '需要登录' : 'Sign In Required'}</h1>
+      <p>{zh ? '授权 CLI 设备前，请先登录你的 AIUsage 账号。' : 'You need to sign in before authorizing a CLI device.'}</p>
+      <a href={loginHref} class="btn-primary">{zh ? '登录' : 'Sign In'}</a>
     {:else if approved}
       <div class="success-icon">&#10003;</div>
-      <h1>Device Authorized</h1>
-      <p>Your CLI device has been authorized. You can close this page and return to your terminal.</p>
+      <h1>{zh ? '设备已授权' : 'Device Authorized'}</h1>
+      <p>{zh ? '你的 CLI 设备已完成授权。可以关闭此页面并返回本地界面或终端。' : 'Your CLI device has been authorized. You can close this page and return to your local app or terminal.'}</p>
     {:else}
-      <h1>Authorize CLI Device</h1>
+      <h1>{zh ? '授权 CLI 设备' : 'Authorize CLI Device'}</h1>
       <p class="authorize-desc">
-        Your CLI is requesting permission to upload token usage data to the AIUsage leaderboard.
+        {zh
+          ? '本机 AIUsage 正在请求上传聚合 Token 用量到公开排行榜的权限。'
+          : 'Your local AIUsage instance is requesting permission to upload token usage data to the AIUsage leaderboard.'}
       </p>
 
       {#if userCode}
         <div class="code-display">
-          <span class="code-label">Device Code</span>
+          <span class="code-label">{zh ? '设备验证码' : 'Device Code'}</span>
           <span class="code-value">{userCode}</span>
         </div>
       {/if}
 
       <div class="authorize-info">
-        <h3>This will allow the CLI to:</h3>
+        <h3>{zh ? '授权后将允许本机执行：' : 'This will allow the CLI to:'}</h3>
         <ul>
-          <li>Upload aggregated token usage statistics</li>
-          <li>Appear on the community leaderboard</li>
+          <li>{zh ? '上传聚合后的 Token 用量统计' : 'Upload aggregated token usage statistics'}</li>
+          <li>{zh ? '参与公开社区排行榜展示' : 'Appear on the community leaderboard'}</li>
         </ul>
-        <h3>Data that will NOT be uploaded:</h3>
+        <h3>{zh ? '以下数据不会上传：' : 'Data that will NOT be uploaded:'}</h3>
         <ul>
-          <li>Prompt or completion content</li>
-          <li>File paths or project names</li>
-          <li>Cost or pricing information</li>
+          <li>{zh ? 'Prompt 或 completion 内容' : 'Prompt or completion content'}</li>
+          <li>{zh ? '文件路径或项目名称' : 'File paths or project names'}</li>
+          <li>{zh ? '费用或价格信息' : 'Cost or pricing information'}</li>
         </ul>
       </div>
 
@@ -94,7 +104,7 @@
       {/if}
 
       <button class="btn-primary" on:click={approveDevice} disabled={loading || !userCode}>
-        {loading ? 'Authorizing...' : 'Authorize Device'}
+        {loading ? (zh ? '授权中...' : 'Authorizing...') : (zh ? '授权设备' : 'Authorize Device')}
       </button>
     {/if}
   </div>

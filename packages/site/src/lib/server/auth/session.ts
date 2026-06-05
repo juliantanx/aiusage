@@ -1,6 +1,7 @@
 import { sql } from '../db/pool.js'
 import { nanoid } from 'nanoid'
 import type { RequestEvent } from '@sveltejs/kit'
+import { error } from '@sveltejs/kit'
 
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const SESSION_COOKIE = 'ai_session'
@@ -68,16 +69,10 @@ export async function getUserFromEvent(event: RequestEvent): Promise<SessionUser
 export async function requireUser(event: RequestEvent): Promise<SessionUser> {
   const user = await getUserFromEvent(event)
   if (!user) {
-    throw new Response(JSON.stringify({ error: 'unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    throw error(401, 'unauthorized')
   }
   if (user.status === 'banned') {
-    throw new Response(JSON.stringify({ error: 'user_banned' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    throw error(403, 'user_banned')
   }
   return user
 }
@@ -85,10 +80,7 @@ export async function requireUser(event: RequestEvent): Promise<SessionUser> {
 export async function requireAdmin(event: RequestEvent): Promise<SessionUser> {
   const user = await requireUser(event)
   if (user.role !== 'admin') {
-    throw new Response(JSON.stringify({ error: 'forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    throw error(403, 'forbidden')
   }
   return user
 }

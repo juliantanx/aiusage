@@ -1,5 +1,8 @@
 <script>
   import { onMount } from 'svelte'
+  import { lang } from '$lib/lang'
+
+  $: zh = $lang === 'zh'
 
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
@@ -45,7 +48,9 @@
     loading = true
     const res = await fetch('/api/admin/uploads')
     if (res.status === 403 || res.status === 401) {
-      error = res.status === 403 ? 'Access denied. Admin role required.' : 'Please log in.'
+      error = res.status === 403
+        ? (zh ? '无权访问，需要管理员权限。' : 'Access denied. Admin role required.')
+        : (zh ? '请先登录。' : 'Please log in.')
       loading = false
       return
     }
@@ -91,10 +96,10 @@
         return true
       }
       const data = await res.json().catch(() => ({}))
-      actionError = data.error || 'Operation failed'
+      actionError = data.error || (zh ? '操作失败' : 'Operation failed')
       return false
     } catch {
-      actionError = 'Network error'
+      actionError = zh ? '网络错误' : 'Network error'
       return false
     } finally {
       actionLoading = ''
@@ -103,56 +108,56 @@
 
   // Upload actions
   async function approveSnap(id) {
-    if (await doAction(`/api/admin/uploads/${id}/approve`, {}, 'Snapshot approved'))
+    if (await doAction(`/api/admin/uploads/${id}/approve`, {}, zh ? '快照已通过' : 'Snapshot approved'))
       snapshots = snapshots.filter(s => s.id !== id)
   }
   async function rejectSnap(id) {
-    if (!confirm('Reject this snapshot? This cannot be undone.')) return
-    if (await doAction(`/api/admin/uploads/${id}/reject`, {}, 'Snapshot rejected'))
+    if (!confirm(zh ? '确认拒绝此快照？此操作不可撤回。' : 'Reject this snapshot? This cannot be undone.')) return
+    if (await doAction(`/api/admin/uploads/${id}/reject`, {}, zh ? '快照已拒绝' : 'Snapshot rejected'))
       snapshots = snapshots.filter(s => s.id !== id)
   }
   async function hideSnap(id) {
-    if (!confirm('Hide this snapshot from the leaderboard?')) return
-    if (await doAction(`/api/admin/uploads/${id}/hide`, {}, 'Snapshot hidden'))
+    if (!confirm(zh ? '确认从排行榜隐藏此快照？' : 'Hide this snapshot from the leaderboard?')) return
+    if (await doAction(`/api/admin/uploads/${id}/hide`, {}, zh ? '快照已隐藏' : 'Snapshot hidden'))
       snapshots = snapshots.filter(s => s.id !== id)
   }
 
   // User actions
   async function banUser(id, username) {
-    const reason = prompt(`Reason for banning @${username}:`)
+    const reason = prompt(zh ? `封禁 @${username} 的原因：` : `Reason for banning @${username}:`)
     if (!reason) return
-    if (await doAction(`/api/admin/users/${id}/ban`, { reason }, `@${username} banned`))
+    if (await doAction(`/api/admin/users/${id}/ban`, { reason }, zh ? `@${username} 已封禁` : `@${username} banned`))
       await searchUsers()
   }
   async function unbanUser(id, username) {
-    if (await doAction(`/api/admin/users/${id}/unban`, {}, `@${username} unbanned`))
+    if (await doAction(`/api/admin/users/${id}/unban`, {}, zh ? `@${username} 已解封` : `@${username} unbanned`))
       await searchUsers()
   }
   async function setRole(id, username, role) {
-    if (!confirm(`Change @${username}'s role to ${role}?`)) return
-    if (await doAction(`/api/admin/users/${id}/role`, { role }, `@${username} role set to ${role}`))
+    if (!confirm(zh ? `确认将 @${username} 的角色改为 ${role}？` : `Change @${username}'s role to ${role}?`)) return
+    if (await doAction(`/api/admin/users/${id}/role`, { role }, zh ? `@${username} 角色已设为 ${role}` : `@${username} role set to ${role}`))
       await searchUsers()
   }
 
   // Pricing actions
   async function seedPricing() {
-    const version = prompt('Version name (e.g. core_v2):')
+    const version = prompt(zh ? '版本名称（例如 core_v2）：' : 'Version name (e.g. core_v2):')
     if (!version) return
-    if (await doAction('/api/admin/pricing/seed', { version }, `Price table "${version}" seeded`))
+    if (await doAction('/api/admin/pricing/seed', { version }, zh ? `价格表 "${version}" 已生成` : `Price table "${version}" seeded`))
       await loadPricing()
   }
   async function recomputeLeaderboard() {
-    if (!confirm('Recompute all leaderboard metrics using the current published price table?')) return
-    if (await doAction('/api/admin/leaderboard/recompute', {}, 'Leaderboard recomputed'))
+    if (!confirm(zh ? '确认使用当前已发布价格表重算全部排行榜指标？' : 'Recompute all leaderboard metrics using the current published price table?')) return
+    if (await doAction('/api/admin/leaderboard/recompute', {}, zh ? '排行榜已重算' : 'Leaderboard recomputed'))
       await loadPricing()
   }
   async function publishTable(id) {
-    if (await doAction(`/api/admin/pricing/${id}/publish`, {}, 'Price table published'))
+    if (await doAction(`/api/admin/pricing/${id}/publish`, {}, zh ? '价格表已发布' : 'Price table published'))
       await loadPricing()
   }
   async function archiveTable(id) {
-    if (!confirm('Archive this price table? It will no longer be used for calculations.')) return
-    if (await doAction(`/api/admin/pricing/${id}/archive`, {}, 'Price table archived'))
+    if (!confirm(zh ? '确认归档此价格表？归档后不会再用于计算。' : 'Archive this price table? It will no longer be used for calculations.')) return
+    if (await doAction(`/api/admin/pricing/${id}/archive`, {}, zh ? '价格表已归档' : 'Price table archived'))
       await loadPricing()
   }
 
@@ -170,21 +175,21 @@
 </script>
 
 <svelte:head>
-  <title>Admin — AIUsage</title>
+  <title>{zh ? '管理后台' : 'Admin'} — AIUsage</title>
 </svelte:head>
 
 <div class="admin-page">
   <div class="admin-container">
-    <h1>Admin Dashboard</h1>
+    <h1>{zh ? '管理后台' : 'Admin Dashboard'}</h1>
 
     {#if error}
       <div class="error-msg">{error}</div>
     {:else}
       <nav class="admin-tabs">
-        <button class:active={activeTab === 'uploads'} on:click={() => loadTab('uploads')}>Uploads</button>
-        <button class:active={activeTab === 'users'} on:click={() => loadTab('users')}>Users</button>
-        <button class:active={activeTab === 'pricing'} on:click={() => loadTab('pricing')}>Pricing</button>
-        <button class:active={activeTab === 'logs'} on:click={() => loadTab('logs')}>Audit Logs</button>
+        <button class:active={activeTab === 'uploads'} on:click={() => loadTab('uploads')}>{zh ? '上传审核' : 'Uploads'}</button>
+        <button class:active={activeTab === 'users'} on:click={() => loadTab('users')}>{zh ? '用户' : 'Users'}</button>
+        <button class:active={activeTab === 'pricing'} on:click={() => loadTab('pricing')}>{zh ? '价格' : 'Pricing'}</button>
+        <button class:active={activeTab === 'logs'} on:click={() => loadTab('logs')}>{zh ? '审计日志' : 'Audit Logs'}</button>
       </nav>
 
       {#if actionFeedback}
@@ -197,11 +202,11 @@
       <!-- Uploads Tab -->
       {#if activeTab === 'uploads'}
         <section class="admin-section">
-          <h2>Flagged Uploads ({snapshots.length})</h2>
+          <h2>{zh ? '待审核上传' : 'Flagged Uploads'} ({snapshots.length})</h2>
           {#if loading}
-            <p class="muted">Loading...</p>
+            <p class="muted">{zh ? '加载中...' : 'Loading...'}</p>
           {:else if snapshots.length === 0}
-            <p class="muted">No flagged uploads pending review.</p>
+            <p class="muted">{zh ? '暂无待审核上传。' : 'No flagged uploads pending review.'}</p>
           {:else}
             <div class="card-list">
               {#each snapshots as snap}
@@ -212,15 +217,15 @@
                     <span class="mono accent">{formatTokens(snap.total_tokens)} tokens</span>
                   </div>
                   <div class="card-meta">
-                    <span>Device: {snap.device_name}</span>
-                    {#if snap.reason_code}<span>Code: {snap.reason_code}</span>{/if}
+                    <span>{zh ? '设备' : 'Device'}: {snap.device_name}</span>
+                    {#if snap.reason_code}<span>{zh ? '代码' : 'Code'}: {snap.reason_code}</span>{/if}
                     {#if snap.reason_message}<span>{snap.reason_message}</span>{/if}
                     <span>{formatDate(snap.created_at)}</span>
                   </div>
                   <div class="card-actions">
-                    <button class="btn-approve" on:click={() => approveSnap(snap.id)} disabled={!!actionLoading}>Approve</button>
-                    <button class="btn-reject" on:click={() => rejectSnap(snap.id)} disabled={!!actionLoading}>Reject</button>
-                    <button class="btn-muted" on:click={() => hideSnap(snap.id)} disabled={!!actionLoading}>Hide</button>
+                    <button class="btn-approve" on:click={() => approveSnap(snap.id)} disabled={!!actionLoading}>{zh ? '通过' : 'Approve'}</button>
+                    <button class="btn-reject" on:click={() => rejectSnap(snap.id)} disabled={!!actionLoading}>{zh ? '拒绝' : 'Reject'}</button>
+                    <button class="btn-muted" on:click={() => hideSnap(snap.id)} disabled={!!actionLoading}>{zh ? '隐藏' : 'Hide'}</button>
                   </div>
                 </div>
               {/each}
@@ -232,13 +237,13 @@
       <!-- Users Tab -->
       {#if activeTab === 'users'}
         <section class="admin-section">
-          <h2>User Management</h2>
+          <h2>{zh ? '用户管理' : 'User Management'}</h2>
           <div class="search-bar">
-            <input type="text" placeholder="Search users by username, name, or email..." bind:value={userSearch} on:keydown={(e) => e.key === 'Enter' && searchUsers()} />
-            <button on:click={searchUsers} disabled={usersLoading}>{usersLoading ? 'Searching...' : 'Search'}</button>
+            <input type="text" placeholder={zh ? '按用户名、名称或邮箱搜索用户...' : 'Search users by username, name, or email...'} bind:value={userSearch} on:keydown={(e) => e.key === 'Enter' && searchUsers()} />
+            <button on:click={searchUsers} disabled={usersLoading}>{usersLoading ? (zh ? '搜索中...' : 'Searching...') : (zh ? '搜索' : 'Search')}</button>
           </div>
           {#if users.length === 0}
-            <p class="muted">{usersLoading ? 'Loading...' : 'No users found.'}</p>
+            <p class="muted">{usersLoading ? (zh ? '加载中...' : 'Loading...') : (zh ? '未找到用户。' : 'No users found.')}</p>
           {:else}
             <div class="card-list">
               {#each users as user}
@@ -250,19 +255,19 @@
                   </div>
                   <div class="card-meta">
                     <span>{user.email}</span>
-                    <span>Joined {formatDate(user.created_at)}</span>
-                    {#if user.ban_reason}<span class="warn">Reason: {user.ban_reason}</span>{/if}
+                    <span>{zh ? '加入时间' : 'Joined'} {formatDate(user.created_at)}</span>
+                    {#if user.ban_reason}<span class="warn">{zh ? '原因' : 'Reason'}: {user.ban_reason}</span>{/if}
                   </div>
                   <div class="card-actions">
                     {#if user.status === 'active'}
-                      <button class="btn-reject" on:click={() => banUser(user.id, user.username)} disabled={!!actionLoading}>Ban</button>
+                      <button class="btn-reject" on:click={() => banUser(user.id, user.username)} disabled={!!actionLoading}>{zh ? '封禁' : 'Ban'}</button>
                     {:else if user.status === 'banned'}
-                      <button class="btn-approve" on:click={() => unbanUser(user.id, user.username)} disabled={!!actionLoading}>Unban</button>
+                      <button class="btn-approve" on:click={() => unbanUser(user.id, user.username)} disabled={!!actionLoading}>{zh ? '解封' : 'Unban'}</button>
                     {/if}
                     {#if user.role === 'user'}
-                      <button class="btn-muted" on:click={() => setRole(user.id, user.username, 'admin')} disabled={!!actionLoading}>Make Admin</button>
+                      <button class="btn-muted" on:click={() => setRole(user.id, user.username, 'admin')} disabled={!!actionLoading}>{zh ? '设为管理员' : 'Make Admin'}</button>
                     {:else if user.role === 'admin'}
-                      <button class="btn-muted" on:click={() => setRole(user.id, user.username, 'user')} disabled={!!actionLoading}>Remove Admin</button>
+                      <button class="btn-muted" on:click={() => setRole(user.id, user.username, 'user')} disabled={!!actionLoading}>{zh ? '移除管理员' : 'Remove Admin'}</button>
                     {/if}
                   </div>
                 </div>
@@ -276,16 +281,16 @@
       {#if activeTab === 'pricing'}
         <section class="admin-section">
           <div class="section-header">
-            <h2>Official Price Tables</h2>
+            <h2>{zh ? '官方价格表' : 'Official Price Tables'}</h2>
             <div style="display: flex; gap: 0.5rem">
-              <button class="btn-muted" on:click={recomputeLeaderboard} disabled={!!actionLoading}>Recompute Leaderboard</button>
-              <button class="btn-approve" on:click={seedPricing} disabled={!!actionLoading}>Seed from Core</button>
+              <button class="btn-muted" on:click={recomputeLeaderboard} disabled={!!actionLoading}>{zh ? '重算排行榜' : 'Recompute Leaderboard'}</button>
+              <button class="btn-approve" on:click={seedPricing} disabled={!!actionLoading}>{zh ? '从 Core 生成' : 'Seed from Core'}</button>
             </div>
           </div>
           {#if pricingLoading}
-            <p class="muted">Loading...</p>
+            <p class="muted">{zh ? '加载中...' : 'Loading...'}</p>
           {:else if priceTables.length === 0}
-            <p class="muted">No price tables. Seed from core pricing to create one.</p>
+            <p class="muted">{zh ? '暂无价格表。可从 core pricing 生成一份。' : 'No price tables. Seed from core pricing to create one.'}</p>
           {:else}
             <div class="card-list">
               {#each priceTables as pt}
@@ -293,19 +298,19 @@
                   <div class="card-header">
                     <strong>{pt.version}</strong>
                     <span class="badge" class:badge-ok={pt.status === 'published'} class:badge-warn={pt.status === 'draft'} class:badge-dim={pt.status === 'archived'}>{pt.status}</span>
-                    <span class="muted-text">{pt.entry_count} entries</span>
+                    <span class="muted-text">{pt.entry_count} {zh ? '条目' : 'entries'}</span>
                   </div>
                   <div class="card-meta">
-                    <span>Source: {pt.source}</span>
-                    <span>Created {formatDate(pt.created_at)}</span>
-                    {#if pt.published_at}<span>Published {formatDate(pt.published_at)}</span>{/if}
+                    <span>{zh ? '来源' : 'Source'}: {pt.source}</span>
+                    <span>{zh ? '创建于' : 'Created'} {formatDate(pt.created_at)}</span>
+                    {#if pt.published_at}<span>{zh ? '发布于' : 'Published'} {formatDate(pt.published_at)}</span>{/if}
                   </div>
                   <div class="card-actions">
                     {#if pt.status === 'draft'}
-                      <button class="btn-approve" on:click={() => publishTable(pt.id)} disabled={!!actionLoading}>Publish</button>
+                      <button class="btn-approve" on:click={() => publishTable(pt.id)} disabled={!!actionLoading}>{zh ? '发布' : 'Publish'}</button>
                     {/if}
                     {#if pt.status !== 'archived'}
-                      <button class="btn-muted" on:click={() => archiveTable(pt.id)} disabled={!!actionLoading}>Archive</button>
+                      <button class="btn-muted" on:click={() => archiveTable(pt.id)} disabled={!!actionLoading}>{zh ? '归档' : 'Archive'}</button>
                     {/if}
                   </div>
                 </div>
@@ -318,12 +323,12 @@
       <!-- Audit Logs Tab -->
       {#if activeTab === 'logs'}
         <section class="admin-section">
-          <h2>Audit Logs</h2>
+          <h2>{zh ? '审计日志' : 'Audit Logs'}</h2>
           <button class="btn-muted" on:click={loadAuditLogs} disabled={logsLoading} style="margin-bottom: 1rem">
-            {logsLoading ? 'Loading...' : 'Refresh'}
+            {logsLoading ? (zh ? '加载中...' : 'Loading...') : (zh ? '刷新' : 'Refresh')}
           </button>
           {#if auditLogs.length === 0}
-            <p class="muted">{logsLoading ? 'Loading...' : 'No audit logs found.'}</p>
+            <p class="muted">{logsLoading ? (zh ? '加载中...' : 'Loading...') : (zh ? '暂无审计日志。' : 'No audit logs found.')}</p>
           {:else}
             <div class="log-list">
               {#each auditLogs as log}

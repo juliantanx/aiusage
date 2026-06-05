@@ -1,6 +1,15 @@
 <script>
-  import { onMount } from 'svelte'
-  import { fetchConfig, fetchLeaderboard } from '$lib/api.js'
+  import { onDestroy, onMount } from 'svelte'
+  import {
+    completeLeaderboardAuth,
+    fetchConfig,
+    fetchLeaderboard,
+    fetchLeaderboardAuthStatus,
+    logoutLeaderboardAuth,
+    saveConfig,
+    startLeaderboardAuth,
+    uploadLeaderboardData,
+  } from '$lib/api.js'
   import { formatTokens } from '$lib/stores.js'
   import { t } from '$lib/i18n.js'
 
@@ -12,10 +21,34 @@
   let loading = true
   let loadingMore = false
   let error = ''
-  let copied = ''
+  let authLoading = true
+  let authBusy = false
+  let authError = ''
+  let authStatus = { loggedIn: false, uploads: [] }
+  let authRequest = null
+  let authPollTimer = null
+  let uploadBusy = false
+  let uploadResult = null
+  let autoUploadEnabled = false
+  let autoUploadInterval = '86400000'
+  let autoUploadSaving = false
+
+  const autoUploadIntervals = [
+    { value: '43200000', labelKey: 'leaderboard.autoUploadIntervals.twelveHours' },
+    { value: '86400000', labelKey: 'leaderboard.autoUploadIntervals.daily' },
+    { value: '604800000', labelKey: 'leaderboard.autoUploadIntervals.weekly' },
+  ]
 
   $: rows = data?.entries || []
   $: leaders = rows.slice(0, 3)
+  $: recentUpload = authStatus?.uploads?.[0] || null
+  $: uploadSummary = uploadResult?.response?.snapshots
+    ? {
+        accepted: uploadResult.response.snapshots.filter(s => s.status === 'accepted').length,
+        flagged: uploadResult.response.snapshots.filter(s => s.status === 'flagged').length,
+        rejected: uploadResult.response.snapshots.filter(s => s.status === 'rejected').length,
+      }
+    : null
 
   function formatFullTokens(value) {
     const n = Number(value)
@@ -67,21 +100,119 @@
     if (data?.next_cursor) loadLeaderboard(data.next_cursor)
   }
 
-  async function copyCommand(command) {
+  async function loadAuthStatus() {
+    authLoading = true
+    authError = ''
     try {
-      await navigator.clipboard.writeText(command)
-      copied = command
-      setTimeout(() => {
-        if (copied === command) copied = ''
-      }, 1600)
-    } catch {}
+      authStatus = await fetchLeaderboardAuthStatus()
+    } catch (e) {
+      authError = e instanceof Error ? e.message : 'Failed to load auth status'
+    } finally {
+      authLoading = false
+    }
+  }
+
+  function clearAuthPoll() {
+    if (authPollTimer) {
+      clearInterval(authPollTimer)
+      authPollTimer = null
+    }
+  }
+
+  async function beginLogin() {
+    authBusy = true
+    authError = ''
+    try {
+      const started = await startLeaderboardAuth()
+      if (started.alreadyLoggedIn) {
+        await loadAuthStatus()
+        return
+      }
+
+      authRequest = started
+      window.open(started.verification_url, '_blank', 'noopener')
+      clearAuthPoll()
+      authPollTimer = setInterval(pollLogin, Math.max(2, Number(started.interval || 5)) * 1000)
+    } catch (e) {
+      authError = e instanceof Error ? e.message : 'Failed to start authorization'
+    } finally {
+      authBusy = false
+    }
+  }
+
+  async function pollLogin() {
+    if (!authRequest?.device_request_id) return
+    try {
+      const result = await completeLeaderboardAuth(authRequest.device_request_id)
+      if (result?.pending) return
+      clearAuthPoll()
+      authRequest = null
+      await loadAuthStatus()
+    } catch (e) {
+      clearAuthPoll()
+      authError = e instanceof Error ? e.message : 'Authorization failed'
+    }
+  }
+
+  async function logout() {
+    authBusy = true
+    authError = ''
+    try {
+      await logoutLeaderboardAuth()
+      await saveConfig({ leaderboardAutoUpload: false })
+      autoUploadEnabled = false
+      clearAuthPoll()
+      authRequest = null
+      await loadAuthStatus()
+    } catch (e) {
+      authError = e instanceof Error ? e.message : 'Logout failed'
+    } finally {
+      authBusy = false
+    }
+  }
+
+  async function uploadNow() {
+    uploadBusy = true
+    authError = ''
+    uploadResult = null
+    try {
+      uploadResult = await uploadLeaderboardData()
+      await Promise.all([loadAuthStatus(), loadLeaderboard()])
+    } catch (e) {
+      authError = e instanceof Error ? e.message : 'Upload failed'
+    } finally {
+      uploadBusy = false
+    }
+  }
+
+  async function updateAutoUpload(enabled = autoUploadEnabled, interval = autoUploadInterval) {
+    autoUploadSaving = true
+    authError = ''
+    try {
+      await saveConfig({
+        leaderboardAutoUpload: enabled,
+        leaderboardUploadInterval: Number(interval) || 86400000,
+      })
+      autoUploadEnabled = enabled
+      autoUploadInterval = interval
+    } catch (e) {
+      authError = e instanceof Error ? e.message : 'Failed to update auto upload'
+    } finally {
+      autoUploadSaving = false
+    }
   }
 
   onMount(async () => {
     const config = await fetchConfig().catch(() => null)
     if (config?.siteUrl) siteUrl = config.siteUrl
-    await loadLeaderboard()
+    if (config) {
+      autoUploadEnabled = config.leaderboardAutoUpload === true
+      autoUploadInterval = String(config.leaderboardUploadInterval || 86400000)
+    }
+    await Promise.all([loadLeaderboard(), loadAuthStatus()])
   })
+
+  onDestroy(clearAuthPoll)
 </script>
 
 <svelte:head>
@@ -98,6 +229,102 @@
     {$t('leaderboard.openSite')} ↗
   </a>
 </div>
+
+<section class="card local-panel">
+  <div class="local-status">
+    <div class="section-title">{$t('leaderboard.authTitle')}</div>
+    {#if authLoading}
+      <div class="auth-state">{$t('common.loading')}</div>
+    {:else}
+      <div class="auth-panel" class:logged-in={authStatus.loggedIn}>
+        <span class="status-dot"></span>
+        <div>
+          <div class="auth-title">
+            {authStatus.loggedIn ? $t('leaderboard.loggedIn') : $t('leaderboard.notLoggedIn')}
+          </div>
+          {#if authStatus.loggedIn}
+            <div class="auth-meta mono">{authStatus.deviceId}</div>
+          {:else}
+            <div class="auth-meta">{$t('leaderboard.webLoginHint')}</div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  <div class="local-actions">
+    {#if authStatus.loggedIn}
+      <button class="primary-action" on:click={uploadNow} disabled={uploadBusy || authLoading}>
+        {uploadBusy ? $t('leaderboard.uploading') : $t('leaderboard.uploadInWeb')}
+      </button>
+      <button class="text-action" on:click={logout} disabled={authBusy || uploadBusy}>
+        {$t('leaderboard.logout')}
+      </button>
+    {:else}
+      <button class="primary-action" on:click={beginLogin} disabled={authBusy || authLoading}>
+        {authBusy ? $t('leaderboard.authorizing') : $t('leaderboard.loginInWeb')}
+      </button>
+    {/if}
+  </div>
+
+  <div class="auto-upload-panel">
+    <label class="toggle-row">
+      <input
+        type="checkbox"
+        checked={autoUploadEnabled}
+        disabled={!authStatus.loggedIn || autoUploadSaving || authLoading}
+        on:change={(event) => updateAutoUpload(event.currentTarget.checked)}
+      />
+      <span class="switch" aria-hidden="true"></span>
+      <span>
+        <strong>{$t('leaderboard.autoUpload')}</strong>
+        <small>{authStatus.loggedIn ? $t('leaderboard.autoUploadHint') : $t('leaderboard.autoUploadRequiresLogin')}</small>
+      </span>
+    </label>
+    <label class="interval-control">
+      <span>{$t('leaderboard.uploadEvery')}</span>
+      <select
+        bind:value={autoUploadInterval}
+        disabled={!authStatus.loggedIn || !autoUploadEnabled || autoUploadSaving}
+        on:change={(event) => updateAutoUpload(autoUploadEnabled, event.currentTarget.value)}
+      >
+        {#each autoUploadIntervals as option}
+          <option value={option.value}>{$t(option.labelKey)}</option>
+        {/each}
+      </select>
+    </label>
+  </div>
+
+  {#if recentUpload}
+    <div class="upload-status">
+      <span>{$t('leaderboard.lastUpload')}</span>
+      <strong>{recentUpload.period_type} · {recentUpload.status}</strong>
+      <span>{formatFullTokens(recentUpload.total_tokens)} tokens</span>
+    </div>
+  {/if}
+
+  {#if uploadSummary}
+    <div class="upload-status result">
+      <span>{$t('leaderboard.uploadResult')}</span>
+      <strong>{uploadSummary.accepted} / {uploadSummary.flagged} / {uploadSummary.rejected}</strong>
+      <span>{$t('leaderboard.uploadResultHint')}</span>
+    </div>
+  {/if}
+
+  {#if authRequest}
+    <div class="verify-box">
+      <span>{$t('leaderboard.verifyCode')}</span>
+      <strong class="mono">{authRequest.user_code}</strong>
+      <a href={authRequest.verification_url} target="_blank" rel="noopener">
+        {$t('leaderboard.openVerify')}
+      </a>
+    </div>
+  {/if}
+
+  {#if authError}
+    <div class="state-msg error compact">{authError}</div>
+  {/if}
+</section>
 
 <div class="period-tabs" aria-label={$t('leaderboard.period')}>
   {#each periods as period}
@@ -182,23 +409,7 @@
   </section>
 
   <aside class="card guide-card">
-    <div class="section-title">{$t('leaderboard.uploadNote')}</div>
-    <div class="command-list">
-      <div class="command-row">
-        <span>{$t('leaderboard.loginCommand')}</span>
-        <button on:click={() => copyCommand('aiusage login')}>
-          {copied === 'aiusage login' ? $t('leaderboard.copied') : $t('leaderboard.copy')}
-        </button>
-        <code>aiusage login</code>
-      </div>
-      <div class="command-row">
-        <span>{$t('leaderboard.uploadCommand')}</span>
-        <button on:click={() => copyCommand('aiusage upload')}>
-          {copied === 'aiusage upload' ? $t('leaderboard.copied') : $t('leaderboard.copy')}
-        </button>
-        <code>aiusage upload</code>
-      </div>
-    </div>
+    <div class="section-title">{$t('leaderboard.privacyTitle')}</div>
     <p class="privacy-copy">{$t('leaderboard.privacy')}</p>
   </aside>
 </div>
@@ -250,6 +461,136 @@
     border-radius: 8px;
     background: var(--surface);
     overflow-x: auto;
+  }
+
+  .local-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.875rem;
+  }
+
+  .local-status {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .local-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    min-width: 220px;
+  }
+
+  .auto-upload-panel {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem 1rem;
+    align-items: center;
+    padding: 0.625rem 0 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .toggle-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.625rem;
+    align-items: center;
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .toggle-row input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .switch {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform 160ms ease;
+  }
+
+  .toggle-row input:checked + .switch {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .toggle-row input:checked + .switch::after {
+    background: var(--surface);
+    transform: translateX(14px);
+  }
+
+  .toggle-row input:focus-visible + .switch {
+    outline: 2px solid color-mix(in oklab, var(--accent) 40%, transparent);
+    outline-offset: 2px;
+  }
+
+  .toggle-row input:disabled + .switch {
+    opacity: 0.55;
+  }
+
+  .toggle-row strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.8125rem;
+  }
+
+  .toggle-row small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .interval-control {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .interval-control select {
+    min-height: 32px;
+    padding: 0 1.875rem 0 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .interval-control select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   .period-tab {
@@ -400,43 +741,121 @@
   .guide-card {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.625rem;
   }
 
-  .command-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .command-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.5rem;
-  }
-
-  .command-row span {
+  .auth-state,
+  .auth-panel,
+  .verify-box,
+  .upload-status {
     font-size: 0.8125rem;
-    color: var(--text-secondary);
-    font-weight: 650;
   }
 
-  .command-row button {
-    border: 1px solid var(--border);
+  .auth-panel {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.625rem;
+    align-items: start;
+    min-width: 0;
+  }
+
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    margin-top: 0.3rem;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  .auth-panel.logged-in .status-dot {
+    background: #16a34a;
+  }
+
+  .auth-title {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .auth-meta {
+    min-width: 0;
+    margin-top: 0.125rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .upload-status,
+  .verify-box {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text-muted);
+  }
+
+  .local-panel > .upload-status,
+  .local-panel > .verify-box,
+  .local-panel > .compact {
+    grid-column: 1 / -1;
+  }
+
+  .upload-status strong,
+  .verify-box strong {
+    color: var(--text);
+  }
+
+  .verify-box a {
+    width: fit-content;
+    color: var(--accent);
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  .primary-action {
+    min-width: 128px;
+    min-height: 36px;
+    padding: 0 0.875rem;
     border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.75rem;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: white;
+    font-size: 0.8125rem;
+    font-weight: 700;
     cursor: pointer;
   }
 
-  .command-row code {
-    grid-column: 1 / -1;
-    padding: 0.625rem;
+  .text-action {
+    min-height: 32px;
+    padding: 0 0.5rem;
+    border: 0;
     border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .text-action:hover {
+    color: var(--text-secondary);
     background: var(--bg);
-    color: var(--text);
-    overflow-x: auto;
+  }
+
+  .primary-action:disabled {
+    cursor: progress;
+    opacity: 0.65;
+  }
+
+  .text-action:disabled {
+    cursor: progress;
+    opacity: 0.55;
+  }
+
+  .compact {
+    padding: 0.625rem 0;
   }
 
   .privacy-copy {
@@ -448,6 +867,7 @@
 
   @media (max-width: 900px) {
     .leaderboard-header,
+    .local-panel,
     .content-grid {
       grid-template-columns: 1fr;
     }
@@ -459,6 +879,27 @@
 
     .leaders {
       grid-template-columns: 1fr;
+    }
+
+    .local-actions {
+      min-width: 0;
+      align-items: stretch;
+    }
+
+    .local-status {
+      grid-template-columns: 1fr;
+    }
+
+    .primary-action {
+      width: 100%;
+    }
+
+    .auto-upload-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .interval-control {
+      justify-content: space-between;
     }
 
     .updated {

@@ -61,6 +61,11 @@ interface UsageGroup extends TokenTotals {
   model: string
 }
 
+export interface LeaderboardUploadResult {
+  totalTokens: number
+  response: Awaited<ReturnType<typeof uploadSnapshots>> | null
+}
+
 function zeroTotals(): TokenTotals {
   return {
     total_tokens: 0,
@@ -251,118 +256,134 @@ function buildSnapshot(
   }
 }
 
-export async function runLeaderboardUpload(): Promise<void> {
+export async function uploadLeaderboardData(
+  db: Database.Database,
+  currentDeviceInstanceId: string | undefined,
+  onRetry?: (message: string) => void
+): Promise<LeaderboardUploadResult> {
   if (!hasCredentials()) {
-    console.error('Not logged in. Run `aiusage login` first.')
-    process.exit(1)
+    throw new LeaderboardApiError('Not logged in. Run `aiusage login` first.', 'not_logged_in')
   }
 
   const serverUrl = getSiteUrl()
+
+  // Generate summary for current device
+  const summary = generateSummary(db, {
+    currentDeviceInstanceId,
+  })
+
+  if (summary.totalTokens === 0) {
+    return { totalTokens: 0, response: null }
+  }
+
+  // Generate snapshots for all periods
+  const periods = getCurrentPeriods()
+  const snapshots: UploadSnapshot[] = periods.map(period => buildSnapshot(db, currentDeviceInstanceId, period))
+
+  const payload: UploadRequest = {
+    schema_version: 1,
+    client_version: getCliVersion(),
+    client_platform: getClientPlatform(),
+    snapshots,
+  }
+
+  // Upload with retry logic
+  let lastError: LeaderboardApiError | null = null
+  const maxRetries = 3
+  const baseDelay = 5000 // 5 seconds
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await uploadSnapshots(serverUrl, payload)
+      return { totalTokens: summary.totalTokens, response }
+    } catch (error) {
+      if (error instanceof LeaderboardApiError) {
+        lastError = error
+
+        if (!isRetryableError(error) || attempt >= maxRetries) {
+          break
+        }
+
+        // Handle specific retryable errors
+        if (error.code === 'rate_limited' && error.retryAfter) {
+          onRetry?.(`Rate limited. Waiting ${error.retryAfter} seconds...`)
+          await sleep(error.retryAfter * 1000)
+          continue
+        }
+
+        if (error.code === 'timestamp_expired') {
+          onRetry?.('Timestamp expired. Please check your system clock.')
+          break
+        }
+
+        if (error.code === 'nonce_reused') {
+          onRetry?.('Nonce reused. Retrying with new nonce...')
+          continue
+        }
+
+        // Exponential backoff for other retryable errors
+        const delay = baseDelay * Math.pow(2, attempt)
+        onRetry?.(`Upload failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${delay / 1000}s...`)
+        await sleep(delay)
+      } else {
+        throw error
+      }
+    }
+  }
+
+  if (lastError) throw lastError
+  throw new LeaderboardApiError('Upload failed', 'upload_failed')
+}
+
+export async function runLeaderboardUpload(): Promise<void> {
   const db = createDatabase(DB_PATH)
   const state = getState(AIUSAGE_DIR)
 
   try {
-    // Generate summary for current device
-    const summary = generateSummary(db, {
-      currentDeviceInstanceId: state?.deviceInstanceId,
-    })
+    const result = await uploadLeaderboardData(db, state?.deviceInstanceId, message => console.log(message))
 
-    if (summary.totalTokens === 0) {
+    if (result.totalTokens === 0 || !result.response) {
       console.log('No token usage data to upload.')
       return
     }
 
-    console.log(`Preparing upload: ${summary.totalTokens.toLocaleString()} tokens`)
-
-    // Generate snapshots for all periods
-    const periods = getCurrentPeriods()
-    const snapshots: UploadSnapshot[] = periods.map(period => buildSnapshot(db, state?.deviceInstanceId, period))
-
-    const payload: UploadRequest = {
-      schema_version: 1,
-      client_version: getCliVersion(),
-      client_platform: getClientPlatform(),
-      snapshots,
+    console.log(`Preparing upload: ${result.totalTokens.toLocaleString()} tokens`)
+    console.log('\n=== Upload Results ===')
+    for (const snap of result.response.snapshots) {
+      const icon = snap.status === 'accepted' ? '✓' :
+                  snap.status === 'flagged' ? '⚠' : '✗'
+      console.log(`${icon} ${snap.period_type}: ${snap.status}${snap.reason_message ? ` - ${snap.reason_message}` : ''}`)
     }
 
-    // Upload with retry logic
-    let lastError: LeaderboardApiError | null = null
-    const maxRetries = 3
-    const baseDelay = 5000 // 5 seconds
+    const accepted = result.response.snapshots.filter(s => s.status === 'accepted').length
+    const flagged = result.response.snapshots.filter(s => s.status === 'flagged').length
+    const rejected = result.response.snapshots.filter(s => s.status === 'rejected').length
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await uploadSnapshots(serverUrl, payload)
+    console.log(`\nSummary: ${accepted} accepted, ${flagged} flagged, ${rejected} rejected`)
 
-        console.log('\n=== Upload Results ===')
-        for (const snap of response.snapshots) {
-          const icon = snap.status === 'accepted' ? '✓' :
-                      snap.status === 'flagged' ? '⚠' : '✗'
-          console.log(`${icon} ${snap.period_type}: ${snap.status}${snap.reason_message ? ` - ${snap.reason_message}` : ''}`)
-        }
-
-        const accepted = response.snapshots.filter(s => s.status === 'accepted').length
-        const flagged = response.snapshots.filter(s => s.status === 'flagged').length
-        const rejected = response.snapshots.filter(s => s.status === 'rejected').length
-
-        console.log(`\nSummary: ${accepted} accepted, ${flagged} flagged, ${rejected} rejected`)
-
-        if (flagged > 0) {
-          console.log('Flagged snapshots will be reviewed by administrators.')
-        }
-
-        return
-      } catch (error) {
-        if (error instanceof LeaderboardApiError) {
-          lastError = error
-
-          if (!isRetryableError(error) || attempt >= maxRetries) {
-            break
-          }
-
-          // Handle specific retryable errors
-          if (error.code === 'rate_limited' && error.retryAfter) {
-            console.log(`Rate limited. Waiting ${error.retryAfter} seconds...`)
-            await sleep(error.retryAfter * 1000)
-            continue
-          }
-
-          if (error.code === 'timestamp_expired') {
-            console.log('Timestamp expired. Please check your system clock.')
-            break
-          }
-
-          if (error.code === 'nonce_reused') {
-            console.log('Nonce reused. Retrying with new nonce...')
-            continue
-          }
-
-          // Exponential backoff for other retryable errors
-          const delay = baseDelay * Math.pow(2, attempt)
-          console.log(`Upload failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${delay / 1000}s...`)
-          await sleep(delay)
-        } else {
-          throw error
-        }
-      }
+    if (flagged > 0) {
+      console.log('Flagged snapshots will be reviewed by administrators.')
     }
+  } catch (error) {
+    if (error instanceof LeaderboardApiError) {
+      console.error(`\n✗ Upload failed: ${error.message}`)
 
-    // If we get here, all retries failed
-    if (lastError) {
-      console.error(`\n✗ Upload failed: ${lastError.message}`)
-
-      if (lastError.code === 'device_not_found' || lastError.code === 'device_revoked') {
+      if (error.code === 'not_logged_in') {
+        console.error('Please run `aiusage login` first.')
+      } else if (error.code === 'device_not_found' || error.code === 'device_revoked') {
         console.error('Please run `aiusage login` to re-authenticate.')
-      } else if (lastError.code === 'user_banned') {
+      } else if (error.code === 'user_banned') {
         console.error('Your account has been banned from the leaderboard.')
-      } else if (lastError.code === 'invalid_signature') {
+      } else if (error.code === 'invalid_signature') {
         console.error('Authentication error. Please run `aiusage login` again.')
-      } else if (lastError.code === 'unsupported_schema_version' || lastError.code === 'client_version_too_old') {
+      } else if (error.code === 'unsupported_schema_version' || error.code === 'client_version_too_old') {
         console.error('Please update your CLI to the latest version.')
       }
 
       process.exit(1)
     }
+
+    throw error
   } finally {
     db.close()
   }

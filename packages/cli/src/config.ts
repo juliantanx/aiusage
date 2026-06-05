@@ -29,6 +29,8 @@ export interface Config {
   platform?: string                    // 'win32' | 'darwin' | 'linux'
   retentionDays?: number
   parseInterval?: number
+  leaderboardAutoUpload?: boolean
+  leaderboardUploadInterval?: number
   dashboardPollInterval?: number
   credentials?: Record<string, string>
   priceOverrides?: Record<string, PriceEntry>

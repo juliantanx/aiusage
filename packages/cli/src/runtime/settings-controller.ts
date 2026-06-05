@@ -6,20 +6,25 @@ export interface RuntimeSettingsControllerOptions {
   loadConfig: () => Config | null
   runParse: (db: Database.Database) => Promise<unknown>
   runCleanup: (db: Database.Database, retentionDays: number) => unknown
+  runLeaderboardUpload?: (db: Database.Database) => Promise<unknown>
   cleanupIntervalMs?: number
 }
 
 const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
+const DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export class RuntimeSettingsController {
   private readonly db: Database.Database
   private readonly loadConfigFn: RuntimeSettingsControllerOptions['loadConfig']
   private readonly runParseFn: RuntimeSettingsControllerOptions['runParse']
   private readonly runCleanupFn: RuntimeSettingsControllerOptions['runCleanup']
+  private readonly runLeaderboardUploadFn: RuntimeSettingsControllerOptions['runLeaderboardUpload']
   private readonly cleanupIntervalMs: number
   private parseTimer: ReturnType<typeof setInterval> | null = null
   private cleanupTimer: ReturnType<typeof setInterval> | null = null
+  private leaderboardUploadTimer: ReturnType<typeof setInterval> | null = null
   private parseInFlight = false
+  private leaderboardUploadInFlight = false
   private started = false
 
   constructor(options: RuntimeSettingsControllerOptions) {
@@ -27,6 +32,7 @@ export class RuntimeSettingsController {
     this.loadConfigFn = options.loadConfig
     this.runParseFn = options.runParse
     this.runCleanupFn = options.runCleanup
+    this.runLeaderboardUploadFn = options.runLeaderboardUpload
     this.cleanupIntervalMs = options.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS
   }
 
@@ -45,19 +51,24 @@ export class RuntimeSettingsController {
     this.started = false
     if (this.parseTimer) clearInterval(this.parseTimer)
     if (this.cleanupTimer) clearInterval(this.cleanupTimer)
+    if (this.leaderboardUploadTimer) clearInterval(this.leaderboardUploadTimer)
     this.parseTimer = null
     this.cleanupTimer = null
+    this.leaderboardUploadTimer = null
   }
 
   private applyConfig(): void {
     if (this.parseTimer) clearInterval(this.parseTimer)
     if (this.cleanupTimer) clearInterval(this.cleanupTimer)
+    if (this.leaderboardUploadTimer) clearInterval(this.leaderboardUploadTimer)
     this.parseTimer = null
     this.cleanupTimer = null
+    this.leaderboardUploadTimer = null
 
     const config = this.loadConfigFn()
     const parseInterval = Number(config?.parseInterval ?? 0)
     const retentionDays = Number(config?.retentionDays ?? 0)
+    const leaderboardUploadInterval = Number(config?.leaderboardUploadInterval ?? DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS)
 
     if (parseInterval > 0) {
       this.parseTimer = setInterval(() => {
@@ -75,6 +86,12 @@ export class RuntimeSettingsController {
         }
       }, this.cleanupIntervalMs)
     }
+
+    if (config?.leaderboardAutoUpload === true && leaderboardUploadInterval > 0 && this.runLeaderboardUploadFn) {
+      this.leaderboardUploadTimer = setInterval(() => {
+        void this.runLeaderboardUploadSafely()
+      }, leaderboardUploadInterval)
+    }
   }
 
   private async runParseSafely(): Promise<void> {
@@ -87,6 +104,20 @@ export class RuntimeSettingsController {
       console.error('[settings-controller] parse failed:', err)
     } finally {
       this.parseInFlight = false
+    }
+  }
+
+  private async runLeaderboardUploadSafely(): Promise<void> {
+    if (this.leaderboardUploadInFlight) return
+    this.leaderboardUploadInFlight = true
+    try {
+      await this.runParseFn(this.db)
+      await this.runLeaderboardUploadFn?.(this.db)
+    } catch (err) {
+      // Keep scheduling active after individual upload failures.
+      console.error('[settings-controller] leaderboard upload failed:', err)
+    } finally {
+      this.leaderboardUploadInFlight = false
     }
   }
 }

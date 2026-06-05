@@ -11,6 +11,10 @@
   let error = ''
   let loading = false
 
+  $: redirectTo = getSafeRedirect($page.url.searchParams.get('redirect'))
+  $: registerHref = redirectTo === '/leaderboard'
+    ? '/register'
+    : `/register?redirect=${encodeURIComponent(redirectTo)}`
   $: verifiedState = $page.url.searchParams.get('verified')
   $: notice = verifiedState === '1'
     ? (zh ? '邮箱已验证，可以登录。' : 'Email verified. You can sign in now.')
@@ -38,7 +42,7 @@
       const data = await res.json()
       if (res.ok) {
         await invalidateAll()
-        goto('/leaderboard')
+        goto(redirectTo)
       } else {
         error = data.error === 'user_banned'
           ? (zh ? '你的账号已被封禁。' : 'Your account has been banned.')
@@ -51,6 +55,11 @@
     } finally {
       loading = false
     }
+  }
+
+  function getSafeRedirect(value) {
+    if (!value || !value.startsWith('/') || value.startsWith('//')) return '/leaderboard'
+    return value
   }
 </script>
 
@@ -104,7 +113,7 @@
     {/if}
 
     <p class="auth-footer">
-      {zh ? '没有账号？' : "Don't have an account?"} <a href="/register">{zh ? '注册' : 'Register'}</a>
+      {zh ? '没有账号？' : "Don't have an account?"} <a href={registerHref}>{zh ? '注册' : 'Register'}</a>
     </p>
   </div>
 </div>

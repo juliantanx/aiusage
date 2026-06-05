@@ -13,10 +13,19 @@
   let error = ''
   let success = ''
   let loading = false
+  $: redirectTo = getSafeRedirect($page.url.searchParams.get('redirect'))
+  $: loginHref = redirectTo === '/leaderboard'
+    ? '/login'
+    : `/login?redirect=${encodeURIComponent(redirectTo)}`
 
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
     return match ? match[1] : ''
+  }
+
+  function getSafeRedirect(value) {
+    if (!value || !value.startsWith('/') || value.startsWith('//')) return '/leaderboard'
+    return value
   }
 
   async function handleRegister() {
@@ -115,7 +124,7 @@
     {/if}
 
     <p class="auth-footer">
-      {zh ? '已有账号？' : 'Already have an account?'} <a href="/login">{zh ? '登录' : 'Sign in'}</a>
+      {zh ? '已有账号？' : 'Already have an account?'} <a href={loginHref}>{zh ? '登录' : 'Sign in'}</a>
     </p>
   </div>
 </div>

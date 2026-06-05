@@ -4,7 +4,7 @@ import { loadCredentials } from './credentials.js'
 const UPLOAD_PATH = '/api/leaderboard/uploads'
 const DEVICE_START_PATH = '/api/cli/device/start'
 const DEVICE_COMPLETE_PATH = '/api/cli/device/complete'
-const LEADERBOARD_STATUS_PATH = '/api/me/leaderboard/uploads'
+const LEADERBOARD_STATUS_PATH = '/api/cli/leaderboard/status'
 const LEADERBOARD_PATH = '/api/leaderboard'
 
 export interface DeviceStartRequest {
@@ -296,9 +296,28 @@ export async function fetchLeaderboardStatus(serverUrl: string): Promise<Leaderb
     throw new LeaderboardApiError('Not logged in. Run `aiusage login` first.', 'not_logged_in')
   }
 
+  const bodyHash = sha256('')
+  const timestamp = Date.now().toString()
+  const nonce = generateNonce()
+  const idempotencyKey = generateIdempotencyKey()
+  const canonical = buildCanonicalString(
+    'GET',
+    LEADERBOARD_STATUS_PATH,
+    bodyHash,
+    timestamp,
+    nonce,
+    creds.device_id,
+    idempotencyKey
+  )
+  const signature = computeHmac(creds.device_secret, canonical)
+
   const response = await fetch(`${serverUrl}${LEADERBOARD_STATUS_PATH}`, {
     headers: {
       'X-AIUsage-Device-Id': creds.device_id,
+      'X-AIUsage-Timestamp': timestamp,
+      'X-AIUsage-Nonce': nonce,
+      'X-AIUsage-Idempotency-Key': idempotencyKey,
+      'X-AIUsage-Signature': `hmac-sha256=${signature}`,
     },
   })
 

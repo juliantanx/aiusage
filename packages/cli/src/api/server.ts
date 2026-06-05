@@ -1,6 +1,7 @@
 import http from 'node:http'
 import path from 'node:path'
 import { hostname, platform } from 'node:os'
+import { randomBytes } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { loadConfig, saveConfig, loadCredential } from '../config.js'
@@ -10,6 +11,12 @@ import { discoverTools } from '../discovery.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
 import { queryAllQuotas } from '../quota.js'
 import { getSiteUrl } from '../site-url.js'
+import { startDeviceAuth, completeDeviceAuth, fetchLeaderboardStatus } from '../leaderboard/api.js'
+import { clearCredentials, hasCredentials, loadCredentials, saveCredentials } from '../leaderboard/credentials.js'
+import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
+import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
+
+const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
 
 function recalcCosts(db: Database.Database): number {
   const BATCH_SIZE = 1000
@@ -88,6 +95,17 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(data))
+}
+
+async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  let body = ''
+  for await (const chunk of req) body += chunk
+  if (!body.trim()) return {}
+  return JSON.parse(body) as Record<string, unknown>
+}
+
+function getDeviceName(): string {
+  return loadConfig()?.device || hostname() || `${platform()}-${process.arch}`
 }
 
 function getLeaderboardFallback(periodType: string): Record<string, unknown> {
@@ -1079,6 +1097,126 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
+      if (url.pathname === '/api/leaderboard/upload' && req.method === 'POST') {
+        try {
+          const result = await uploadLeaderboardData(db, options?.currentDeviceInstanceId)
+          json(res, {
+            totalTokens: result.totalTokens,
+            response: result.response,
+          })
+        } catch (err: any) {
+          json(res, {
+            error: {
+              code: err?.code || 'UPLOAD_FAILED',
+              message: err instanceof Error ? err.message : String(err),
+            },
+          }, err?.code === 'not_logged_in' ? 401 : 502)
+        }
+        return
+      }
+
+      // ── /api/leaderboard/auth ─────────────────────────────────────
+      if (url.pathname === '/api/leaderboard/auth/status' && req.method === 'GET') {
+        const creds = loadCredentials()
+        if (!creds) {
+          json(res, { loggedIn: false, siteUrl: getSiteUrl(), uploads: [] })
+          return
+        }
+
+        try {
+          const status = await fetchLeaderboardStatus(getSiteUrl())
+          json(res, {
+            loggedIn: true,
+            deviceId: creds.device_id,
+            obtainedAt: creds.obtained_at,
+            siteUrl: getSiteUrl(),
+            uploads: status.snapshots,
+          })
+        } catch (err) {
+          json(res, {
+            loggedIn: true,
+            deviceId: creds.device_id,
+            obtainedAt: creds.obtained_at,
+            siteUrl: getSiteUrl(),
+            uploads: [],
+            statusError: err instanceof Error ? err.message : String(err),
+          })
+        }
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/auth/start' && req.method === 'POST') {
+        if (hasCredentials()) {
+          const creds = loadCredentials()
+          json(res, {
+            alreadyLoggedIn: true,
+            deviceId: creds?.device_id ?? null,
+            obtainedAt: creds?.obtained_at ?? null,
+          })
+          return
+        }
+
+        try {
+          const verifier = base64url(randomBytes(32))
+          const challenge = base64url(sha256Buffer(verifier))
+          const started = await startDeviceAuth(getSiteUrl(), {
+            device_name: getDeviceName(),
+            cli_version: 'web',
+            device_challenge: challenge,
+          })
+          pendingLeaderboardAuth.set(started.device_request_id, {
+            verifier,
+            expiresAt: new Date(started.expires_at).getTime(),
+          })
+          json(res, started)
+        } catch (err) {
+          json(res, { error: { code: 'AUTH_START_FAILED', message: err instanceof Error ? err.message : String(err) } }, 502)
+        }
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/auth/complete' && req.method === 'POST') {
+        try {
+          const body = await readJsonBody(req)
+          const requestId = typeof body.device_request_id === 'string' ? body.device_request_id : ''
+          const pending = pendingLeaderboardAuth.get(requestId)
+          if (!requestId || !pending) {
+            json(res, { error: { code: 'INVALID_REQUEST', message: 'Unknown or expired authorization request' } }, 400)
+            return
+          }
+          if (Date.now() > pending.expiresAt) {
+            pendingLeaderboardAuth.delete(requestId)
+            json(res, { error: { code: 'AUTH_EXPIRED', message: 'Authorization expired' } }, 410)
+            return
+          }
+
+          const completed = await completeDeviceAuth(getSiteUrl(), {
+            device_request_id: requestId,
+            device_verifier: pending.verifier,
+          })
+          pendingLeaderboardAuth.delete(requestId)
+          saveCredentials({
+            device_id: completed.device_id,
+            device_secret: completed.device_secret,
+            obtained_at: new Date().toISOString(),
+          })
+          json(res, { loggedIn: true, deviceId: completed.device_id })
+        } catch (err: any) {
+          if (err?.code === 'authorization_pending') {
+            json(res, { pending: true }, 202)
+            return
+          }
+          json(res, { error: { code: err?.code || 'AUTH_COMPLETE_FAILED', message: err instanceof Error ? err.message : String(err) } }, 502)
+        }
+        return
+      }
+
+      if (url.pathname === '/api/leaderboard/auth/logout' && req.method === 'POST') {
+        clearCredentials()
+        json(res, { ok: true })
+        return
+      }
+
       // ── /api/devices ──────────────────────────────────────────────
       if (url.pathname === '/api/devices') {
         const currentId = options?.currentDeviceInstanceId
@@ -1190,6 +1328,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             dashboardPollInterval: rest.dashboardPollInterval ?? null,
             parseInterval: rest.parseInterval ?? null,
             retentionDays: rest.retentionDays ?? null,
+            leaderboardAutoUpload: rest.leaderboardAutoUpload ?? false,
+            leaderboardUploadInterval: rest.leaderboardUploadInterval ?? null,
             sync: rest.sync ?? null,
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
@@ -1250,6 +1390,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if ('retentionDays' in update) {
               if (!update.retentionDays) delete existing.retentionDays
               else existing.retentionDays = Number(update.retentionDays)
+            }
+            if ('leaderboardAutoUpload' in update) {
+              existing.leaderboardAutoUpload = update.leaderboardAutoUpload === true
+            }
+            if ('leaderboardUploadInterval' in update) {
+              const uploadInterval = Number(update.leaderboardUploadInterval)
+              if (Number.isFinite(uploadInterval) && uploadInterval > 0) {
+                existing.leaderboardUploadInterval = uploadInterval
+              } else {
+                delete existing.leaderboardUploadInterval
+              }
             }
 
             if ('sync' in update) {
