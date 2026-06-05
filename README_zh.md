@@ -6,7 +6,7 @@
 
 **[aiusage.jtanx.com](https://aiusage.jtanx.com)** · [English](https://github.com/juliantanx/aiusage/blob/main/README.md) | 中文
 
-一站式追踪 **22 款 AI 编程工具**的 token 用量、费用和会话。本地使用无需注册，无遥测，无需上云。
+一站式追踪 **23 款 AI 工具**的 token 用量、费用和会话。本地使用无需注册，无遥测，无需上云。
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage 仪表盘首页" width="32%" />
@@ -30,10 +30,10 @@ aiusage serve
 | | | | | |
 |---|---|---|---|---|
 | `Claude Code` | `Codex` | `OpenCode` | `Cursor` | `Hermes` |
-| `Qoder` | `OpenClaw` | `KiloCode` | `Copilot` | `Gemini CLI` |
-| `Kimi Code` | `CodeBuddy` | `Kiro` | `Grok Build` | `Antigravity` |
-| `Roo Code` | `Zed` | `Goose` | `oh-my-pi` | `pi` |
-| `Craft` | `Droid` | | | |
+| `Qoder` | `OpenClaw` | `KiloCode` | `Kelivo` | `Copilot` |
+| `Gemini CLI` | `Kimi Code` | `CodeBuddy` | `Kiro` | `Grok Build` |
+| `Antigravity` | `Roo Code` | `Zed` | `Goose` | `oh-my-pi` |
+| `pi` | `Craft` | `Droid` | | |
 
 ## 为什么使用 aiusage
 

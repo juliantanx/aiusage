@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, importKelivoBackup, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let loading = true
@@ -12,6 +12,11 @@
   let detectedTools = []
   let currentPlatform = ''
   let currentHostname = ''
+  let kelivoFileInput
+  let kelivoImporting = false
+  let kelivoImportError = ''
+  let kelivoImportedCount = null
+  let kelivoLastImportedAt = null
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
 
@@ -54,6 +59,12 @@
   $: rateLastUpdated = cachedRateFetchedAt
     ? new Date(cachedRateFetchedAt).toLocaleString()
     : null
+  $: kelivoTool = detectedTools.find(tool => tool.sourceKey === 'kelivo')
+  $: kelivoStatus = kelivoLastImportedAt
+    ? `${$t('settings.lastImported')} ${kelivoLastImportedAt.toLocaleString()}`
+    : kelivoTool?.status === 'found'
+      ? $t('settings.toolFound')
+      : $t('settings.notConfigured')
 
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
@@ -285,6 +296,36 @@
     }
   }
 
+  function triggerKelivoImport() {
+    kelivoImportError = ''
+    kelivoFileInput?.click()
+  }
+
+  async function handleKelivoFileChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.name !== 'chats.json' && !file.name.toLowerCase().endsWith('.zip')) {
+      kelivoImportError = $t('settings.kelivoInvalidFile')
+      return
+    }
+
+    kelivoImporting = true
+    kelivoImportError = ''
+    try {
+      const result = await importKelivoBackup(file)
+      kelivoImportedCount = result.imported ?? 0
+      kelivoLastImportedAt = new Date()
+      const toolsResult = await fetchDetectedTools()
+      detectedTools = toolsResult.tools ?? []
+      notifySettingsUpdated({ importedTool: 'kelivo' })
+    } catch (e) {
+      kelivoImportError = e instanceof Error ? e.message : $t('settings.kelivoImportFailed')
+    } finally {
+      kelivoImporting = false
+    }
+  }
+
   // Per-credential toggle helpers
   async function toggleGhToken() {
     syncError = ''
@@ -395,15 +436,16 @@
       </div>
     </div>
 
-    <!-- Detected Tools -->
+    <!-- Data Sources -->
     <div class="card">
       <div class="group-title-row">
-        <span class="group-title">{$t('settings.detectedTools')}</span>
+        <span class="group-title">{$t('settings.dataSources')}</span>
         {#if currentPlatform}
           <span class="platform-badge">{PLATFORM_LABEL[currentPlatform] ?? currentPlatform}</span>
         {/if}
       </div>
       <div class="field-hint" style="margin-bottom: 0.75rem">{$t('settings.detectedToolsHint')}</div>
+      <input class="file-input" type="file" accept=".zip,.json,application/zip,application/json" bind:this={kelivoFileInput} on:change={handleKelivoFileChange} />
       <div class="detected-tools-list">
         {#each detectedTools as tool}
           <div class="detected-tool" class:found={tool.status === 'found'} class:not-found={tool.status === 'not_found'}>
@@ -411,7 +453,9 @@
               <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'} class:gray={tool.status === 'not_found'}></span>
               <span class="detected-tool-name">{tool.label}</span>
               <span class="detected-tool-status">
-                {#if tool.status === 'found'}
+                {#if tool.sourceKey === 'kelivo'}
+                  {kelivoStatus}
+                {:else if tool.status === 'found'}
                   {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
                 {:else if tool.status === 'empty'}
                   {$t('settings.toolEmpty')}
@@ -426,6 +470,17 @@
               {/each}
             {:else if tool.path}
               <div class="detected-tool-path">{tool.path}</div>
+            {/if}
+            {#if tool.sourceKey === 'kelivo'}
+              <div class="source-actions">
+                <button type="button" class="btn-ghost import-btn" on:click={triggerKelivoImport} disabled={kelivoImporting}>
+                  {kelivoImporting ? '...' : $t('settings.importBackup')}
+                </button>
+                {#if kelivoImportedCount !== null}
+                  <span class="source-result">{$t('settings.imported')} {kelivoImportedCount} {$t('settings.records')}</span>
+                {/if}
+              </div>
+              {#if kelivoImportError}<p class="section-error compact">{kelivoImportError}</p>{/if}
             {/if}
           </div>
         {/each}
@@ -707,6 +762,7 @@
     font-size: 0.8rem;
     color: var(--rose);
   }
+  .section-error.compact { margin: 0.5rem 0 0 1.25rem; }
 
   .section-footer {
     display: flex;
@@ -838,5 +894,42 @@
     margin-top: 0.25rem;
     margin-left: 1.25rem;
     word-break: break-all;
+  }
+
+  .file-input { display: none; }
+
+  .source-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    margin-left: 1.25rem;
+  }
+
+  .import-btn {
+    padding-left: 0;
+  }
+
+  .source-result {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--green);
+  }
+
+  @media (max-width: 640px) {
+    .detected-tool-header,
+    .source-actions {
+      align-items: flex-start;
+    }
+    .detected-tool-status {
+      margin-left: 0;
+    }
+    .detected-tool-header {
+      flex-wrap: wrap;
+    }
+    .source-actions {
+      flex-direction: column;
+      gap: 0.25rem;
+    }
   }
 </style>

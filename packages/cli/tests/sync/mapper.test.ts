@@ -120,7 +120,7 @@ describe('SyncRecord Mapper', () => {
     expect(sync1.id).not.toBe(sync2.id)
   })
 
-  it.each(['qoder', 'cursor', 'kilocode', 'goose', 'zed', 'kiro', 'roocode'] as const)(
+  it.each(['qoder', 'cursor', 'kilocode', 'kelivo', 'goose', 'zed', 'kiro', 'roocode'] as const)(
     'uses record.id for %s imports whose lineOffset is not a byte position',
     (tool) => {
       const first: StatsRecord = {

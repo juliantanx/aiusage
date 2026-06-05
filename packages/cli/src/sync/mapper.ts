@@ -8,6 +8,7 @@ const RECORD_ID_SYNC_TOOLS = new Set<Tool>([
   'qoder',
   'cursor',
   'kilocode',
+  'kelivo',
   'goose',
   'zed',
   'kiro',

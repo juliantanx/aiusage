@@ -6,7 +6,7 @@
 
 **[aiusage.jtanx.com](https://aiusage.jtanx.com)** · English | [中文](https://github.com/juliantanx/aiusage/blob/main/README_zh.md)
 
-Track token usage, cost, and sessions across **22 AI coding tools** in one local dashboard. No account is required for local use. No telemetry. No cloud required.
+Track token usage, cost, and sessions across **23 AI tools** in one local dashboard. No account is required for local use. No telemetry. No cloud required.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage dashboard home" width="32%" />
@@ -30,10 +30,10 @@ Open `http://localhost:3847` to explore the dashboard.
 | | | | | |
 |---|---|---|---|---|
 | `Claude Code` | `Codex` | `OpenCode` | `Cursor` | `Hermes` |
-| `Qoder` | `OpenClaw` | `KiloCode` | `Copilot` | `Gemini CLI` |
-| `Kimi Code` | `CodeBuddy` | `Kiro` | `Grok Build` | `Antigravity` |
-| `Roo Code` | `Zed` | `Goose` | `oh-my-pi` | `pi` |
-| `Craft` | `Droid` | | | |
+| `Qoder` | `OpenClaw` | `KiloCode` | `Kelivo` | `Copilot` |
+| `Gemini CLI` | `Kimi Code` | `CodeBuddy` | `Kiro` | `Grok Build` |
+| `Antigravity` | `Roo Code` | `Zed` | `Goose` | `oh-my-pi` |
+| `pi` | `Craft` | `Droid` | | |
 
 ## Why aiusage
 

@@ -292,6 +292,14 @@ function probeKiloTasks(ctx: ProbeContext): string | null {
   return null
 }
 
+function probeKelivo(ctx: ProbeContext): string | null {
+  const override = envOverride('kelivo', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['kelivo']
+  if (legacy) return legacy
+  return null
+}
+
 function probeCopilot(ctx: ProbeContext): string | null {
   const override = envOverride('copilot', ctx.env)
   if (override) return override
@@ -512,6 +520,7 @@ const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'cursor', sourceKey: 'cursor', label: 'Cursor', probe: probeCursor },
   { tool: 'kilocode', sourceKey: 'kilocode', label: 'Kilo Code (extension)', probe: probeKiloTasks },
   { tool: 'kilocode', sourceKey: 'kilocode-db', label: 'KiloCode', probe: probeKiloDb },
+  { tool: 'kelivo', sourceKey: 'kelivo', label: 'Kelivo', probe: probeKelivo },
   { tool: 'copilot', sourceKey: 'copilot', label: 'Copilot', probe: probeCopilot },
   { tool: 'gemini', sourceKey: 'gemini', label: 'Gemini CLI', probe: probeGemini },
   { tool: 'kimi', sourceKey: 'kimi', label: 'Kimi Code', probe: probeKimi },
@@ -563,6 +572,9 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
         if (stat.isDirectory()) {
           if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
             fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'ui_messages.json').length
+          } else if (entry.sourceKey === 'kelivo') {
+            fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'chats.json').length
+              + findZipFiles(detectedPath).length
           } else if (entry.sourceKey === 'kiro') {
             fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
           } else {
@@ -711,6 +723,17 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     if (paths.length > 0) results.push({ tool: 'kilocode', paths: unique(paths) })
   }
 
+  const kelivoPath = probeKelivo(ctx)
+  if (kelivoPath && existsSync(kelivoPath)) {
+    const paths = statSync(kelivoPath).isDirectory()
+      ? [...findJsonFiles(kelivoPath).filter((p) => basename(p) === 'chats.json'), ...findZipFiles(kelivoPath)]
+      : basename(kelivoPath) === 'chats.json'
+        || basename(kelivoPath).endsWith('.zip')
+        ? [kelivoPath]
+        : []
+    if (paths.length > 0) results.push({ tool: 'kelivo', paths: unique(paths) })
+  }
+
   return results
 }
 
@@ -723,6 +746,22 @@ function findJsonFiles(dir: string): string[] {
       if (entry.isDirectory()) {
         results.push(...findJsonFiles(fullPath))
       } else if (entry.isFile() && extname(entry.name) === '.json') {
+        results.push(fullPath)
+      }
+    }
+  } catch {}
+  return results
+}
+
+function findZipFiles(dir: string): string[] {
+  const results: string[] = []
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        results.push(...findZipFiles(fullPath))
+      } else if (entry.isFile() && extname(entry.name) === '.zip') {
         results.push(fullPath)
       }
     }

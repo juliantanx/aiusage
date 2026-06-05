@@ -7,6 +7,7 @@ export const TOOLS = [
   'qoder',
   'cursor',
   'kilocode',
+  'kelivo',
   'copilot',
   'gemini',
   'kimi',
