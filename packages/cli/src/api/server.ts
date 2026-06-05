@@ -1306,6 +1306,40 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
+      // ── /api/tools ────────────────────────────────────────────────
+      if (url.pathname === '/api/tools' && req.method === 'GET') {
+        const device = url.searchParams.get('device')
+        const df = getDeviceFilter(device, options?.currentDeviceInstanceId)
+        const dr = getDateRangeFilter(range, from, to, '', weekStart)
+
+        let rows: Array<{ tool: string; sessionCount: number }>
+
+        if (df.useUnion) {
+          rows = db.prepare(`
+            SELECT tool, COUNT(DISTINCT session_id) AS sessionCount FROM (
+              SELECT tool, session_id FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+              UNION ALL
+              SELECT tool, session_key AS session_id FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where}
+            ) GROUP BY tool ORDER BY sessionCount DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+        } else if (df.where) {
+          rows = db.prepare(`
+            SELECT tool, COUNT(DISTINCT session_key) AS sessionCount
+            FROM synced_records WHERE 1=1 ${df.where} ${dr.where}
+            GROUP BY tool ORDER BY sessionCount DESC
+          `).all({ ...dr.params, ...df.params }) as any[]
+        } else {
+          rows = db.prepare(`
+            SELECT tool, COUNT(DISTINCT session_id) AS sessionCount
+            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''}
+            GROUP BY tool ORDER BY sessionCount DESC
+          `).all({ ...dr.params }) as any[]
+        }
+
+        json(res, { tools: rows })
+        return
+      }
+
       // ── /api/config/credential ──────────────────────────────────────
       if (url.pathname === '/api/config/credential' && req.method === 'GET') {
         const ref = url.searchParams.get('ref')?.trim()
