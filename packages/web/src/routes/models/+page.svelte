@@ -194,7 +194,7 @@
   }
   .mode-btn {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     padding: 0.22rem 0.65rem;
@@ -217,7 +217,7 @@
   }
   .leg {
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -259,7 +259,7 @@
     white-space: nowrap;
   }
   .model-provider {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
   }
 
@@ -292,7 +292,7 @@
     gap: 0.4rem;
     flex-wrap: wrap;
   }
-  .token-breakdown span { font-size: 0.7rem; }
+  .token-breakdown span { font-size: 0.75rem; }
 
   .ranking-bar-fill {
     height: 100%;
@@ -323,7 +323,7 @@
     align-items: baseline;
   }
   .stat-label {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;

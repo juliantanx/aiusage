@@ -190,11 +190,11 @@
     color: var(--text);
   }
   .meta-sub {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
   }
   .meta-key {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -221,7 +221,7 @@
   }
   .gap-text {
     font-family: var(--mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     background: var(--surface);
     padding: 0.2rem 0.75rem;
@@ -290,7 +290,7 @@
     background: var(--raised);
   }
   .tc-index {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     min-width: 1.5rem;
     color: var(--text-muted);
   }
@@ -300,12 +300,12 @@
     color: var(--text);
   }
   .tc-offset {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     flex-shrink: 0;
   }
 
   .badge {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     padding: 0.1rem 0.35rem;
     border-radius: 3px;

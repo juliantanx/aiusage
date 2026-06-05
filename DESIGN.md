@@ -39,9 +39,11 @@ Dark theme exists as a secondary option but is not the default.
 
 ## Typography
 
-**UI font:** Instrument Sans (Google Fonts). Clean, modern, slightly condensed. Used for all interface text.
+**UI font:** Inter (Google Fonts). Wide apertures, excellent readability at all sizes. Used for all interface text.
 
 **Mono font:** Geist Mono (Vercel, open source). Used for numbers, data values, code, and technical labels. Excellent tabular figure support.
+
+**Base size:** html font-size 18px (1rem = 18px). Optimized for comfortable reading.
 
 **Scale:**
 - Display: 2rem / 700 weight / -0.02em tracking
@@ -49,8 +51,8 @@ Dark theme exists as a secondary option but is not the default.
 - H2: 1rem / 600 weight
 - Body: 0.875rem / 400 weight / 1.5 line-height
 - Small: 0.8125rem / 400 weight
-- Label: 0.6875rem / 550 weight / 0.04em tracking / uppercase
-- Micro: 0.625rem / 550 weight / 0.06em tracking / uppercase
+- Label: 0.75rem / 550 weight / 0.04em tracking / uppercase
+- Micro: 0.6875rem / 550 weight / 0.06em tracking / uppercase
 
 **Data values:** Geist Mono, tabular-nums, 0.8125rem base.
 

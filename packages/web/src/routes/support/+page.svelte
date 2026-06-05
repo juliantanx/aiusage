@@ -158,7 +158,7 @@
     flex-shrink: 0;
     color: var(--accent);
     font-family: var(--mono);
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 550;
   }
 
