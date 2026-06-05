@@ -52,9 +52,10 @@
 
   function goToDetail(session) {
     const params = new URLSearchParams()
-    params.set('tool', $selectedTool ?? '')
-    params.set('device', $selectedDevice ?? '')
-    window.location.href = `/sessions/${encodeURIComponent(session.sessionId)}?${params.toString()}`
+    if ($selectedTool) params.set('tool', $selectedTool)
+    if ($selectedDevice) params.set('device', $selectedDevice)
+    const qs = params.toString()
+    window.location.href = `/sessions/${encodeURIComponent(session.sessionId)}${qs ? `?${qs}` : ''}`
   }
 </script>
 
