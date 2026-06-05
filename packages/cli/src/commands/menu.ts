@@ -1,8 +1,7 @@
 import { createInterface, type Interface } from 'node:readline'
-import { spawn, execSync } from 'node:child_process'
+import { spawn, spawnSync, execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { platform } from 'node:os'
 import { AIUSAGE_DIR } from '../config.js'
 
 const DEFAULT_PORT = 3847
@@ -27,19 +26,21 @@ function getPort(): number {
 
 function getPidOnPort(port: number): string | null {
   try {
-    if (platform() === 'win32') {
+    if (process.platform === 'win32') {
       const out = execSync(
         `netstat -ano | findstr LISTENING | findstr :${port}`,
         { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
       )
       const parts = out.trim().split(/\s+/)
-      return parts[parts.length - 1] ?? null
+      const pid = parts[parts.length - 1] ?? null
+      return pid && /^\d+$/.test(pid) ? pid : null
     } else {
       const out = execSync(`lsof -iTCP:${port} -sTCP:LISTEN -t`, {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
       })
-      return out.trim().split('\n')[0] ?? null
+      const pid = out.trim().split('\n')[0] ?? null
+      return pid && /^\d+$/.test(pid) ? pid : null
     }
   } catch {
     return null
@@ -53,10 +54,14 @@ function isDashboardRunning(): { running: boolean; port: number } {
 }
 
 function openBrowser(url: string): void {
-  const os = platform()
-  const cmd = os === 'darwin' ? 'open' : os === 'win32' ? 'start' : 'xdg-open'
   try {
-    spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref()
+    if (process.platform === 'darwin') {
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref()
+    } else if (process.platform === 'win32') {
+      execSync(`start "" "${url}"`, { stdio: 'ignore' })
+    } else {
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref()
+    }
   } catch {
     // ignore
   }
@@ -64,7 +69,7 @@ function openBrowser(url: string): void {
 
 function runCommand(args: string[]): void {
   try {
-    execSync(`aiusage ${args.join(' ')}`, { stdio: 'inherit' })
+    spawnSync('aiusage', args, { stdio: 'inherit' })
   } catch {
     // command handles its own output
   }
@@ -81,6 +86,40 @@ function dashboardStatusLine(): string {
   return running
     ? `  Dashboard: RUNNING  http://localhost:${port}`
     : '  Dashboard: STOPPED'
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard helpers
+// ---------------------------------------------------------------------------
+
+function stopDashboard(port: number): boolean {
+  const pid = getPidOnPort(port)
+  if (!pid || !/^\d+$/.test(pid)) return false
+  try {
+    if (process.platform === 'win32') {
+      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' })
+    } else {
+      process.kill(parseInt(pid, 10), 'SIGTERM')
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function startDashboard(port: number): Promise<boolean> {
+  const child = spawn('aiusage', ['serve'], {
+    detached: true,
+    stdio: 'ignore',
+  })
+  child.unref()
+  // wait up to 15s for port to become available
+  const deadline = Date.now() + 15_000
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 500))
+    if (getPidOnPort(port)) return true
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -110,21 +149,7 @@ async function dashboardSubmenu(rl: Interface): Promise<void> {
           console.log('\n  Dashboard is already running.')
         } else {
           console.log('\n  Starting dashboard...')
-          const child = spawn('aiusage', ['serve'], {
-            detached: true,
-            stdio: 'ignore',
-          })
-          child.unref()
-          // wait up to 15s for port to become available
-          const deadline = Date.now() + 15_000
-          let started = false
-          while (Date.now() < deadline) {
-            await new Promise((r) => setTimeout(r, 500))
-            if (getPidOnPort(port)) {
-              started = true
-              break
-            }
-          }
+          const started = await startDashboard(port)
           if (started) {
             console.log(`  Dashboard started on http://localhost:${port}`)
             openBrowser(`http://localhost:${port}`)
@@ -139,52 +164,21 @@ async function dashboardSubmenu(rl: Interface): Promise<void> {
         if (!running) {
           console.log('\n  Dashboard is not running.')
         } else {
-          const pid = getPidOnPort(port)
-          if (pid) {
-            try {
-              if (platform() === 'win32') {
-                execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' })
-              } else {
-                process.kill(parseInt(pid, 10), 'SIGTERM')
-              }
-              console.log('\n  Dashboard stopped.')
-            } catch {
-              console.log('\n  Failed to stop dashboard.')
-            }
+          const stopped = stopDashboard(port)
+          if (stopped) {
+            console.log('\n  Dashboard stopped.')
+          } else {
+            console.log('\n  Failed to stop dashboard.')
           }
         }
         await prompt(rl, '\n  Press Enter to continue...')
         break
       }
       case '3': {
-        const pid = getPidOnPort(port)
-        if (pid) {
-          try {
-            if (platform() === 'win32') {
-              execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' })
-            } else {
-              process.kill(parseInt(pid, 10), 'SIGTERM')
-            }
-          } catch {
-            // ignore
-          }
-          await new Promise((r) => setTimeout(r, 1000))
-        }
+        stopDashboard(port)
+        await new Promise((r) => setTimeout(r, 1000))
         console.log('\n  Starting dashboard...')
-        const child = spawn('aiusage', ['serve'], {
-          detached: true,
-          stdio: 'ignore',
-        })
-        child.unref()
-        const deadline = Date.now() + 15_000
-        let started = false
-        while (Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 500))
-          if (getPidOnPort(port)) {
-            started = true
-            break
-          }
-        }
+        const started = await startDashboard(port)
         if (started) {
           console.log(`  Dashboard restarted on http://localhost:${port}`)
           openBrowser(`http://localhost:${port}`)
