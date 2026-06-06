@@ -103,7 +103,7 @@
       loadSyncStatus()
       fetchConfig().then(applyConfig).catch(() => {})
     } catch (err) {
-      authError = err instanceof Error ? err.message : 'Login failed'
+      authError = err instanceof Error ? err.message : $t('auth.loginFailed')
     } finally {
       authSubmitting = false
     }
@@ -228,37 +228,37 @@
         </svg>
         <span class="brand-name">AIUsage</span>
       </a>
-      <h1>Dashboard locked</h1>
-      <p>Enter the dashboard password to view this page.</p>
+      <h1>{$t('auth.locked')}</h1>
+      <p>{$t('auth.lockedHint')}</p>
       <form on:submit|preventDefault={handleLogin}>
         <!-- svelte-ignore a11y-autofocus -->
         <input
           type="password"
           bind:value={password}
-          placeholder="Password"
+          placeholder={$t('auth.password')}
           autocomplete="current-password"
           autofocus
         />
         <button type="submit" disabled={authSubmitting || !password}>
-          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+          {authSubmitting ? $t('auth.unlocking') : $t('auth.unlock')}
         </button>
       </form>
       {#if authError}
         <div class="auth-error">{authError}</div>
       {/if}
-      <a class="auth-home" href="/">Back to public home</a>
+      <a class="auth-home" href="/">{$t('auth.backHome')}</a>
     </section>
   </main>
 {:else if shellState === 'loading'}
   <main class="auth-page">
     <section class="auth-card">
-      <div class="auth-loading">Checking access...</div>
+      <div class="auth-loading">{$t('auth.checking')}</div>
     </section>
   </main>
 {:else if shouldShowPublicHome}
   <div class="public-shell">
     <header class="public-header">
-      <button class="public-unlock" type="button" on:click={openUnlock} aria-label="Unlock dashboard">
+      <button class="public-unlock" type="button" on:click={openUnlock} aria-label={$t('auth.unlockDashboard')}>
         <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect width="64" height="64" rx="14" fill="currentColor"/>
           <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
@@ -294,19 +294,19 @@
         </svg>
         <span class="brand-name">AIUsage</span>
       </div>
-      <h1 id="unlock-title">Unlock dashboard</h1>
-      <p>Enter the dashboard password to show navigation and protected pages.</p>
+      <h1 id="unlock-title">{$t('auth.unlockDashboard')}</h1>
+      <p>{$t('auth.unlockHint')}</p>
       <form on:submit|preventDefault={handleLogin}>
         <!-- svelte-ignore a11y-autofocus -->
         <input
           type="password"
           bind:value={password}
-          placeholder="Password"
+          placeholder={$t('auth.password')}
           autocomplete="current-password"
           autofocus
         />
         <button type="submit" disabled={authSubmitting || !password}>
-          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+          {authSubmitting ? $t('auth.unlocking') : $t('auth.unlock')}
         </button>
       </form>
       {#if authError}
