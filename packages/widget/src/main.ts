@@ -1,9 +1,11 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog, screen } from 'electron'
+import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog, screen, nativeTheme } from 'electron'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 import { queryWidgetData } from './data'
+import { loadSettings, saveSettings } from './settings'
+import type { WidgetSettings } from './settings'
 import {
   getTrayIconNativeImage,
   getWidgetNativeBindingPath,
@@ -19,11 +21,12 @@ const Database = nodeRequire('better-sqlite3') as typeof import('better-sqlite3'
 const DB_PATH = join(homedir(), '.aiusage', 'cache.db')
 const PORT_FILE = join(homedir(), '.aiusage', '.serve-port')
 const DASHBOARD_PORT = 3847
-const REFRESH_INTERVAL_MS = 60_000
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
 let db: InstanceType<typeof Database> | null = null
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+let settings: WidgetSettings = loadSettings()
 
 app.setName('aiusage Widget')
 
@@ -40,6 +43,7 @@ app.whenReady().then(() => {
     })
   }
 
+  applyTheme(settings.theme)
   createTray()
   createWindow()
   startAutoRefresh()
@@ -57,6 +61,10 @@ app.on('before-quit', () => {
   db?.close()
 })
 
+function applyTheme(theme: WidgetSettings['theme']): void {
+  nativeTheme.themeSource = theme
+}
+
 function createTray(): void {
   const { buffer, scaleFactor } = getTrayIconNativeImage()
   const icon = nativeImage.createFromBuffer(buffer, scaleFactor ? { scaleFactor } : undefined)
@@ -67,6 +75,7 @@ function createTray(): void {
   tray.on('right-click', () => {
     const menu = Menu.buildFromTemplate([
       { label: 'Show Panel', click: () => showWindow() },
+      { label: 'Open Dashboard', click: () => openDashboardAction() },
       { label: 'Refresh', click: () => pushDataUpdate() },
       { type: 'separator' },
       { label: 'Quit', click: () => { app.exit(0) } },
@@ -77,8 +86,8 @@ function createTray(): void {
 
 function createWindow(): void {
   win = new BrowserWindow({
-    width: 320,
-    height: 300,
+    width: 380,
+    height: 520,
     show: false,
     frame: false,
     resizable: false,
@@ -131,7 +140,7 @@ function toggleWindow(): void {
 function pushDataUpdate(): void {
   if (!win || !db) return
   try {
-    const data = queryWidgetData(db)
+    const data = queryWidgetData(db, settings.rangeDays)
     win.webContents.send('widget:data-update', data)
   } catch {
     // DB may not be initialized yet; silently skip
@@ -139,7 +148,75 @@ function pushDataUpdate(): void {
 }
 
 function startAutoRefresh(): void {
-  setInterval(() => pushDataUpdate(), REFRESH_INTERVAL_MS)
+  if (refreshTimer) clearInterval(refreshTimer)
+  refreshTimer = setInterval(() => pushDataUpdate(), settings.refreshIntervalSec * 1000)
+}
+
+async function openDashboardAction(): Promise<void> {
+  const port = getDashboardPort()
+  const reachable = await isDashboardReachable(port)
+  if (!reachable) {
+    const result = await launchDashboard()
+    if (!result.success) {
+      // CLI not found; attempt auto-install
+      notifyRenderer('install:status', { phase: 'installing' })
+      const installResult = await installAiusageCli()
+      if (!installResult.success) {
+        notifyRenderer('install:status', { phase: 'failed', error: installResult.error })
+        dialog.showErrorBox(
+          'Installation Failed',
+          `Could not install @juliantanx/aiusage automatically.\n\n${installResult.error ?? 'Unknown error'}\n\nTry manually:\n  npm install -g @juliantanx/aiusage`
+        )
+        return
+      }
+      notifyRenderer('install:status', { phase: 'launching' })
+      const retryResult = await launchDashboard()
+      if (!retryResult.success) {
+        notifyRenderer('install:status', { phase: 'failed', error: retryResult.error })
+        dialog.showErrorBox(
+          'Launch Failed',
+          'aiusage was installed but the dashboard failed to start.\n\nTry running:\n  aiusage serve'
+        )
+        return
+      }
+      notifyRenderer('install:status', { phase: 'done' })
+    }
+  }
+  shell.openExternal(`http://localhost:${getDashboardPort()}`)
+}
+
+function notifyRenderer(channel: string, payload: Record<string, unknown>): void {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(channel, payload)
+  }
+}
+
+async function installAiusageCli(): Promise<{ success: boolean; error?: string }> {
+  const { execFile } = nodeRequire('child_process') as typeof import('child_process')
+
+  // Try npm first, fall back to pnpm, then yarn
+  const managers = ['npm', 'pnpm', 'yarn']
+
+  for (const pm of managers) {
+    const args = pm === 'yarn'
+      ? ['global', 'add', '@juliantanx/aiusage']
+      : ['install', '-g', '@juliantanx/aiusage']
+
+    const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+      execFile(pm, args, { timeout: 120_000, shell: true }, (err, _stdout, stderr) => {
+        if (err) {
+          resolve({ success: false, error: stderr || err.message })
+        } else {
+          resolve({ success: true })
+        }
+      })
+    })
+
+    if (result.success) return result
+    // If this package manager isn't installed, try the next one
+  }
+
+  return { success: false, error: 'No package manager (npm/pnpm/yarn) could install @juliantanx/aiusage.' }
 }
 
 // IPC handlers
@@ -149,19 +226,19 @@ ipcMain.handle('widget:get-data', () => {
 })
 
 ipcMain.handle('widget:open-dashboard', async () => {
-  const port = getDashboardPort()
-  const reachable = await isDashboardReachable(port)
-  if (!reachable) {
-    const result = await launchDashboard()
-    if (!result.success) {
-      dialog.showErrorBox(
-        'aiusage Not Found',
-        'The aiusage CLI is not installed.\n\nInstall it with:\n  npm install -g @juliantanx/aiusage\n\nThen try again.'
-      )
-      return
-    }
-  }
-  shell.openExternal(`http://localhost:${getDashboardPort()}`)
+  await openDashboardAction()
+})
+
+ipcMain.handle('widget:get-settings', () => {
+  return settings
+})
+
+ipcMain.handle('widget:save-settings', (_event, newSettings: WidgetSettings) => {
+  settings = newSettings
+  saveSettings(settings)
+  applyTheme(settings.theme)
+  startAutoRefresh()
+  return settings
 })
 
 ipcMain.on('widget:hide-window', () => {
@@ -186,7 +263,6 @@ async function isDashboardReachable(port: number): Promise<boolean> {
       resolve(res.statusCode !== undefined && res.statusCode < 500)
     })
     req.on('error', () => resolve(false))
-    // 200ms is plenty for localhost; 1000ms caused each poll to block for 1s
     req.setTimeout(200, () => { req.destroy(); resolve(false) })
   })
 }
@@ -205,15 +281,12 @@ async function launchDashboard(): Promise<{ success: boolean; error?: string }> 
 
     child.on('error', () => { failed = true })
 
-    // shell:true suppresses ENOENT on the error event — the shell itself spawns fine
-    // but exits immediately (code 127) when the command isn't found. Detect that here.
     child.on('close', (code) => {
       if (code !== 0) failed = true
     })
 
     child.unref()
 
-    // Poll up to 5s (25 × 200ms) for the server to become reachable
     let attempts = 0
     const check = async () => {
       if (failed) {
