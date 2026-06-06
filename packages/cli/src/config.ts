@@ -47,6 +47,8 @@ export interface Config {
   exchangeRate?: number
   /** Auto-fetched exchange rate cache */
   exchangeRateCache?: ExchangeRateCache
+  /** Auto-sync interval in milliseconds (0 or undefined = disabled) */
+  syncInterval?: number
 }
 
 export function loadConfig(): Config | null {

@@ -43,3 +43,51 @@ export class ProgressReporter {
     process.stderr.write('\r\x1b[K')
   }
 }
+
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+export class SyncProgressReporter {
+  private frame = 0
+  private timer: ReturnType<typeof setInterval> | null = null
+  private lastPhase = ''
+  private lastCounts = ''
+
+  start(): void {
+    if (!isTTY) return
+    this.timer = setInterval(() => {
+      this.frame = (this.frame + 1) % SPINNER_FRAMES.length
+      this.render()
+    }, 80)
+  }
+
+  update(progress: { phase: string; pulledCount?: number; uploadedCount?: number }): void {
+    const phaseLabels: Record<string, string> = {
+      pulling: 'Pulling',
+      merging: 'Merging',
+      uploading: 'Uploading',
+      finalizing: 'Finalizing',
+    }
+    this.lastPhase = phaseLabels[progress.phase] ?? progress.phase
+    const parts: string[] = []
+    if (progress.pulledCount) parts.push(`pulled: ${progress.pulledCount}`)
+    if (progress.uploadedCount) parts.push(`uploaded: ${progress.uploadedCount}`)
+    this.lastCounts = parts.length ? `  ${parts.join(', ')}` : ''
+    this.render()
+  }
+
+  private render(): void {
+    if (!isTTY) return
+    const spinner = SPINNER_FRAMES[this.frame]
+    const phase = this.lastPhase || 'Starting'
+    process.stderr.write(`\r${spinner} ${phase}...${this.lastCounts}  `)
+  }
+
+  done(): void {
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+    if (!isTTY) return
+    process.stderr.write('\r\x1b[K')
+  }
+}

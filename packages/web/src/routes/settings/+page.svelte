@@ -1,7 +1,7 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, notifySettingsUpdated, refreshExchangeRate } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let loading = true
@@ -25,6 +25,14 @@
 
   // Sync form — credentialRef is derived automatically, never user-editable
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '' }
+  let cloudLoggedIn = false
+  let autoSyncEnabled = false
+  let syncIntervalMinutes = '30'
+
+  // Sync status
+  let syncStatusData = null
+  let syncRunning = false
+  let syncPollTimer = null
 
   // GitHub credential state
   let ghToken = ''
@@ -121,6 +129,13 @@
       prevBackend = syncData.backend
       prevRepo = syncData.repo
       prevBucket = syncData.bucket
+      cloudLoggedIn = Boolean(cfg.loggedIn)
+
+      const si = cfg.syncInterval
+      if (si && si > 0) {
+        autoSyncEnabled = true
+        syncIntervalMinutes = String(Math.round(si / 60000))
+      }
 
       const keys = cfg.credentialKeys ?? []
       // Check both the structured key (new UI) and credentialRef (old init command)
@@ -135,12 +150,59 @@
         cachedRate = cfg.exchangeRateCache.CNY_USD
         cachedRateFetchedAt = cfg.exchangeRateCache.fetchedAt
       }
+
+      loadSyncStatusData()
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
     } finally {
       loading = false
     }
   })
+
+  async function loadSyncStatusData() {
+    try {
+      const data = await fetchSyncStatus()
+      syncStatusData = data.status
+      syncRunning = Boolean(syncStatusData?.isRunning)
+    } catch {
+      syncStatusData = null
+    }
+  }
+
+  async function handleSyncFromSettings() {
+    syncRunning = true
+    try {
+      await triggerSync()
+      startSyncPolling()
+    } catch {
+      syncRunning = false
+      await loadSyncStatusData()
+    }
+  }
+
+  function startSyncPolling() {
+    stopSyncPolling()
+    syncPollTimer = setInterval(async () => {
+      await loadSyncStatusData()
+      if (!syncStatusData?.isRunning) {
+        stopSyncPolling()
+        syncRunning = false
+      }
+    }, 800)
+  }
+
+  function stopSyncPolling() {
+    if (syncPollTimer) {
+      clearInterval(syncPollTimer)
+      syncPollTimer = null
+    }
+  }
+
+  function formatSyncTime(ts) {
+    if (!ts) return $t('settings.syncNever')
+    const d = new Date(ts)
+    return d.toLocaleString()
+  }
 
   async function saveGeneral() {
     generalSaving = true; generalError = ''
@@ -182,7 +244,9 @@
     try {
       // Build the sync config payload with auto-derived credentialRef
       let syncPayload = null
-      if (syncData.backend === 'github' && syncData.repo) {
+      if (syncData.backend === 'cloud') {
+        syncPayload = { backend: 'cloud' }
+      } else if (syncData.backend === 'github' && syncData.repo) {
         syncPayload = {
           backend: 'github',
           repo: syncData.repo,
@@ -209,7 +273,11 @@
         if (s3SakValue)  credentials[s3SakKey(syncData.bucket)]  = s3SakValue
       }
 
-      const payload = { sync: syncPayload }
+      const syncIntervalMs = autoSyncEnabled && syncIntervalMinutes
+        ? Number(syncIntervalMinutes) * 60000
+        : null
+
+      const payload = { sync: syncPayload, syncInterval: syncIntervalMs }
       if (Object.keys(credentials).length > 0) payload.credentials = credentials
 
       await saveConfig(payload)
@@ -306,6 +374,10 @@
       s3SakLoading = false
     }
   }
+
+  onDestroy(() => {
+    stopSyncPolling()
+  })
 
   function btnLabel(saving, saved, t_save, t_saved) {
     if (saving) return '...'
@@ -449,16 +521,41 @@
     <!-- Sync -->
     <div class="card">
       <div class="group-title">{$t('settings.sync')}</div>
-      <div class="field-hint" style="margin-bottom: 0.75rem">{$t('settings.syncHint')}</div>
       <div class="fields">
-        <div class="field">
+        <div class="field full">
           <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
           <select id="field-sync-backend" bind:value={syncData.backend} class="field-input" on:change={onBackendChange}>
             <option value="">{$t('settings.syncBackendNone')}</option>
+            <option value="cloud">AIUsage Cloud</option>
             <option value="github">GitHub</option>
             <option value="s3">S3 / Compatible</option>
           </select>
+          <div class="field-hint">
+            {#if syncData.backend === 'cloud'}
+              {$t('settings.syncBackendCloudDesc')}
+            {:else if syncData.backend === 'github'}
+              {$t('settings.syncBackendGithubDesc')}
+            {:else if syncData.backend === 's3'}
+              {$t('settings.syncBackendS3Desc')}
+            {:else}
+              {$t('settings.syncBackendNoneDesc')}
+            {/if}
+          </div>
         </div>
+
+        {#if syncData.backend === 'cloud'}
+          <div class="field full">
+            <div class="cloud-status" class:logged-in={cloudLoggedIn}>
+              {#if cloudLoggedIn}
+                <span class="status-dot ok"></span>
+                <span>{$t('settings.cloudLoggedIn')}</span>
+              {:else}
+                <span class="status-dot"></span>
+                <span>{$t('settings.cloudNotLoggedIn')}</span>
+              {/if}
+            </div>
+          </div>
+        {/if}
 
         {#if syncData.backend === 'github'}
           <div class="field">
@@ -533,6 +630,29 @@
             </div>
           {/if}
         {/if}
+        {#if syncData.backend}
+          <div class="field full">
+            <label class="field-label auto-sync-row">
+              <input type="checkbox" bind:checked={autoSyncEnabled} class="toggle-checkbox" />
+              <span>{$t('settings.autoSync')}</span>
+            </label>
+            {#if autoSyncEnabled}
+              <div class="auto-sync-freq">
+                <label class="field-label" for="field-sync-interval">{$t('settings.syncFrequency')}</label>
+                <select id="field-sync-interval" bind:value={syncIntervalMinutes} class="field-input freq-select">
+                  <option value="5">5 {$t('settings.syncMinutes')}</option>
+                  <option value="15">15 {$t('settings.syncMinutes')}</option>
+                  <option value="30">30 {$t('settings.syncMinutes')}</option>
+                  <option value="60">1 {$t('settings.syncHour')}</option>
+                  <option value="120">2 {$t('settings.syncHours')}</option>
+                  <option value="360">6 {$t('settings.syncHours')}</option>
+                  <option value="720">12 {$t('settings.syncHours')}</option>
+                  <option value="1440">24 {$t('settings.syncHours')}</option>
+                </select>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
       {#if syncError}<p class="section-error">{syncError}</p>{/if}
       <div class="section-footer">
@@ -540,6 +660,69 @@
           {btnLabel(syncSaving, syncSaved, $t('settings.save'), $t('settings.saved'))}
         </button>
       </div>
+
+      {#if syncData.backend}
+        <div class="sync-status-section">
+          <div class="group-title">{$t('settings.syncStatus')}</div>
+          <div class="sync-status-grid">
+            <div class="sync-status-item">
+              <span class="sync-status-label">{$t('settings.syncLastSync')}</span>
+              <span class="sync-status-value mono">{formatSyncTime(syncStatusData?.lastSyncAt)}</span>
+            </div>
+            <div class="sync-status-item">
+              <span class="sync-status-label">{$t('settings.syncStatusLabel')}</span>
+              <span class="sync-status-value" class:ok={syncStatusData?.lastSyncStatus === 'ok'} class:err={syncStatusData?.lastSyncStatus === 'failed'}>
+                {#if syncRunning}
+                  {syncStatusData?.phase ? $t(`sync.phase.${syncStatusData.phase}`) : $t('sync.syncing')}
+                {:else if syncStatusData?.lastSyncStatus === 'ok'}
+                  {$t('sync.complete')}
+                {:else if syncStatusData?.lastSyncStatus}
+                  {$t('sync.failed')}
+                {:else}
+                  —
+                {/if}
+              </span>
+            </div>
+            {#if syncStatusData?.lastSyncPulled != null && syncStatusData?.lastSyncStatus === 'ok'}
+              <div class="sync-status-item">
+                <span class="sync-status-label">{$t('settings.syncPulled')}</span>
+                <span class="sync-status-value mono">{syncStatusData.lastSyncPulled}</span>
+              </div>
+              <div class="sync-status-item">
+                <span class="sync-status-label">{$t('settings.syncUploaded')}</span>
+                <span class="sync-status-value mono">{syncStatusData.lastSyncUploaded ?? 0}</span>
+              </div>
+            {/if}
+            {#if syncStatusData?.lastSyncError && syncStatusData?.lastSyncStatus !== 'ok'}
+              <div class="sync-status-item full">
+                <span class="sync-status-label">{$t('settings.syncError')}</span>
+                <span class="sync-status-value err">{syncStatusData.lastSyncError}</span>
+              </div>
+            {/if}
+            {#if syncStatusData?.lastSyncDurationMs != null && syncStatusData?.lastSyncStatus === 'ok'}
+              <div class="sync-status-item">
+                <span class="sync-status-label">{$t('settings.syncDuration')}</span>
+                <span class="sync-status-value mono">{(syncStatusData.lastSyncDurationMs / 1000).toFixed(1)}s</span>
+              </div>
+            {/if}
+          </div>
+          <div class="sync-action">
+            <button class="btn-sync" on:click={handleSyncFromSettings} disabled={syncRunning}>
+              {#if syncRunning}
+                {syncStatusData?.phase ? $t(`sync.phase.${syncStatusData.phase}`) : $t('sync.syncing')}
+                {#if syncStatusData?.pulledCount || syncStatusData?.uploadedCount}
+                  <span class="sync-progress-counts">
+                    {#if syncStatusData.pulledCount}↓{syncStatusData.pulledCount}{/if}
+                    {#if syncStatusData.uploadedCount}↑{syncStatusData.uploadedCount}{/if}
+                  </span>
+                {/if}
+              {:else}
+                {$t('settings.syncNow')}
+              {/if}
+            </button>
+          </div>
+        </div>
+      {/if}
     </div>
 
   </div>
@@ -680,8 +863,122 @@
     color: var(--green);
   }
 
+  .sync-status-section {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .sync-status-section .group-title {
+    margin-bottom: 0.5rem;
+  }
+  .sync-status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.375rem 1.5rem;
+  }
+  .sync-status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+  }
+  .sync-status-item.full {
+    grid-column: 1 / -1;
+  }
+  .sync-status-label {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+  .sync-status-value {
+    font-size: 0.8125rem;
+    color: var(--text);
+    text-align: right;
+  }
+  .sync-status-value.ok { color: var(--green); }
+  .sync-status-value.err { color: var(--rose); }
+  .sync-action {
+    margin-top: 0.75rem;
+  }
+  .btn-sync {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.375rem 1rem;
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-sync:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-sync:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .sync-progress-counts {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+    margin-left: 0.25rem;
+  }
+
+  .auto-sync-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 500;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+  }
+
+  .toggle-checkbox {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .auto-sync-freq {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.375rem;
+  }
+
+  .auto-sync-freq .field-label {
+    white-space: nowrap;
+  }
+
+  .freq-select {
+    max-width: 160px;
+  }
+
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
   .state-msg.error { color: var(--rose); }
+
+  .cloud-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    padding: 0.5rem 0;
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .status-dot.ok {
+    background: var(--green);
+  }
 
   .credential-row {
     display: flex;

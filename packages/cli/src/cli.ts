@@ -11,7 +11,7 @@ import { cleanOldData } from './commands/clean.js'
 import { runReset } from './commands/reset.js'
 import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
-import { ProgressReporter } from './progress.js'
+import { ProgressReporter, SyncProgressReporter } from './progress.js'
 import { launchWidget } from './commands/widget.js'
 import { runLeaderboardLogin } from './commands/leaderboard-login.js'
 import { runLeaderboardUpload } from './commands/leaderboard-upload.js'
@@ -159,10 +159,10 @@ program
   .command('parse')
   .description('Parse AI tool session logs')
   .option('--tool <tool>', 'Specific supported tool id to parse')
-  .option('--progress', 'Show real-time progress')
+  .option('--no-progress', 'Hide real-time progress')
   .action(async (options) => {
     const db = createDatabase(DB_PATH)
-    const reporter = options.progress ? new ProgressReporter() : undefined
+    const reporter = options.progress !== false ? new ProgressReporter() : undefined
     try {
       const result = await runParse(db, options.tool, {
         onProgress: reporter ? (info) => reporter.update(info) : undefined,
@@ -276,14 +276,25 @@ program
   .description('Sync data with cloud storage')
   .action(async () => {
     const db = createDatabase(DB_PATH)
-    const result = await runSync(db)
-    if (result.status === 'ok') {
-      console.log(`✓ Sync complete — pulled: ${result.pulledCount}, merged: ${result.mergedCount}, uploaded: ${result.uploadedCount}`)
-    } else if (result.status === 'blocked_pending_consent') {
-      console.error(`✗ ${result.error}`)
-      process.exit(1)
-    } else {
-      console.error(`✗ Sync failed: ${result.error}`)
+    const reporter = new SyncProgressReporter()
+    reporter.start()
+    try {
+      const result = await runSync(db, {
+        onProgress: (progress) => reporter.update(progress),
+      })
+      reporter.done()
+      if (result.status === 'ok') {
+        console.log(`✓ Sync complete — pulled: ${result.pulledCount}, merged: ${result.mergedCount}, uploaded: ${result.uploadedCount}`)
+      } else if (result.status === 'blocked_pending_consent') {
+        console.error(`✗ ${result.error}`)
+        process.exit(1)
+      } else {
+        console.error(`✗ Sync failed: ${result.error}`)
+        process.exit(1)
+      }
+    } catch (e) {
+      reporter.done()
+      console.error(`✗ Sync failed: ${e instanceof Error ? e.message : e}`)
       process.exit(1)
     }
     db.close()

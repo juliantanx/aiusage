@@ -1423,6 +1423,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             leaderboardAutoUpload: rest.leaderboardAutoUpload ?? false,
             leaderboardUploadInterval: rest.leaderboardUploadInterval ?? null,
             sync: rest.sync ?? null,
+            syncInterval: rest.syncInterval ?? null,
+            loggedIn: hasCredentials(),
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
             exchangeRateCache: rest.exchangeRateCache ?? null,
@@ -1497,17 +1499,26 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               }
             }
 
+            if ('syncInterval' in update) {
+              const si = Number(update.syncInterval)
+              if (Number.isFinite(si) && si > 0) {
+                existing.syncInterval = si
+              } else {
+                delete existing.syncInterval
+              }
+            }
+
             if ('sync' in update) {
               const syncUpdate = update.sync as Record<string, unknown> | null
               if (!syncUpdate?.backend) {
                 delete existing.sync
               } else {
                 const backendVal = String(syncUpdate.backend)
-                if (backendVal !== 'github' && backendVal !== 's3') {
-                  json(res, { error: { code: 'INVALID_BACKEND', message: 'sync.backend must be github or s3' } }, 400)
+                if (backendVal !== 'github' && backendVal !== 's3' && backendVal !== 'cloud') {
+                  json(res, { error: { code: 'INVALID_BACKEND', message: 'sync.backend must be cloud, github, or s3' } }, 400)
                   return
                 }
-                const newSync: SyncConfig = { backend: backendVal as 'github' | 's3' }
+                const newSync: SyncConfig = { backend: backendVal as 'github' | 's3' | 'cloud' }
                 for (const f of ['repo', 'bucket', 'prefix', 'endpoint', 'region', 'credentialRef'] as const) {
                   if (syncUpdate[f]) (newSync as any)[f] = String(syncUpdate[f])
                 }

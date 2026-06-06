@@ -3,14 +3,14 @@
   import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
-  import { triggerSync, fetchSyncStatus, fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
+  import { fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
   import { getAuthShellState } from '$lib/auth-shell.js'
   import {
     House, LayoutDashboard, Coins, DollarSign, Box,
     MessageSquare, FolderKanban, Wrench,
     Gauge, Tag, Trophy, Settings, HelpCircle,
-    RefreshCw, ArrowUpDown, Sun, Moon, MonitorCog,
+    Sun, Moon, MonitorCog,
     Languages, PanelLeftClose, PanelLeftOpen, ExternalLink
   } from 'lucide-svelte'
 
@@ -57,10 +57,6 @@
 
   const themeIcons = { system: MonitorCog, dark: Moon, light: Sun }
 
-  let syncStatus = null
-  let syncing = false
-  let syncResult = ''
-  let syncPollTimer = null
   let authLoading = true
   let authEnabled = false
   let authenticated = false
@@ -100,67 +96,12 @@
       authenticated = true
       password = ''
       unlockOpen = false
-      loadSyncStatus()
       fetchConfig().then(applyConfig).catch(() => {})
     } catch (err) {
       authError = err instanceof Error ? err.message : $t('auth.loginFailed')
     } finally {
       authSubmitting = false
     }
-  }
-
-  async function loadSyncStatus() {
-    try {
-      const data = await fetchSyncStatus()
-      syncStatus = data.status
-      syncing = Boolean(syncStatus?.isRunning)
-      updateSyncPolling()
-    } catch {
-      syncStatus = null
-      syncing = false
-      updateSyncPolling()
-    }
-  }
-
-  async function handleSync() {
-    syncResult = ''
-    try {
-      const result = await triggerSync()
-      syncStatus = result.status
-      syncing = Boolean(result.status?.isRunning)
-      syncResult = result.alreadyRunning ? $t('sync.inProgress') : $t('sync.started')
-      updateSyncPolling()
-    } catch {
-      syncResult = $t('sync.failed')
-      syncing = false
-      updateSyncPolling()
-    }
-    setTimeout(() => {
-      if (!syncing) syncResult = ''
-    }, 3000)
-  }
-
-  function updateSyncPolling() {
-    if (syncPollTimer) {
-      clearInterval(syncPollTimer)
-      syncPollTimer = null
-    }
-    if (!syncing) return
-    syncPollTimer = setInterval(async () => {
-      await loadSyncStatus()
-      if (!syncStatus?.isRunning) {
-        syncResult = syncStatus?.lastSyncStatus === 'ok'
-          ? $t('sync.complete')
-          : (syncStatus?.lastSyncError || $t('sync.failed'))
-        setTimeout(() => { syncResult = '' }, 5000)
-      }
-    }, 2000)
-  }
-
-  function formatSyncTime(ts) {
-    if (!ts) return $t('sync.never')
-    const d = new Date(ts)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   function toggleSidebar() {
@@ -195,7 +136,6 @@
   onMount(() => {
     initTheme()
     loadAuthStatus()
-    loadSyncStatus()
     // Initialize currency stores from config
     fetchConfig().then(applyConfig).catch(() => {})
     if (typeof window !== 'undefined') {
@@ -203,9 +143,7 @@
     }
   })
 
-  onDestroy(() => {
-    if (syncPollTimer) clearInterval(syncPollTimer)
-  })
+  onDestroy(() => {})
 
   $: $page, mobileOpen = false
 </script>
@@ -356,22 +294,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button
-          class="ctrl-btn sync-btn"
-          on:click={handleSync}
-          disabled={syncing}
-          title={syncStatus
-            ? `${$t('sync.lastSync')}: ${formatSyncTime(syncStatus.lastSyncAt)}`
-            : $t('sync.notConfigured')}
-        >
-          <span class="ctrl-icon" class:spinning={syncing}>{#if syncing}<RefreshCw size={14} strokeWidth={1.75} />{:else}<ArrowUpDown size={14} strokeWidth={1.75} />{/if}</span>
-          {#if !collapsed}
-            <span class="ctrl-label" class:ok={syncResult === $t('sync.complete')} class:err={syncResult === $t('sync.failed')}>
-              {syncResult || $t('sync.trigger')}
-            </span>
-          {/if}
-        </button>
-
         <button class="ctrl-btn" on:click={cycleTheme} title={$t(`theme.${$userPref}`)}>
           <span class="ctrl-icon"><svelte:component this={themeIcons[$userPref]} size={14} strokeWidth={1.75} /></span>
           {#if !collapsed}
@@ -945,18 +867,6 @@
     letter-spacing: 0.02em;
     flex: 1;
   }
-  .ctrl-label.ok { color: var(--green); }
-  .ctrl-label.err { color: var(--rose); }
-
-  .spinning {
-    animation: spin 0.9s linear infinite;
-    display: inline-block;
-  }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-  }
-
   .collapse-btn { margin-top: 0.125rem; }
 
   /* ── Main area ────────────────────────────────────────────────────────── */
@@ -1212,6 +1122,4 @@
   @media (min-width: 801px) {
     .mobile-backdrop { display: none !important; }
   }
-
-  .sync-btn:hover { color: var(--accent); }
 </style>

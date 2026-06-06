@@ -21,30 +21,13 @@ export const GET: RequestHandler = async ({ request, url }) => {
   const cursor = url.searchParams.get('cursor')
   const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT))), MAX_LIMIT)
 
-  // Get device instance to exclude self
-  const instance = await sql`
-    SELECT device_instance_id, sync_generation FROM cloud_device_instances
-    WHERE user_id = ${userId} AND device_id = ${deviceId}
-  `
-
-  if (instance.length === 0) {
-    return json({
-      records: [],
-      tombstones: [],
-      sync_generation: 1,
-      next_cursor: null,
-      has_more: false
-    })
-  }
-
-  const instanceRow = instance[0] as { device_instance_id: string; sync_generation: number }
-  const excludeDeviceInstanceId = instanceRow.device_instance_id
-
   // Get current sync generation
   const reset = await sql`SELECT sync_generation FROM cloud_sync_resets WHERE user_id = ${userId}`
   const currentGeneration = reset.length > 0 ? (reset[0] as { sync_generation: number }).sync_generation : 1
 
-  // Query records from other devices, using change_seq as cursor
+  // Query records from all devices (including self), using change_seq as cursor.
+  // Local merge logic (mergeSyncedRecordsIntoRecords) deduplicates via LEFT JOIN,
+  // so self-records won't cause duplicates.
   const cursorValue = cursor ? parseInt(cursor) : 0
 
   const rows = await sql`
@@ -52,11 +35,10 @@ export const GET: RequestHandler = async ({ request, url }) => {
       record_id, ts, tool, model, provider,
       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens,
       cost, cost_source, session_key, source_file, cwd,
-      device_name, platform, updated_at, deleted_at, change_seq
+      device_instance_id, device_name, platform, updated_at, deleted_at, change_seq
     FROM cloud_usage_records
     WHERE user_id = ${userId}
       AND sync_generation = ${currentGeneration}
-      AND device_instance_id != ${excludeDeviceInstanceId}
       AND change_seq > ${cursorValue}
     ORDER BY change_seq ASC
     LIMIT ${limit + 1}
@@ -73,7 +55,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
     if (r.deleted_at) {
       tombstones.push({
         record_id: r.record_id,
-        device_instance_id: excludeDeviceInstanceId, // tell client which device was excluded
+        device_instance_id: r.device_instance_id,
         deleted_at: r.deleted_at,
         updated_at: r.updated_at
       })
@@ -94,6 +76,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
         sessionKey: r.session_key,
         sourceFile: r.source_file,
         cwd: r.cwd,
+        deviceInstanceId: r.device_instance_id,
         deviceName: r.device_name,
         platform: r.platform,
         updatedAt: r.updated_at
