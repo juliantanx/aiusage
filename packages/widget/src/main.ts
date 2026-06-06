@@ -28,7 +28,7 @@ let db: InstanceType<typeof Database> | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 let settings: WidgetSettings = loadSettings()
 
-app.setName('aiusage Widget')
+app.setName('AIUsage Widget')
 
 // Prevent dock icon on macOS
 if (process.platform === 'darwin' && app.dock) {
@@ -69,7 +69,7 @@ function createTray(): void {
   const { buffer, scaleFactor } = getTrayIconNativeImage()
   const icon = nativeImage.createFromBuffer(buffer, scaleFactor ? { scaleFactor } : undefined)
   tray = new Tray(icon)
-  tray.setToolTip('aiusage Widget')
+  tray.setToolTip('AIUsage Widget')
 
   tray.on('click', () => toggleWindow())
   tray.on('right-click', () => {
@@ -175,7 +175,7 @@ async function openDashboardAction(): Promise<void> {
         notifyRenderer('install:status', { phase: 'failed', error: retryResult.error })
         dialog.showErrorBox(
           'Launch Failed',
-          'aiusage was installed but the dashboard failed to start.\n\nTry running:\n  aiusage serve'
+          'AIUsage was installed but the dashboard failed to start.\n\nTry running:\n  aiusage serve'
         )
         return
       }

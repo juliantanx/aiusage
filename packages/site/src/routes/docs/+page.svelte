@@ -1043,7 +1043,7 @@
 
     <section>
       <figure class="doc-shot">
-        <img src="/screenshots/widget.png" alt={zh ? 'aiusage Widget 面板截图' : 'aiusage Widget panel screenshot'} loading="lazy" />
+        <img src="/screenshots/widget.png" alt={zh ? 'AIUsage Widget 面板截图' : 'AIUsage Widget panel screenshot'} loading="lazy" />
         <figcaption>{zh ? 'Widget 悬浮面板：近 30 天 Token、费用、Token 分布、趋势、常用模型、常用工具和会话数。' : 'Widget floating panel showing last-30-day tokens, cost, token breakdown, trend, top model, top tool, and sessions.'}</figcaption>
       </figure>
     </section>

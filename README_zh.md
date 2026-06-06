@@ -1,27 +1,86 @@
-# aiusage — AI 编程助手用量追踪工具
-
-[![npm version](https://img.shields.io/npm/v/@juliantanx/aiusage)](https://www.npmjs.com/package/@juliantanx/aiusage)
-[![CI](https://github.com/juliantanx/aiusage/actions/workflows/test.yml/badge.svg)](https://github.com/juliantanx/aiusage/actions/workflows/test.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
-**[aiusage.jtanx.com](https://aiusage.jtanx.com)** · [English](https://github.com/juliantanx/aiusage/blob/main/README.md) | 中文
-
-一站式追踪 **22 款 AI 编程工具**的 token 用量、费用和会话。本地使用无需注册，无遥测，无需上云。
+<h1 align="center">
+  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/packages/site/static/logo-icon.svg" alt="AIUsage logo" width="42" align="absmiddle" />
+  AIUsage
+</h1>
 
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@b179e5a37c92e7040a07b84a7b2048821d120aed/packages/site/static/screenshots/aiusage-demo.gif" alt="aiusage 仪表盘演示" width="92%" />
+  面向 AI 编程助手的本地优先用量追踪工具。
 </p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@juliantanx/aiusage"><img src="https://img.shields.io/npm/v/@juliantanx/aiusage" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@juliantanx/aiusage"><img src="https://img.shields.io/npm/dm/@juliantanx/aiusage" alt="npm downloads" /></a>
+  <a href="https://github.com/juliantanx/aiusage/actions/workflows/test.yml"><img src="https://github.com/juliantanx/aiusage/actions/workflows/test.yml/badge.svg" alt="CI" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+</p>
+
+<p align="center">
+  <strong><a href="https://aiusage.jtanx.com">官网</a></strong> ·
+  <strong><a href="https://aiusage.jtanx.com/docs">文档</a></strong> ·
+  <strong><a href="https://aiusage.jtanx.com/leaderboard">排行榜</a></strong> ·
+  <a href="https://github.com/juliantanx/aiusage/blob/main/README.md">English</a> | 中文
+</p>
+
+在一个本地仪表盘里追踪 **22 款 AI 编程工具**的 token、费用、会话、模型、项目、工具调用和配额压力。本地使用无需账号、无遥测、无需云同步。
+
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@b179e5a37c92e7040a07b84a7b2048821d120aed/packages/site/static/screenshots/aiusage-demo.gif" alt="AIUsage 仪表盘演示" width="92%" />
+</p>
+
+## 功能亮点
+
+- **一个本地仪表盘** 查看 token、费用、会话、模型、项目、工具调用和配额。
+- **广泛的数据源支持**，覆盖 Claude Code、Codex、OpenCode、Cursor、Copilot、Gemini CLI 等工具。
+- **可选多机同步**，支持官方云同步、GitHub、S3、R2 或 MinIO。
+- **可选公开排行榜**，只上传签名后的聚合用量。
+- **桌面小组件**，可在菜单栏或系统托盘快速查看最近用量。
+- **默认保护隐私**：本地解析和本地仪表盘不会上传 prompt、completion、源码或文件路径。
 
 ## 快速开始
 
-**前置条件：** Node.js 20+
+**要求：** Node.js 20+，支持 macOS、Linux 和 Windows。
 
 ```bash
 npm install -g @juliantanx/aiusage
 aiusage serve
 ```
 
-打开 `http://localhost:3847` 即可查看仪表盘。
+打开 `http://localhost:3847` 即可使用仪表盘。`serve` 会在启动时解析一次本地日志，然后启动本地 Web UI。
+
+使用 pnpm：
+
+```bash
+pnpm add -g @juliantanx/aiusage
+```
+
+使用 Docker：
+
+```bash
+docker run -d \
+  -p 3847:3847 \
+  -v ~/.aiusage:/root/.aiusage \
+  juliantanx/aiusage
+```
+
+Docker 示例中的 `~/.aiusage` 挂载只会持久化 AIUsage 自己的数据。若要解析宿主机上的 AI 工具日志，还需要额外挂载对应日志目录，并配置相应的 `AIUSAGE_*_PATH`。详见 [Docker 文档](https://aiusage.jtanx.com/docs#docker)。
+
+## 常用命令
+
+| 命令 | 用途 |
+|---|---|
+| `aiusage` / `aiusage summary` | 在终端输出用量摘要 |
+| `aiusage parse` | 解析本地 AI 工具日志 |
+| `aiusage serve` | 在 `3847` 端口启动本地仪表盘 |
+| `aiusage status` | 查看数据源和本地数据库状态 |
+| `aiusage export --range month` | 导出用量数据 |
+| `aiusage init` | 配置可选同步 |
+| `aiusage sync` | 使用已配置的后端同步数据 |
+| `aiusage widget` | 启动桌面托盘小组件 |
+| `aiusage leaderboard` | 查看公开排行榜 |
+| `aiusage login` / `aiusage upload` | 授权当前设备并上传聚合排行榜数据 |
+| `aiusage pm2-start` | 使用 PM2 后台运行仪表盘和小组件 |
+
+完整 CLI 参考请看：[aiusage.jtanx.com/docs#cli-reference](https://aiusage.jtanx.com/docs#cli-reference)。
 
 ## 已支持的工具
 
@@ -33,42 +92,92 @@ aiusage serve
 | `Roo Code` | `Zed` | `Goose` | `oh-my-pi` | `pi` |
 | `Craft` | `Droid` | | | |
 
-## 为什么使用 aiusage
+默认路径和环境变量覆盖方式见 [数据源](https://aiusage.jtanx.com/docs#settings-sources) 与 [数据源环境变量](https://aiusage.jtanx.com/docs#settings-env)。
 
-每款 AI 编程工具各自记录日志，格式不同、机器不同，没有统一视图。aiusage 把这些数据汇总到一个本地仪表盘：
+## 仪表盘密码
 
-- **一个仪表盘** 查看 token 用量、费用、模型分布和工具调用活跃度
-- **多机同步** 通过官方云同步、GitHub、S3 或 R2 — 完全可选
-- **数据默认本地** 不上传、不追踪
+本地仪表盘默认在 localhost 上开放。设置 `AIUSAGE_DASHBOARD_PASSWORD` 后，可以保护仪表盘 API。
 
-## 公开排行榜
+| Shell | 命令 |
+|---|---|
+| macOS / Linux | `AIUSAGE_DASHBOARD_PASSWORD="change-me" aiusage serve` |
+| Windows PowerShell | `$env:AIUSAGE_DASHBOARD_PASSWORD="change-me"; aiusage serve` |
+| Windows CMD | `set AIUSAGE_DASHBOARD_PASSWORD=change-me && aiusage serve` |
 
-AIUsage 内置公开排行榜，适合愿意分享聚合总量的用户参与。支持按 **Token 总量**或**费用**排名，可按工具和模型维度筛选。
+PM2 后台运行时，也可以在启动 `aiusage pm2-start` 时传入同名变量；修改密码后使用 `pm2 restart aiusage-server --update-env` 更新环境变量。详见 [仪表盘密码](https://aiusage.jtanx.com/docs#dashboard-password) 和 [PM2](https://aiusage.jtanx.com/docs#pm2)。
 
-- 在 [aiusage.jtanx.com/leaderboard](https://aiusage.jtanx.com/leaderboard) 查看排行榜，或用 `aiusage leaderboard` 在终端查看。
-- 上传数据需要账号和已授权的 CLI 设备：先运行 `aiusage login`，再运行 `aiusage upload`。
-- 上传内容只包含各排名周期的聚合 Token 总量，不包含 prompt、completion、源码、文件路径或本地费用估算。
-- 可在 [/settings](https://aiusage.jtanx.com/settings) 中开启匿名模式，隐藏排行榜上的身份信息。
+## 隐私与数据
 
-## 站点账号
+AIUsage 采用本地优先设计。
 
-官方站点 [aiusage.jtanx.com](https://aiusage.jtanx.com) 提供账号系统，用于排行榜参与：
+- 本地解析会读取各工具日志，并把解析后的用量写入 `~/.aiusage/cache.db`。
+- 本地仪表盘无需账号，不发送遥测。
+- 可选同步由用户主动配置，支持官方云同步、GitHub、S3、R2 或 MinIO。
+- 可选排行榜上传只包含各排名周期的聚合 token 总量，不包含 prompt、completion、源码、文件路径或本地费用估算。
+- 费用是基于定价元数据的估算值，刷新或重新计算定价后可能变化。
+- 历史总量取决于各 AI 工具是否仍保留原始日志或本地数据库。
 
-- **登录方式**：密码注册、GitHub OAuth、LINUX DO OAuth
-- **个人设置**（[/settings](https://aiusage.jtanx.com/settings)）：用户名（30 天冷却期）、显示名称、头像、密码、排行榜可见性、匿名模式
-- **上传状态**（[/uploads](https://aiusage.jtanx.com/uploads)）：查看上传历史、管理授权设备
-- **管理后台**（[/admin](https://aiusage.jtanx.com/admin)）：上传审核、用户管理、定价表、审计日志（需管理员角色）
+如需报告安全问题，优先使用私密渠道。详见 [SECURITY.md](./SECURITY.md)。
 
-职责边界：
+## 同步与排行榜
 
-- `@juliantanx/aiusage` 负责本地解析、本地仪表盘、同步、终端摘要、CLI 授权和签名上传。
-- 官方站点负责公开榜单浏览、账号资料、授权设备、上传审核状态和管理员治理。
+同步和排行榜是两个互相独立的可选功能。
+
+- **同步** 用于在自己的多台设备之间保持数据一致，支持官方云同步、GitHub、S3、R2 或 MinIO。使用 `aiusage init` 配置，再运行 `aiusage sync`。
+- **排行榜** 面向明确选择分享聚合数据的用户。先用 `aiusage login` 授权设备，再运行 `aiusage upload`。
+- 参与排行榜时，可在 [站点设置](https://aiusage.jtanx.com/settings) 中开启匿名模式。
+
+官方站点负责账号、OAuth 登录、资料设置、授权设备、上传审核状态和管理员治理。CLI 负责本地解析、本地仪表盘、同步、终端摘要和签名上传。
+
+## 桌面小组件
+
+安装可选的托盘 / 菜单栏小组件：
+
+```bash
+npm install -g @juliantanx/aiusage-widget
+aiusage-widget
+```
+
+小组件读取同一个本地 AIUsage 数据库，并可从托盘菜单打开完整仪表盘。详见 [Widget 文档](https://aiusage.jtanx.com/docs#widget)。
+
+## 本地开发
+
+```bash
+git clone https://github.com/juliantanx/aiusage.git
+cd aiusage
+pnpm install
+pnpm build
+pnpm test
+pnpm dev
+```
+
+项目结构：
+
+| 路径 | 说明 |
+|---|---|
+| `packages/core` | 共享类型、数据库 schema、定价和工具函数 |
+| `packages/cli` | 发布到 npm 的 CLI、解析器、本地 API 服务、同步和 PM2 辅助命令 |
+| `packages/web` | 打包进 CLI 的本地仪表盘 UI |
+| `packages/widget` | Electron 托盘 / 菜单栏小组件 |
+| `packages/site` | 官方站点、文档、账号、上传和排行榜 |
+
+欢迎贡献。请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)，使用 issue 模板，并在提交 PR 前运行 `pnpm test`。
 
 ## 文档
 
-完整文档 — CLI 命令参考、Docker 部署、同步设置、桌面小组件等 — 请访问 **[文档页面](https://aiusage.jtanx.com/docs)**。
+- [完整文档](https://aiusage.jtanx.com/docs)
+- [CLI 命令参考](https://aiusage.jtanx.com/docs#cli-reference)
+- [Docker 部署](https://aiusage.jtanx.com/docs#docker)
+- [同步设置](https://aiusage.jtanx.com/docs#sync)
+- [桌面小组件](https://aiusage.jtanx.com/docs#widget)
+- [更新日志](./CHANGELOG.zh-CN.md)
+- [安全策略](./SECURITY.md)
 
-## 友情链接
+## 社区
+
+- Bug 反馈：[GitHub Issues](https://github.com/juliantanx/aiusage/issues/new?template=bug_report.md)
+- 功能建议：[GitHub Issues](https://github.com/juliantanx/aiusage/issues/new?template=feature_request.md)
+- 问题讨论：[GitHub Discussions](https://github.com/juliantanx/aiusage/discussions)
 
 [**linux.do**](https://linux.do/) —— 感谢 L 站及其社区为项目开发与交流提供的支持与启发。
 
@@ -76,15 +185,11 @@ AIUsage 内置公开排行榜，适合愿意分享聚合总量的用户参与。
 
 <a href="https://www.star-history.com/?repos=juliantanx%2Faiusage&type=date&logscale=&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&theme=dark&legend=top-left&t=20260606" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&legend=top-left&t=20260606" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&legend=top-left&t=20260606" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&theme=dark&logscale&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&logscale&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&logscale&legend=top-left" />
  </picture>
 </a>
-
-## 贡献
-
-欢迎贡献！请参阅 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解如何参与。
 
 ## 许可证
 

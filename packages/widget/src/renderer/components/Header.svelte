@@ -12,7 +12,7 @@
       <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
       <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
     </svg>
-    aiusage
+    AIUsage
   </span>
   <div class="actions">
     <button class="icon-btn" title="Refresh" on:click={onRefresh}>

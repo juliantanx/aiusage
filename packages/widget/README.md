@@ -1,6 +1,6 @@
 # @juliantanx/aiusage-widget
 
-A lightweight system tray widget for [aiusage](https://github.com/juliantanx/aiusage) that shows your AI coding assistant token usage at a glance.
+A lightweight system tray widget for [AIUsage](https://github.com/juliantanx/aiusage) that shows your AI coding assistant token usage at a glance.
 
 English | [中文](./README_zh.md)
 
@@ -10,13 +10,13 @@ English | [中文](./README_zh.md)
 - **Today's token usage** — total tokens with input/output breakdown.
 - **Monthly totals** — rolling token count for the current month.
 - **Top model** — your most-used model today and its share.
-- **Dashboard launcher** — open the full aiusage web dashboard from the tray menu.
+- **Dashboard launcher** — open the full AIUsage web dashboard from the tray menu.
 - **Auto-refresh** — updates every 60 seconds automatically.
 - **Cross-platform** — Windows, macOS, and Linux.
 
 ## Prerequisites
 
-- [aiusage](https://github.com/juliantanx/aiusage) CLI installed and data parsed (`aiusage serve` auto-parses on startup)
+- [AIUsage](https://github.com/juliantanx/aiusage) CLI installed and data parsed (`aiusage serve` auto-parses on startup)
 - Node.js >= 20
 
 ## Install
@@ -41,7 +41,7 @@ To keep the widget running after closing the terminal and auto-start on boot:
 ```bash
 npm install -g pm2
 
-# Start aiusage server + widget as background services
+# Start AIUsage server + widget as background services
 aiusage pm2-start
 
 # Linux / macOS: run directly; Windows: run the output command as Administrator
@@ -75,7 +75,7 @@ pnpm dev
 
 - **Runtime:** Electron
 - **UI:** Svelte + Vite
-- **Database:** better-sqlite3 (reads aiusage's local SQLite database)
+- **Database:** better-sqlite3 (reads AIUsage's local SQLite database)
 
 ## License
 
