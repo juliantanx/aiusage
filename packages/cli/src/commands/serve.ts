@@ -63,7 +63,10 @@ export function serve(options: ServeOptions): void {
   }
 
   const syncRuntime = new SyncRuntimeController({
-    runSync: (runtimeOptions) => runSync(options.db, runtimeOptions).then(() => undefined),
+    runSync: async (runtimeOptions) => {
+      await runParse(options.db)
+      await runSync(options.db, runtimeOptions)
+    },
     getPersistedState: () => getState(AIUSAGE_DIR),
   })
 

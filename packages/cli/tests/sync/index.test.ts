@@ -240,7 +240,7 @@ describe('SyncOrchestrator', () => {
     expect(getSyncPath(1778664420000, 'device-abc')).toBe('device-abc/2026/05/13.ndjson')
   })
 
-  it('does not count already-existing remote records as uploaded', async () => {
+  it('counts already-existing remote records when local rows are marked synced', async () => {
     const syncId = generateSyncRecordId('di1', '/f1', 0)
 
     db.prepare(`INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', 2000, 2000, 1000, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')`).run()
@@ -275,7 +275,7 @@ describe('SyncOrchestrator', () => {
     })
 
     const result = await orchestrator.sync()
-    // Local updatedAt (1000) is not > remote updatedAt (1000), so it's not actually updated
-    expect(result.uploadedCount).toBe(0)
+    // The local row was still processed successfully and marked as synced.
+    expect(result.uploadedCount).toBe(1)
   })
 })

@@ -50,7 +50,7 @@ export class CloudSyncOrchestrator {
 
       // Step 4: Push local records to cloud
       this.options.onProgress?.({ phase: 'uploading', pulledCount: insertedCount })
-      const pushResult = await this.push(syncGeneration)
+      const uploadedCount = await this.push(syncGeneration)
 
       // Step 5: Mark local records as synced
       const unsynced = getUnsyncedRecords(this.db)
@@ -66,13 +66,13 @@ export class CloudSyncOrchestrator {
       this.options.onProgress?.({
         phase: 'finalizing',
         pulledCount: insertedCount,
-        uploadedCount: pushResult.inserted + pushResult.updated,
+        uploadedCount,
       })
 
       return {
         status: 'ok',
         pulledCount: insertedCount,
-        uploadedCount: pushResult.inserted + pushResult.updated,
+        uploadedCount,
         mergedCount,
         syncGeneration: pullResult.syncGeneration,
       }
@@ -107,10 +107,10 @@ export class CloudSyncOrchestrator {
     return { records: allRecords, syncGeneration }
   }
 
-  private async push(syncGeneration: number): Promise<{ inserted: number; updated: number; skipped: number }> {
+  private async push(syncGeneration: number): Promise<number> {
     const unsynced = getUnsyncedRecords(this.db)
     if (unsynced.length === 0) {
-      return { inserted: 0, updated: 0, skipped: 0 }
+      return 0
     }
 
     // Convert to SyncRecord format
@@ -118,18 +118,11 @@ export class CloudSyncOrchestrator {
 
     // Push in batches of 500
     const BATCH_SIZE = 500
-    let totalInserted = 0
-    let totalUpdated = 0
-    let totalSkipped = 0
-
     for (let i = 0; i < syncRecords.length; i += BATCH_SIZE) {
       const batch = syncRecords.slice(i, i + BATCH_SIZE)
-      const result = await cloudPush(batch, [], this.options.deviceInstanceId, syncGeneration)
-      totalInserted += result.inserted
-      totalUpdated += result.updated
-      totalSkipped += result.skipped
+      await cloudPush(batch, [], this.options.deviceInstanceId, syncGeneration)
     }
 
-    return { inserted: totalInserted, updated: totalUpdated, skipped: totalSkipped }
+    return unsynced.length
   }
 }

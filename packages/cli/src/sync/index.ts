@@ -204,8 +204,8 @@ export class SyncOrchestrator {
       })
 
       const localSyncRecords = localRecords.map(mapStatsRecordToSyncRecord)
-      const changedCount = await this.uploadFile(path, localSyncRecords)
-      totalUploaded += changedCount
+      await this.uploadFile(path, localSyncRecords)
+      totalUploaded += localRecords.length
 
       this.options.onProgress?.({
         phase: 'uploading',

@@ -717,6 +717,9 @@
                 <span class="sync-status-value mono">{(syncStatusData.lastSyncDurationMs / 1000).toFixed(1)}s</span>
               </div>
             {/if}
+            {#if syncStatusData?.lastSyncPulled != null && syncStatusData?.lastSyncStatus === 'ok'}
+              <div class="sync-status-hint">{$t('settings.syncCountHint')}</div>
+            {/if}
           </div>
           <div class="sync-action">
             <button class="btn-sync" on:click={handleSyncFromSettings} disabled={syncRunning}>
@@ -901,6 +904,12 @@
   .sync-status-label {
     font-size: 0.8125rem;
     color: var(--text-muted);
+  }
+  .sync-status-hint {
+    grid-column: 1 / -1;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding-top: 0.125rem;
   }
   .sync-status-value {
     font-size: 0.8125rem;
