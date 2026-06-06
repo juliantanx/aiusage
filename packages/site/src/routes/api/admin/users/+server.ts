@@ -10,23 +10,34 @@ export const GET: RequestHandler = async (event) => {
   const offset = Math.max(parseInt(event.url.searchParams.get('offset') || '0'), 0)
 
   let users
+  let total
   if (q.trim()) {
     const pattern = `%${q.trim()}%`
-    users = await sql`
-      SELECT id, username, display_name, email, role, status, created_at, banned_at, ban_reason
-      FROM users
-      WHERE username ILIKE ${pattern} OR display_name ILIKE ${pattern} OR email ILIKE ${pattern}
-      ORDER BY created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `
+    const [u, t] = await Promise.all([
+      sql`
+        SELECT id, username, display_name, email, role, status, created_at, banned_at, ban_reason
+        FROM users
+        WHERE username ILIKE ${pattern} OR display_name ILIKE ${pattern} OR email ILIKE ${pattern}
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+      sql`SELECT COUNT(*)::INTEGER AS count FROM users WHERE username ILIKE ${pattern} OR display_name ILIKE ${pattern} OR email ILIKE ${pattern}`
+    ])
+    users = u
+    total = (t[0] as { count: number }).count
   } else {
-    users = await sql`
-      SELECT id, username, display_name, email, role, status, created_at, banned_at, ban_reason
-      FROM users
-      ORDER BY created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `
+    const [u, t] = await Promise.all([
+      sql`
+        SELECT id, username, display_name, email, role, status, created_at, banned_at, ban_reason
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+      sql`SELECT COUNT(*)::INTEGER AS count FROM users`
+    ])
+    users = u
+    total = (t[0] as { count: number }).count
   }
 
-  return json({ users })
+  return json({ users, total })
 }

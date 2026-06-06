@@ -2,11 +2,12 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { verifyUploadRequest } from '$lib/server/uploads/verify.js'
-
-const DEFAULT_LIMIT = 1000
-const MAX_LIMIT = 2000
+import { getConfigValue, CFG } from '$lib/server/config.js'
 
 export const GET: RequestHandler = async ({ request, url }) => {
+  const defaultLimit = await getConfigValue(CFG.SYNC_PULL_DEFAULT_LIMIT)
+  const maxLimit = await getConfigValue(CFG.SYNC_PULL_MAX_LIMIT)
+
   // Verify HMAC signature (pull uses same auth as push)
   const bodyText = '' // GET has no body
   const verification = await verifyUploadRequest(request, bodyText)
@@ -19,7 +20,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
   const deviceId = verification.deviceId!
 
   const cursor = url.searchParams.get('cursor')
-  const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit') || String(DEFAULT_LIMIT))), MAX_LIMIT)
+  const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit') || String(defaultLimit))), maxLimit)
 
   // Get current sync generation
   const reset = await sql`SELECT sync_generation FROM cloud_sync_resets WHERE user_id = ${userId}`

@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { requireAdmin } from '$lib/server/auth/session.js'
 import { nanoid } from 'nanoid'
+import { getConfigValue, CFG } from '$lib/server/config.js'
 
 /**
  * POST /api/admin/maintenance/cleanup
@@ -17,24 +18,31 @@ export const POST: RequestHandler = async (event) => {
   const admin = await requireAdmin(event)
   const body = await event.request.json().catch(() => ({}))
 
+  const syncBatchDays = await getConfigValue(CFG.RETENTION_SYNC_BATCH_DAYS)
+  const tombstoneDays = await getConfigValue(CFG.RETENTION_TOMBSTONE_DAYS)
+  const nonceRetentionMinutes = await getConfigValue(CFG.NONCE_RETENTION_MINUTES)
+  const now = new Date()
+
   const results: Record<string, number> = {}
 
-  // 1. Clean expired upload nonces (older than 10 minutes)
+  // 1. Clean expired upload nonces
   const nonceCleanup = await sql`
-    DELETE FROM upload_nonces WHERE created_at < NOW() - INTERVAL '10 minutes'
+    DELETE FROM upload_nonces WHERE created_at < NOW() - ${`${nonceRetentionMinutes} minutes`}::interval
   `
   results.nonces_cleaned = nonceCleanup.count ?? 0
 
-  // 2. Clean stale sync batches (older than 30 days)
+  // 2. Clean stale sync batches
+  const batchCutoff = new Date(now.getTime() - syncBatchDays * 24 * 60 * 60 * 1000)
   const batchCleanup = await sql`
-    DELETE FROM cloud_sync_batches WHERE created_at < NOW() - INTERVAL '30 days'
+    DELETE FROM cloud_sync_batches WHERE created_at < ${batchCutoff}
   `
   results.batches_cleaned = batchCleanup.count ?? 0
 
-  // 3. Physically delete cloud_usage_records that have been tombstoned for > 90 days
+  // 3. Physically delete cloud_usage_records that have been tombstoned
+  const tombstoneCutoff = new Date(now.getTime() - tombstoneDays * 24 * 60 * 60 * 1000)
   const tombstoneCleanup = await sql`
     DELETE FROM cloud_usage_records
-    WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '90 days'
+    WHERE deleted_at IS NOT NULL AND deleted_at < ${tombstoneCutoff}
   `
   results.tombstoned_records_cleaned = tombstoneCleanup.count ?? 0
 

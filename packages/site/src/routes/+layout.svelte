@@ -173,6 +173,11 @@
                 <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
                   {zh ? '上传状态' : 'Upload status'}
                 </a>
+                {#if user.role === 'admin'}
+                  <a href="/admin" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                    {zh ? '管理后台' : 'Admin'}
+                  </a>
+                {/if}
                 <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
                   {zh ? '退出登录' : 'Sign out'}
                 </button>
@@ -228,6 +233,11 @@
               <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
                 {zh ? '上传状态' : 'Upload status'}
               </a>
+              {#if user.role === 'admin'}
+                <a href="/admin" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                  {zh ? '管理后台' : 'Admin'}
+                </a>
+              {/if}
               <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
                 {zh ? '退出登录' : 'Sign out'}
               </button>

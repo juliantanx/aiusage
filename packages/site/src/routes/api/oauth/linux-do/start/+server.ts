@@ -2,19 +2,21 @@ import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { nanoid } from 'nanoid'
 import { env } from '$env/dynamic/private'
+import { getConfigValue, CFG } from '$lib/server/config.js'
 
 export const GET: RequestHandler = async ({ cookies }) => {
   const clientId = env.LINUX_DO_CLIENT_ID
   const authUrl = env.LINUX_DO_AUTHORIZATION_URL
   if (!clientId || !authUrl) return new Response('Linux Do OAuth not configured', { status: 500 })
 
+  const stateMaxAge = await getConfigValue(CFG.OAUTH_STATE_MAX_AGE_SECONDS)
   const state = nanoid(32)
   cookies.set('oauth_state', state, {
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 600
+    maxAge: stateMaxAge
   })
 
   const siteUrl = env.SITE_URL || 'http://localhost:5173'

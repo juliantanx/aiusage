@@ -23,7 +23,11 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<Sess
   `
 
   if (existing[0]) {
-    return existing[0] as SessionUser
+    const user = existing[0] as SessionUser
+    if (profile.email && profile.emailVerified) {
+      await maybeGrantAdmin(user.id, profile.email)
+    }
+    return user
   }
 
   // 2. Try auto-merge by verified email
@@ -39,6 +43,7 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<Sess
         INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile)
         VALUES (${nanoid()}, ${user.id}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)})
       `
+      await maybeGrantAdmin(user.id, profile.email)
       return user
     }
   }

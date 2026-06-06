@@ -29,7 +29,7 @@
   let lbSaving = false
   let activeSection = 'profile'
 
-  const COOLDOWN_DAYS = 30
+  $: COOLDOWN_DAYS = $page.data.usernameCooldownDays ?? 30
 
   $: settingsSections = [
     {

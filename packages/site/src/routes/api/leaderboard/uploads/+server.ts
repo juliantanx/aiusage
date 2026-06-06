@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { MAX_PAYLOAD_SIZE, validatePayload, verifyUploadRequest, processUpload } from '$lib/server/uploads/verify.js'
+import { getMaxPayloadSize, validatePayload, verifyUploadRequest, processUpload } from '$lib/server/uploads/verify.js'
 
 export const POST: RequestHandler = async (event) => {
   const request = event.request
@@ -12,7 +12,8 @@ export const POST: RequestHandler = async (event) => {
 
   // Check payload size
   const bodyText = await request.text()
-  if (bodyText.length > MAX_PAYLOAD_SIZE) {
+  const maxPayloadSize = await getMaxPayloadSize()
+  if (bodyText.length > maxPayloadSize) {
     return json({ error: 'Payload too large', error_code: 'payload_too_large' }, { status: 413 })
   }
 
@@ -24,7 +25,7 @@ export const POST: RequestHandler = async (event) => {
     return json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const validation = validatePayload(body)
+  const validation = await validatePayload(body)
   if (!validation.valid) {
     return json({ error: validation.error, error_code: validation.error_code }, { status: 400 })
   }

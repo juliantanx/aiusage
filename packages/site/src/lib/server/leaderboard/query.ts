@@ -1,4 +1,5 @@
 import { sql } from '../db/pool.js'
+import { getConfigValue, CFG } from '$lib/server/config.js'
 
 export type RankingMetric = 'tokens' | 'cost'
 export type RankingScope = 'all' | 'tool' | 'model' | 'tool_model'
@@ -27,9 +28,6 @@ export interface LeaderboardResponse {
   tool: string | null
   model: string | null
 }
-
-const PAGE_SIZE = 50
-const CACHE_TTL_MS = 60_000 // 60 seconds
 
 // In-memory TTL cache for leaderboard queries (§11.5)
 interface CacheEntry {
@@ -61,6 +59,8 @@ export async function queryLeaderboard(options: {
     return queryRollingLeaderboard(options, 30)
   }
 
+  const pageSize = await getConfigValue(CFG.LEADERBOARD_PAGE_SIZE)
+  const cacheTtlMs = await getConfigValue(CFG.LEADERBOARD_CACHE_TTL_MS)
   const orderExpr = options.metric === 'cost'
     ? sql`lm.total_cost_usd DESC`
     : sql`lm.total_tokens DESC`
@@ -106,11 +106,11 @@ export async function queryLeaderboard(options: {
     FROM ranked
     WHERE rn > ${cursorRank}
     ORDER BY rn ASC
-    LIMIT ${PAGE_SIZE + 1}
+    LIMIT ${pageSize + 1}
   ` as Array<RankingEntry & { rn: string }>
 
-  const hasMore = entries.length > PAGE_SIZE
-  const page = entries.slice(0, PAGE_SIZE)
+  const hasMore = entries.length > pageSize
+  const page = entries.slice(0, pageSize)
   const nextCursor = hasMore && page.length > 0 ? encodeCursor(page[page.length - 1].rn) : null
 
   const currentUser = await getCurrentUserRanking(options)
@@ -129,7 +129,7 @@ export async function queryLeaderboard(options: {
 
   // Cache first-page results
   if (!options.cursor) {
-    cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })
+    cache.set(key, { data: result, expiresAt: Date.now() + cacheTtlMs })
   }
 
   return result
@@ -145,6 +145,8 @@ async function queryRollingLeaderboard(options: {
   cursor: string | null
   currentUserId: string | null
 }, days: number): Promise<LeaderboardResponse> {
+  const pageSize = await getConfigValue(CFG.LEADERBOARD_PAGE_SIZE)
+  const cacheTtlMs = await getConfigValue(CFG.LEADERBOARD_CACHE_TTL_MS)
   const orderExpr = options.metric === 'cost'
     ? sql`a.total_cost_usd DESC`
     : sql`a.total_tokens DESC`
@@ -204,11 +206,11 @@ async function queryRollingLeaderboard(options: {
     FROM ranked
     WHERE rn > ${cursorRank}
     ORDER BY rn ASC
-    LIMIT ${PAGE_SIZE + 1}
+    LIMIT ${pageSize + 1}
   ` as Array<RankingEntry & { rn: string }>
 
-  const hasMore = entries.length > PAGE_SIZE
-  const page = entries.slice(0, PAGE_SIZE)
+  const hasMore = entries.length > pageSize
+  const page = entries.slice(0, pageSize)
   const nextCursor = hasMore && page.length > 0 ? encodeCursor(page[page.length - 1].rn) : null
   const currentUser = await getRollingCurrentUserRanking(options, days)
 
@@ -225,7 +227,7 @@ async function queryRollingLeaderboard(options: {
   }
 
   if (!options.cursor) {
-    cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })
+    cache.set(key, { data: result, expiresAt: Date.now() + cacheTtlMs })
   }
 
   return result

@@ -9,6 +9,8 @@
   let login = ''
   let password = ''
   let error = ''
+  let isBanned = false
+  let banReason = ''
   let loading = false
 
   $: redirectTo = getSafeRedirect($page.url.searchParams.get('redirect'))
@@ -29,6 +31,8 @@
 
   async function handleLogin() {
     error = ''
+    isBanned = false
+    banReason = ''
     loading = true
     try {
       const res = await fetch('/api/auth/login', {
@@ -43,10 +47,12 @@
       if (res.ok) {
         await invalidateAll()
         goto(redirectTo)
+      } else if (data.error === 'user_banned') {
+        error = zh ? '你的账号已被封禁。' : 'Your account has been banned.'
+        isBanned = true
+        banReason = data.ban_reason || ''
       } else {
-        error = data.error === 'user_banned'
-          ? (zh ? '你的账号已被封禁。' : 'Your account has been banned.')
-          : data.error === 'email_not_verified'
+        error = data.error === 'email_not_verified'
             ? (zh ? '请先打开邮箱中的验证链接，再登录。' : 'Please verify your email before signing in.')
           : data.error || (zh ? '登录失败' : 'Login failed')
       }
@@ -73,7 +79,15 @@
     <p class="auth-subtitle">{zh ? '登录后可上传数据并管理个人资料。' : 'Sign in to upload data and manage your profile.'}</p>
 
     {#if error}
-      <div class="error-msg">{error}</div>
+      <div class="error-msg">
+        {error}
+        {#if isBanned}
+          {#if banReason}
+            <div class="ban-detail">{zh ? '原因' : 'Reason'}: {banReason}</div>
+          {/if}
+          <div class="ban-detail">{zh ? '如需申诉，请通过页脚的联系方式联系我们。' : 'To appeal, please contact us via the link in the footer.'}</div>
+        {/if}
+      </div>
     {/if}
     {#if notice}
       <div class:success-msg={verifiedState === '1'} class:error-msg={verifiedState === 'invalid'}>{notice}</div>
@@ -91,6 +105,7 @@
       <button type="submit" class="btn-primary" disabled={loading}>
         {loading ? (zh ? '登录中...' : 'Signing in...') : (zh ? '登录' : 'Sign In')}
       </button>
+      <p class="forgot-link"><a href="/forgot-password">{zh ? '忘记密码？' : 'Forgot password?'}</a></p>
     </form>
 
     {#if oauth.github || oauth.linuxDo}
@@ -124,6 +139,7 @@
   h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
   .auth-subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
   .error-msg { background: oklch(0.55 0.22 25 / 0.08); color: var(--rose); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
+  .ban-detail { margin-top: 0.375rem; font-size: 0.8125rem; }
   .success-msg { background: oklch(0.62 0.14 155 / 0.1); color: oklch(0.42 0.12 155); padding: 0.75rem; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; }
   .field { margin-bottom: 1rem; }
   label { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.375rem; color: var(--text-secondary); }
@@ -132,6 +148,9 @@
   .btn-primary { width: 100%; padding: 0.75rem; font-size: 0.9375rem; font-weight: 600; color: oklch(0.99 0.002 85); background: var(--accent); border: none; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .forgot-link { text-align: right; margin-top: 0.5rem; font-size: 0.8125rem; }
+  .forgot-link a { color: var(--text-muted); text-decoration: none; }
+  .forgot-link a:hover { color: var(--accent); }
   .auth-divider { display: flex; align-items: center; gap: 1rem; margin: 1.5rem 0; color: var(--text-muted); font-size: 0.8125rem; }
   .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-subtle); }
   .oauth-buttons { display: flex; flex-direction: column; gap: 0.75rem; }

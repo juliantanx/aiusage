@@ -439,5 +439,35 @@ const migrations = [
       await tx`CREATE INDEX IF NOT EXISTS idx_email_send_attempts_email ON email_send_attempts(purpose, email_hash, created_at DESC)`
       await tx`CREATE INDEX IF NOT EXISTS idx_email_send_attempts_created ON email_send_attempts(created_at)`
     }
+  },
+  {
+    version: 9,
+    name: 'site_config',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`CREATE TABLE IF NOT EXISTS site_config (
+        key TEXT PRIMARY KEY,
+        value JSONB NOT NULL,
+        description TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_by TEXT REFERENCES users(id)
+      )`
+    }
+  },
+  {
+    version: 11,
+    name: 'password_reset_tokens',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id, consumed_at)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at)`
+    }
   }
 ]

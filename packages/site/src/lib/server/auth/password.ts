@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import { getConfigValue, CFG } from '$lib/server/config.js'
 
 const SALT_ROUNDS = 12
 
@@ -10,9 +11,11 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash)
 }
 
-export function validateUsername(username: string): string | null {
-  if (!username || username.length < 3 || username.length > 32) {
-    return 'Username must be 3-32 characters'
+export async function validateUsername(username: string): Promise<string | null> {
+  const minLen = await getConfigValue(CFG.USERNAME_MIN_LENGTH)
+  const maxLen = await getConfigValue(CFG.USERNAME_MAX_LENGTH)
+  if (!username || username.length < minLen || username.length > maxLen) {
+    return `Username must be ${minLen}-${maxLen} characters`
   }
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
     return 'Username can only contain letters, numbers, underscores, and hyphens'
@@ -27,9 +30,10 @@ export function validateEmail(email: string): string | null {
   return null
 }
 
-export function validatePassword(password: string): string | null {
-  if (!password || password.length < 8) {
-    return 'Password must be at least 8 characters'
+export async function validatePassword(password: string): Promise<string | null> {
+  const minLen = await getConfigValue(CFG.PASSWORD_MIN_LENGTH)
+  if (!password || password.length < minLen) {
+    return `Password must be at least ${minLen} characters`
   }
   return null
 }

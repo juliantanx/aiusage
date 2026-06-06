@@ -16,13 +16,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   const email = String(body.email || '').trim().toLowerCase()
   const password = body.password
 
-  const usernameError = validateUsername(username)
+  const usernameError = await validateUsername(username)
   if (usernameError) return json({ error: usernameError }, { status: 400 })
 
   const emailError = validateEmail(email)
   if (emailError) return json({ error: emailError }, { status: 400 })
 
-  const passwordError = validatePassword(password)
+  const passwordError = await validatePassword(password)
   if (passwordError) return json({ error: passwordError }, { status: 400 })
 
   const ip = getClientAddress()

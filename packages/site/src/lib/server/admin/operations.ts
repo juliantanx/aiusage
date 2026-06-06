@@ -113,6 +113,12 @@ export async function getAdminAuditLogs(limit = 50, offset = 0) {
   `
 }
 
+export async function clearAdminAuditLogs(adminUserId: string): Promise<number> {
+  const result = await sql`DELETE FROM admin_audit_logs RETURNING id`
+  await logAdminAction(adminUserId, 'clear_audit_logs', 'admin_audit_logs', '-', `Cleared ${result.length} logs`)
+  return result.length
+}
+
 async function logAdminAction(adminUserId: string, action: string, targetType: string, targetId: string, reason: string): Promise<void> {
   await sql`
     INSERT INTO admin_audit_logs (id, admin_user_id, action, target_type, target_id, reason)
@@ -122,66 +128,97 @@ async function logAdminAction(adminUserId: string, action: string, targetType: s
 
 // --- Pricing Management ---
 
-export async function seedPriceTable(adminUserId: string, version: string, sourceCommit?: string): Promise<{ tableId: string; entryCount: number }> {
-  const tableId = nanoid()
-  await sql.begin(async (tx) => {
-    await tx`
-      INSERT INTO official_price_tables (id, version, status, source, source_commit, notes, created_by)
-      VALUES (${tableId}, ${version}, 'draft', 'core_pricing', ${sourceCommit || null}, ${'Seeded from packages/core/src/pricing.ts'}, ${adminUserId})
-    `
+/** Get or create the single active price table, return its id */
+async function ensurePriceTable(adminUserId: string): Promise<string> {
+  const existing = await sql`SELECT id FROM official_price_tables WHERE status = 'published' LIMIT 1`
+  if (existing.length > 0) return (existing[0] as { id: string }).id
 
+  const tableId = nanoid()
+  await sql`
+    INSERT INTO official_price_tables (id, version, status, source, created_by, published_by, published_at)
+    VALUES (${tableId}, 'default', 'published', 'core_pricing', ${adminUserId}, ${adminUserId}, NOW())
+  `
+  return tableId
+}
+
+/** Sync all entries from core DEFAULT_PRICE_TABLE into the active table. Upserts by model_key. */
+export async function syncPricingFromCore(adminUserId: string): Promise<{ added: number; updated: number }> {
+  const tableId = await ensurePriceTable(adminUserId)
+  let added = 0, updated = 0
+
+  await sql.begin(async (tx) => {
     for (const [modelKey, entry] of Object.entries(DEFAULT_PRICE_TABLE)) {
-      await tx`
-        INSERT INTO official_price_entries (id, table_id, model_key, input, output, cache_read, cache_write, currency)
-        VALUES (${nanoid()}, ${tableId}, ${modelKey}, ${entry.input}, ${entry.output}, ${entry.cacheRead ?? null}, ${entry.cacheWrite ?? null}, ${entry.currency ?? 'USD'})
-      `
+      const existing = await tx`SELECT id FROM official_price_entries WHERE table_id = ${tableId} AND model_key = ${modelKey}`
+      if (existing.length > 0) {
+        await tx`
+          UPDATE official_price_entries
+          SET input = ${entry.input}, output = ${entry.output}, cache_read = ${entry.cacheRead ?? null}, cache_write = ${entry.cacheWrite ?? null}, currency = ${entry.currency ?? 'USD'}
+          WHERE table_id = ${tableId} AND model_key = ${modelKey}
+        `
+        updated++
+      } else {
+        await tx`
+          INSERT INTO official_price_entries (id, table_id, model_key, input, output, cache_read, cache_write, currency)
+          VALUES (${nanoid()}, ${tableId}, ${modelKey}, ${entry.input}, ${entry.output}, ${entry.cacheRead ?? null}, ${entry.cacheWrite ?? null}, ${entry.currency ?? 'USD'})
+        `
+        added++
+      }
     }
   })
 
-  await logAdminAction(adminUserId, 'seed_price_table', 'official_price_tables', tableId, `Seeded v${version} from core pricing`)
-  return { tableId, entryCount: Object.keys(DEFAULT_PRICE_TABLE).length }
+  await logAdminAction(adminUserId, 'sync_pricing', 'official_price_tables', tableId, `Synced from core: ${added} added, ${updated} updated`)
+  return { added, updated }
 }
 
-export async function publishPriceTable(adminUserId: string, tableId: string, note?: string): Promise<void> {
-  const tables = await sql`SELECT id, status, version FROM official_price_tables WHERE id = ${tableId}`
-  const table = tables[0] as { id: string; status: string; version: string } | undefined
-  if (!table) throw new Error('Price table not found')
-  if (table.status !== 'draft') throw new Error('Only draft tables can be published')
+export async function getPriceEntries(adminUserId: string) {
+  const tableId = await ensurePriceTable(adminUserId)
+  const entries = await sql`
+    SELECT e.*, COALESCE(u.usage_count, 0)::INTEGER AS usage_count
+    FROM official_price_entries e
+    LEFT JOIN (
+      SELECT model, COUNT(*)::INTEGER AS usage_count
+      FROM cloud_usage_records
+      GROUP BY model
+    ) u ON u.model = e.model_key
+    WHERE e.table_id = ${tableId}
+    ORDER BY COALESCE(u.usage_count, 0) DESC, e.model_key ASC
+  `
+  return { tableId, entries }
+}
 
+export async function updatePriceEntries(
+  adminUserId: string,
+  updates: Array<{ id: string; input: number; output: number; cache_read: number | null; cache_write: number | null }>
+): Promise<void> {
+  const tableId = await ensurePriceTable(adminUserId)
   await sql.begin(async (tx) => {
-    // Archive the current published table
-    await tx`UPDATE official_price_tables SET status = 'archived', archived_at = NOW() WHERE status = 'published'`
-    // Publish this one
-    await tx`UPDATE official_price_tables SET status = 'published', published_by = ${adminUserId}, published_at = NOW() WHERE id = ${tableId}`
+    for (const u of updates) {
+      await tx`
+        UPDATE official_price_entries
+        SET input = ${u.input}, output = ${u.output}, cache_read = ${u.cache_read}, cache_write = ${u.cache_write}
+        WHERE id = ${u.id} AND table_id = ${tableId}
+      `
+    }
   })
-
-  await logAdminAction(adminUserId, 'publish_price_table', 'official_price_tables', tableId, note || `Published v${table.version}`)
+  await logAdminAction(adminUserId, 'update_price_entries', 'official_price_tables', tableId, `Updated ${updates.length} entries`)
 }
 
-export async function archivePriceTable(adminUserId: string, tableId: string): Promise<void> {
-  const tables = await sql`SELECT id, status FROM official_price_tables WHERE id = ${tableId}`
-  const table = tables[0] as { id: string; status: string } | undefined
-  if (!table) throw new Error('Price table not found')
-  if (table.status === 'archived') throw new Error('Already archived')
-
-  await sql`UPDATE official_price_tables SET status = 'archived', archived_at = NOW() WHERE id = ${tableId}`
-  await logAdminAction(adminUserId, 'archive_price_table', 'official_price_tables', tableId, 'Table archived')
-}
-
-export async function getPriceTables(limit = 50, offset = 0) {
-  return sql`
-    SELECT pt.*,
-      (SELECT COUNT(*) FROM official_price_entries WHERE table_id = pt.id) as entry_count
-    FROM official_price_tables pt
-    ORDER BY pt.created_at DESC
-    LIMIT ${limit} OFFSET ${offset}
+export async function addPriceEntry(
+  adminUserId: string,
+  entry: { model_key: string; input: number; output: number; cache_read: number | null; cache_write: number | null; currency: string }
+): Promise<string> {
+  const tableId = await ensurePriceTable(adminUserId)
+  const id = nanoid()
+  await sql`
+    INSERT INTO official_price_entries (id, table_id, model_key, input, output, cache_read, cache_write, currency)
+    VALUES (${id}, ${tableId}, ${entry.model_key}, ${entry.input}, ${entry.output}, ${entry.cache_read}, ${entry.cache_write}, ${entry.currency})
   `
+  await logAdminAction(adminUserId, 'add_price_entry', 'official_price_tables', tableId, `Added model ${entry.model_key}`)
+  return id
 }
 
-export async function getPriceTableEntries(tableId: string) {
-  return sql`
-    SELECT * FROM official_price_entries
-    WHERE table_id = ${tableId}
-    ORDER BY model_key ASC
-  `
+export async function deletePriceEntry(adminUserId: string, entryId: string, modelKey: string): Promise<void> {
+  const tableId = await ensurePriceTable(adminUserId)
+  await sql`DELETE FROM official_price_entries WHERE id = ${entryId} AND table_id = ${tableId}`
+  await logAdminAction(adminUserId, 'delete_price_entry', 'official_price_tables', tableId, `Deleted model ${modelKey}`)
 }

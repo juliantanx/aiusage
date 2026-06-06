@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { fetchGitHubProfile, findOrCreateOAuthUser, bindOAuthIdentity } from '$lib/server/oauth/providers.js'
-import { createSession, getSessionUser } from '$lib/server/auth/session.js'
+import { createSession, getSessionUser, setSessionCookie } from '$lib/server/auth/session.js'
 import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
@@ -42,13 +42,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
   const user = await findOrCreateOAuthUser(profile)
   const sid = await createSession(user.id)
-  cookies.set('ai_session', sid, {
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 604800
-  })
+  await setSessionCookie(cookies, sid)
 
   throw redirect(302, '/leaderboard')
 }

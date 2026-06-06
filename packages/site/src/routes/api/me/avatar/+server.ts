@@ -3,16 +3,18 @@ import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { requireUser } from '$lib/server/auth/session.js'
 import { uploadFile, deleteFile, extractKeyFromUrl } from '$lib/server/storage/r2.js'
+import { getConfigValue, CFG } from '$lib/server/config.js'
 import sharp from 'sharp'
 import { nanoid } from 'nanoid'
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB raw upload limit
-const AVATAR_SIZE = 256 // output 256x256
-const AVATAR_QUALITY = 80
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 export const POST: RequestHandler = async (event) => {
   const user = await requireUser(event)
+
+  const maxSize = await getConfigValue(CFG.AVATAR_MAX_FILE_SIZE)
+  const avatarSize = await getConfigValue(CFG.AVATAR_OUTPUT_SIZE)
+  const avatarQuality = await getConfigValue(CFG.AVATAR_QUALITY)
 
   const contentType = event.request.headers.get('content-type') || ''
   if (!contentType.includes('multipart/form-data')) {
@@ -26,7 +28,7 @@ export const POST: RequestHandler = async (event) => {
     return json({ error: 'No avatar file provided' }, { status: 400 })
   }
 
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.size > maxSize) {
     return json({ error: 'File too large (max 5MB)' }, { status: 400 })
   }
 
@@ -38,8 +40,8 @@ export const POST: RequestHandler = async (event) => {
 
   // Resize and compress to WebP
   const processed = await sharp(buffer)
-    .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'cover', position: 'centre' })
-    .webp({ quality: AVATAR_QUALITY })
+    .resize(avatarSize, avatarSize, { fit: 'cover', position: 'centre' })
+    .webp({ quality: avatarQuality })
     .toBuffer()
 
   // Delete old avatar from R2 if exists
