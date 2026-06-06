@@ -9,9 +9,7 @@
 一站式追踪 **22 款 AI 编程工具**的 token 用量、费用和会话。本地使用无需注册，无遥测，无需上云。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/dashboard-home.png" alt="aiusage 仪表盘首页" width="32%" />
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/overview.png" alt="aiusage 概览仪表盘" width="32%" />
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/a527444cf87a9c1e92f1440282ed4e94f744b910/packages/site/static/screenshots/sessions.png" alt="aiusage 会话仪表盘" width="32%" />
+  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/main/packages/site/static/screenshots/aiusage-demo.gif" alt="aiusage 仪表盘演示" width="92%" />
 </p>
 
 ## 快速开始

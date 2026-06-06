@@ -10,7 +10,7 @@
 - **今日 token 用量** — 总 token 数及输入/输出明细。
 - **月度总量** — 当月累计 token 数。
 - **热门模型** — 今日使用最多的模型及其占比。
-- **仪表盘启动** — 一键打开完整的 aiusage Web 仪表盘。
+- **仪表盘启动** — 从托盘菜单打开完整的 aiusage Web 仪表盘。
 - **自动刷新** — 每 60 秒自动更新数据。
 - **跨平台** — 支持 Windows、macOS 和 Linux。
 
@@ -57,7 +57,8 @@ PM2 支持 Windows、macOS 和 Linux。
 
 **面板操作：**
 
-- 点击 **Open Full Dashboard** 可启动 `aiusage serve` 并在浏览器中打开 Web 仪表盘。
+- 点击面板右上角的刷新图标，可立即重新读取本地用量数据。
+- 在托盘右键菜单中点击 **Open Dashboard**，可按需启动 `aiusage serve` 并在浏览器中打开 Web 仪表盘。
 
 ## 从源码构建
 

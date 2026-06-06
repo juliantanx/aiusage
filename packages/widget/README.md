@@ -10,7 +10,7 @@ English | [中文](./README_zh.md)
 - **Today's token usage** — total tokens with input/output breakdown.
 - **Monthly totals** — rolling token count for the current month.
 - **Top model** — your most-used model today and its share.
-- **Dashboard launcher** — one click to open the full aiusage web dashboard.
+- **Dashboard launcher** — open the full aiusage web dashboard from the tray menu.
 - **Auto-refresh** — updates every 60 seconds automatically.
 - **Cross-platform** — Windows, macOS, and Linux.
 
@@ -57,7 +57,8 @@ PM2 works on Windows, macOS, and Linux.
 
 **Panel actions:**
 
-- Click **Open Full Dashboard** to launch `aiusage serve` and open the web dashboard in your browser.
+- Click the refresh icon in the panel header to reload local usage data immediately.
+- Use **Open Dashboard** in the tray context menu to launch `aiusage serve` if needed and open the web dashboard in your browser.
 
 ## Build from Source
 
