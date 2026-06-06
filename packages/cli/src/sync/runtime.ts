@@ -38,6 +38,7 @@ export interface SyncStatusSnapshot {
   lastSyncUploaded?: number
   lastSyncPulled?: number
   lastSyncDurationMs?: number
+  nextSyncAt?: number
 }
 
 export interface SyncStartResult {
@@ -55,6 +56,7 @@ export class SyncRuntimeController {
   private readonly runSyncFn: SyncRuntimeOptions['runSync']
   private readonly getPersistedState: SyncRuntimeOptions['getPersistedState']
   private current: SyncRuntimeStatus = { isRunning: false }
+  private _nextSyncAt?: number
 
   constructor(options: SyncRuntimeOptions) {
     this.runSyncFn = options.runSync
@@ -87,6 +89,10 @@ export class SyncRuntimeController {
     }
   }
 
+  setNextSyncAt(ts: number | undefined): void {
+    this._nextSyncAt = ts
+  }
+
   getStatus(): SyncStatusSnapshot {
     const persisted = this.getPersistedState()
     return {
@@ -98,6 +104,7 @@ export class SyncRuntimeController {
       lastSyncUploaded: persisted?.lastSyncUploaded,
       lastSyncPulled: persisted?.lastSyncPulled,
       lastSyncDurationMs: persisted?.lastSyncDurationMs,
+      nextSyncAt: this._nextSyncAt,
     }
   }
 

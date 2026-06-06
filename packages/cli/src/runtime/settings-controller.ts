@@ -8,6 +8,7 @@ export interface RuntimeSettingsControllerOptions {
   runCleanup: (db: Database.Database, retentionDays: number) => unknown
   runLeaderboardUpload?: (db: Database.Database) => Promise<unknown>
   runSync?: () => void
+  onSyncScheduleChanged?: (nextSyncAt: number | undefined) => void
   cleanupIntervalMs?: number
 }
 
@@ -21,6 +22,7 @@ export class RuntimeSettingsController {
   private readonly runCleanupFn: RuntimeSettingsControllerOptions['runCleanup']
   private readonly runLeaderboardUploadFn: RuntimeSettingsControllerOptions['runLeaderboardUpload']
   private readonly runSyncFn: RuntimeSettingsControllerOptions['runSync']
+  private readonly onSyncScheduleChangedFn: RuntimeSettingsControllerOptions['onSyncScheduleChanged']
   private readonly cleanupIntervalMs: number
   private parseTimer: ReturnType<typeof setInterval> | null = null
   private cleanupTimer: ReturnType<typeof setInterval> | null = null
@@ -37,6 +39,7 @@ export class RuntimeSettingsController {
     this.runCleanupFn = options.runCleanup
     this.runLeaderboardUploadFn = options.runLeaderboardUpload
     this.runSyncFn = options.runSync
+    this.onSyncScheduleChangedFn = options.onSyncScheduleChanged
     this.cleanupIntervalMs = options.cleanupIntervalMs ?? DEFAULT_CLEANUP_INTERVAL_MS
   }
 
@@ -103,9 +106,16 @@ export class RuntimeSettingsController {
 
     const syncInterval = Number(config?.syncInterval ?? 0)
     if (syncInterval > 0 && config?.sync?.backend && this.runSyncFn) {
+      const updateNextSyncAt = () => {
+        this.onSyncScheduleChangedFn?.(Date.now() + syncInterval)
+      }
+      updateNextSyncAt()
       this.syncTimer = setInterval(() => {
         this.runSyncFn!()
+        updateNextSyncAt()
       }, syncInterval)
+    } else {
+      this.onSyncScheduleChangedFn?.(undefined)
     }
   }
 

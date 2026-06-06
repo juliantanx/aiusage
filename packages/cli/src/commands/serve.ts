@@ -74,6 +74,7 @@ export function serve(options: ServeOptions): void {
     runCleanup: cleanOldData,
     runLeaderboardUpload: (db) => uploadLeaderboardData(db, getState(AIUSAGE_DIR)?.deviceInstanceId).then(() => undefined),
     runSync: () => syncRuntime.start(),
+    onSyncScheduleChanged: (ts) => syncRuntime.setNextSyncAt(ts),
   })
   runtimeSettings.start()
 

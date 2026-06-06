@@ -296,6 +296,7 @@
 
       syncSaved = true
       setTimeout(() => { syncSaved = false }, 2000)
+      await loadSyncStatusData()
     } catch (e) {
       syncError = e instanceof Error ? e.message : 'Save failed'
     } finally {
@@ -632,25 +633,30 @@
         {/if}
         {#if syncData.backend}
           <div class="field full">
-            <label class="field-label auto-sync-row">
-              <input type="checkbox" bind:checked={autoSyncEnabled} class="toggle-checkbox" />
-              <span>{$t('settings.autoSync')}</span>
-            </label>
-            {#if autoSyncEnabled}
-              <div class="auto-sync-freq">
-                <label class="field-label" for="field-sync-interval">{$t('settings.syncFrequency')}</label>
-                <select id="field-sync-interval" bind:value={syncIntervalMinutes} class="field-input freq-select">
-                  <option value="5">5 {$t('settings.syncMinutes')}</option>
-                  <option value="15">15 {$t('settings.syncMinutes')}</option>
-                  <option value="30">30 {$t('settings.syncMinutes')}</option>
-                  <option value="60">1 {$t('settings.syncHour')}</option>
-                  <option value="120">2 {$t('settings.syncHours')}</option>
-                  <option value="360">6 {$t('settings.syncHours')}</option>
-                  <option value="720">12 {$t('settings.syncHours')}</option>
-                  <option value="1440">24 {$t('settings.syncHours')}</option>
-                </select>
-              </div>
-            {/if}
+            <div class="auto-sync-toggle-row">
+              <label class="toggle-row">
+                <input type="checkbox" bind:checked={autoSyncEnabled} />
+                <span class="switch" aria-hidden="true"></span>
+                <span>
+                  <strong>{$t('settings.autoSync')}</strong>
+                </span>
+              </label>
+              {#if autoSyncEnabled}
+                <label class="interval-control">
+                  <span>{$t('settings.syncFrequency')}</span>
+                  <select bind:value={syncIntervalMinutes}>
+                    <option value="5">5 {$t('settings.syncMinutes')}</option>
+                    <option value="15">15 {$t('settings.syncMinutes')}</option>
+                    <option value="30">30 {$t('settings.syncMinutes')}</option>
+                    <option value="60">1 {$t('settings.syncHour')}</option>
+                    <option value="120">2 {$t('settings.syncHours')}</option>
+                    <option value="360">6 {$t('settings.syncHours')}</option>
+                    <option value="720">12 {$t('settings.syncHours')}</option>
+                    <option value="1440">24 {$t('settings.syncHours')}</option>
+                  </select>
+                </label>
+              {/if}
+            </div>
           </div>
         {/if}
       </div>
@@ -669,6 +675,12 @@
               <span class="sync-status-label">{$t('settings.syncLastSync')}</span>
               <span class="sync-status-value mono">{formatSyncTime(syncStatusData?.lastSyncAt)}</span>
             </div>
+            {#if syncStatusData?.nextSyncAt}
+              <div class="sync-status-item">
+                <span class="sync-status-label">{$t('settings.syncNextSync')}</span>
+                <span class="sync-status-value mono">{formatSyncTime(syncStatusData.nextSyncAt)}</span>
+              </div>
+            {/if}
             <div class="sync-status-item">
               <span class="sync-status-label">{$t('settings.syncStatusLabel')}</span>
               <span class="sync-status-value" class:ok={syncStatusData?.lastSyncStatus === 'ok'} class:err={syncStatusData?.lastSyncStatus === 'failed'}>
@@ -924,38 +936,91 @@
     margin-left: 0.25rem;
   }
 
-  .auto-sync-row {
+  .auto-sync-toggle-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    text-transform: none;
-    letter-spacing: normal;
-    font-weight: 500;
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
+    justify-content: space-between;
+    gap: 1rem;
   }
 
-  .toggle-checkbox {
+  .toggle-row {
+    display: flex;
+    gap: 0.625rem;
+    align-items: center;
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .toggle-row input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .switch {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    border: 1px solid var(--border-medium);
+    border-radius: 999px;
+    background: var(--raised);
+    transition: background 160ms ease, border-color 160ms ease;
+    flex-shrink: 0;
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
     width: 14px;
     height: 14px;
-    accent-color: var(--accent);
-    cursor: pointer;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: transform 160ms ease, background 160ms ease;
   }
 
-  .auto-sync-freq {
-    display: flex;
-    align-items: center;
+  .toggle-row input:checked + .switch {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .toggle-row input:checked + .switch::after {
+    background: oklch(0.99 0.002 175);
+    transform: translateX(14px);
+  }
+
+  .toggle-row input:focus-visible + .switch {
+    outline: 2px solid color-mix(in oklab, var(--accent) 40%, transparent);
+    outline-offset: 2px;
+  }
+
+  .toggle-row strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.8125rem;
+  }
+
+  .interval-control {
+    display: inline-flex;
     gap: 0.5rem;
-    margin-top: 0.375rem;
-  }
-
-  .auto-sync-freq .field-label {
+    align-items: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
     white-space: nowrap;
+    flex-shrink: 0;
   }
 
-  .freq-select {
-    max-width: 160px;
+  .interval-control select {
+    min-height: 32px;
+    padding: 0 1.875rem 0 0.625rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
   }
 
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
