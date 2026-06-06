@@ -43,6 +43,40 @@ describe('API Client', () => {
     await expect(fetchSummary({ range: 'invalid' as any })).rejects.toThrow()
   })
 
+  it('fetches dashboard auth status', async () => {
+    const mockData = { enabled: true, authenticated: false }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockData),
+    })
+
+    const { fetchAuthStatus } = await import('../src/lib/api.js')
+    const result = await fetchAuthStatus()
+
+    expect(result).toEqual(mockData)
+    expect(mockFetch).toHaveBeenCalledWith('/api/auth/status')
+  })
+
+  it('logs in with dashboard password', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    })
+
+    const { login } = await import('../src/lib/api.js')
+    const result = await login('secret')
+
+    expect(result).toEqual({ ok: true })
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret' }),
+      })
+    )
+  })
+
   it('saves config via PUT', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

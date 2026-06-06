@@ -176,6 +176,23 @@ export async function fetchQuotas() {
   return apiFetch('/api/quotas')
 }
 
+export async function fetchAuthStatus() {
+  return apiFetch('/api/auth/status')
+}
+
+export async function login(password) {
+  const response = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
 export async function fetchLeaderboard(baseUrl, params = {}) {
   const data = await apiFetch(buildUrl('/api/leaderboard', {
     period_type: params.period_type,

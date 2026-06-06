@@ -3,8 +3,9 @@
   import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
-  import { triggerSync, fetchSyncStatus, fetchConfig } from '$lib/api.js'
+  import { triggerSync, fetchSyncStatus, fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
+  import { getAuthShellState } from '$lib/auth-shell.js'
   import {
     House, LayoutDashboard, Coins, DollarSign, Box,
     MessageSquare, FolderKanban, Wrench,
@@ -60,6 +61,53 @@
   let syncing = false
   let syncResult = ''
   let syncPollTimer = null
+  let authLoading = true
+  let authEnabled = false
+  let authenticated = false
+  let password = ''
+  let authError = ''
+  let authSubmitting = false
+  let unlockOpen = false
+
+  $: isHomeRoute = $page.url.pathname === '/'
+  $: shellState = getAuthShellState({
+    pathname: $page.url.pathname,
+    authEnabled,
+    authenticated,
+    authLoading,
+  })
+  $: shouldShowLogin = shellState === 'login-page'
+  $: shouldShowPublicHome = shellState === 'public-home'
+
+  async function loadAuthStatus() {
+    try {
+      const status = await fetchAuthStatus()
+      authEnabled = Boolean(status.enabled)
+      authenticated = Boolean(status.authenticated)
+    } catch {
+      authEnabled = false
+      authenticated = false
+    } finally {
+      authLoading = false
+    }
+  }
+
+  async function handleLogin() {
+    authError = ''
+    authSubmitting = true
+    try {
+      await login(password)
+      authenticated = true
+      password = ''
+      unlockOpen = false
+      loadSyncStatus()
+      fetchConfig().then(applyConfig).catch(() => {})
+    } catch (err) {
+      authError = err instanceof Error ? err.message : 'Login failed'
+    } finally {
+      authSubmitting = false
+    }
+  }
 
   async function loadSyncStatus() {
     try {
@@ -126,15 +174,30 @@
     mobileOpen = !mobileOpen
   }
 
+  function openUnlock() {
+    if (authLoading) return
+    unlockOpen = true
+    authError = ''
+  }
+
+  function closeUnlock() {
+    unlockOpen = false
+    authError = ''
+    password = ''
+  }
+
+  function applyConfig(cfg) {
+    if (cfg.displayCurrency) displayCurrency.set(cfg.displayCurrency)
+    if (cfg.exchangeRateCache?.CNY_USD) exchangeRate.set(cfg.exchangeRateCache.CNY_USD)
+    if (cfg.exchangeRate) exchangeRate.set(cfg.exchangeRate)
+  }
+
   onMount(() => {
     initTheme()
+    loadAuthStatus()
     loadSyncStatus()
     // Initialize currency stores from config
-    fetchConfig().then(cfg => {
-      if (cfg.displayCurrency) displayCurrency.set(cfg.displayCurrency)
-      if (cfg.exchangeRateCache?.CNY_USD) exchangeRate.set(cfg.exchangeRateCache.CNY_USD)
-      if (cfg.exchangeRate) exchangeRate.set(cfg.exchangeRate)  // manual override takes precedence
-    }).catch(() => {})
+    fetchConfig().then(applyConfig).catch(() => {})
     if (typeof window !== 'undefined') {
       collapsed = localStorage.getItem(SIDEBAR_KEY) === 'true'
     }
@@ -147,12 +210,111 @@
   $: $page, mobileOpen = false
 </script>
 
-{#if mobileOpen}
+{#if mobileOpen && shellState === 'shell'}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="mobile-backdrop" on:click={toggleMobile}></div>
 {/if}
 
+{#if shouldShowLogin}
+  <main class="auth-page">
+    <section class="auth-card">
+      <a href="/" class="brand auth-brand">
+        <svg class="brand-logo" width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
+        <span class="brand-name">AIUsage</span>
+      </a>
+      <h1>Dashboard locked</h1>
+      <p>Enter the dashboard password to view this page.</p>
+      <form on:submit|preventDefault={handleLogin}>
+        <!-- svelte-ignore a11y-autofocus -->
+        <input
+          type="password"
+          bind:value={password}
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus
+        />
+        <button type="submit" disabled={authSubmitting || !password}>
+          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+        </button>
+      </form>
+      {#if authError}
+        <div class="auth-error">{authError}</div>
+      {/if}
+      <a class="auth-home" href="/">Back to public home</a>
+    </section>
+  </main>
+{:else if shellState === 'loading'}
+  <main class="auth-page">
+    <section class="auth-card">
+      <div class="auth-loading">Checking access...</div>
+    </section>
+  </main>
+{:else if shouldShowPublicHome}
+  <div class="public-shell">
+    <header class="public-header">
+      <button class="public-unlock" type="button" on:click={openUnlock} aria-label="Unlock dashboard">
+        <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
+        <span>AIUsage</span>
+      </button>
+      <button class="public-lang" type="button" on:click={toggleLang} title={$lang === 'en' ? '中文' : 'EN'}>
+        {$lang === 'en' ? '中' : 'EN'}
+      </button>
+    </header>
+
+    <main class="public-page-content">
+      <div class="public-page-inner">
+        <slot />
+      </div>
+    </main>
+  </div>
+
+  {#if unlockOpen}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="auth-modal-backdrop" on:click={closeUnlock}></div>
+    <section class="auth-card auth-modal" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
+      <button class="auth-close" type="button" on:click={closeUnlock} aria-label="Close">×</button>
+      <div class="brand auth-brand">
+        <svg class="brand-logo" width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="64" height="64" rx="14" fill="currentColor"/>
+          <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
+          <rect x="26" y="26" width="12" height="28" rx="3" fill="white"/>
+          <rect x="42" y="14" width="12" height="40" rx="3" fill="white"/>
+        </svg>
+        <span class="brand-name">AIUsage</span>
+      </div>
+      <h1 id="unlock-title">Unlock dashboard</h1>
+      <p>Enter the dashboard password to show navigation and protected pages.</p>
+      <form on:submit|preventDefault={handleLogin}>
+        <!-- svelte-ignore a11y-autofocus -->
+        <input
+          type="password"
+          bind:value={password}
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus
+        />
+        <button type="submit" disabled={authSubmitting || !password}>
+          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+        </button>
+      </form>
+      {#if authError}
+        <div class="auth-error">{authError}</div>
+      {/if}
+    </section>
+  {/if}
+{:else}
 <div class="app" class:collapsed>
 
   <aside class="sidebar" class:open={mobileOpen}>
@@ -274,6 +436,7 @@
   </div>
 
 </div>
+{/if}
 
 <style>
   /* ── Reset & base ─────────────────────────────────────────────────────── */
@@ -383,6 +546,229 @@
   .app {
     display: flex;
     min-height: 100vh;
+  }
+
+  .public-shell {
+    min-height: 100vh;
+    padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 2.5rem;
+  }
+
+  .public-header {
+    max-width: 1180px;
+    margin: 0 auto 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .public-page-content {
+    min-height: calc(100vh - 5.25rem);
+  }
+
+  .public-page-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .public-unlock {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 0.85rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .public-unlock:hover {
+    border-color: var(--border-medium);
+    color: var(--accent);
+  }
+
+  .public-lang {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-sm);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .public-lang:hover {
+    border-color: var(--border-medium);
+    color: var(--accent);
+  }
+
+  .auth-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: var(--overlay);
+    backdrop-filter: blur(8px);
+  }
+
+  .auth-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 510;
+    transform: translate(-50%, -50%);
+  }
+
+  .auth-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--raised);
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .auth-close:hover {
+    color: var(--text);
+    border-color: var(--border-medium);
+  }
+
+  .auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    background:
+      radial-gradient(circle at top left, var(--accent-dim), transparent 30rem),
+      var(--bg);
+  }
+
+  .auth-card {
+    width: min(100%, 380px);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem;
+  }
+
+  .auth-brand {
+    width: fit-content;
+    padding: 0;
+    margin-bottom: 1.25rem;
+  }
+
+  .auth-card h1 {
+    font-size: 1.45rem;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.35rem;
+  }
+
+  .auth-card p {
+    color: var(--text-secondary);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .auth-card form {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .auth-card input {
+    width: 100%;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border-medium);
+    background: var(--raised);
+    color: var(--text);
+    padding: 0 0.9rem;
+    font: inherit;
+    outline: none;
+  }
+
+  .auth-card input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .auth-card button {
+    height: 2.75rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: var(--accent);
+    color: white;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .auth-card button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .auth-card .auth-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--raised);
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .auth-card .auth-close:hover {
+    color: var(--text);
+    border-color: var(--border-medium);
+  }
+
+  .auth-error {
+    margin-top: 0.9rem;
+    color: var(--rose);
+    font-size: 0.9rem;
+  }
+
+  .auth-home {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .auth-home:hover {
+    color: var(--accent);
+  }
+
+  .auth-loading {
+    color: var(--text-secondary);
   }
 
   /* ── Sidebar ──────────────────────────────────────────────────────────── */
@@ -784,6 +1170,22 @@
     }
     .page-content {
       padding: 1.25rem 1rem;
+    }
+    .public-shell {
+      padding: 1rem 0.875rem 1.5rem;
+    }
+    .public-header {
+      margin-bottom: 1rem;
+    }
+    .public-unlock {
+      height: 2.25rem;
+      padding: 0 0.75rem;
+      font-size: 0.8125rem;
+    }
+    .public-lang {
+      min-width: 2.25rem;
+      height: 2.25rem;
+      padding: 0 0.625rem;
     }
 
     /* Global mobile font size minimums */

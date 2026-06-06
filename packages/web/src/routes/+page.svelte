@@ -894,7 +894,16 @@
     .counter-sub { gap: 1rem; }
     .stats-strip { flex-direction: column; }
     .stat-block:not(:last-child) { border-right: none; border-bottom: 1px solid var(--border-subtle); }
-    .top-bar { flex-wrap: wrap; gap: 0.5rem; }
-    .clock-block { margin-left: 0; }
+    .top-bar {
+      display: grid;
+      grid-template-columns: auto auto 1fr auto;
+      gap: 0.5rem;
+    }
+    .clock-block {
+      margin-left: 0;
+      align-items: flex-end;
+      justify-self: end;
+    }
+    .cfg-btn { justify-self: end; }
   }
 </style>
