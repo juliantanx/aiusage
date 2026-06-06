@@ -376,7 +376,12 @@
     color: var(--text);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     transition: background 0.2s ease, color 0.2s ease;
+  }
+  :global(:root[data-theme="dark"] body) {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
   }
 
   /* ── Light theme (default) ────────────────────────────────────────────── */
@@ -425,43 +430,43 @@
 
   /* ── Dark theme ───────────────────────────────────────────────────────── */
   :global(:root[data-theme="dark"]) {
-    --bg:               oklch(0.15 0.01 175);
-    --surface:          oklch(0.18 0.012 175);
-    --raised:           oklch(0.22 0.014 175);
-    --hover:            oklch(0.26 0.016 175);
-    --sidebar-bg:       oklch(0.14 0.01 175);
-    --border-subtle:    oklch(0.25 0.014 175);
-    --border-medium:    oklch(0.32 0.016 175);
-    --text:             oklch(0.9 0.008 175);
-    --text-secondary:   oklch(0.65 0.015 175);
-    --text-muted:       oklch(0.45 0.014 175);
-    --accent:           oklch(0.7 0.12 175);
-    --accent-dim:       oklch(0.7 0.12 175 / 0.12);
-    --accent-hover:     oklch(0.75 0.11 175);
-    --green:            oklch(0.72 0.16 155);
-    --green-dim:        oklch(0.72 0.16 155 / 0.12);
-    --blue:             oklch(0.68 0.14 250);
-    --blue-dim:         oklch(0.68 0.14 250 / 0.12);
-    --purple:           oklch(0.7 0.14 300);
-    --purple-dim:       oklch(0.7 0.14 300 / 0.12);
-    --rose:             oklch(0.68 0.18 25);
-    --rose-dim:         oklch(0.68 0.18 25 / 0.12);
-    --badge-override-bg: oklch(0.7 0.12 175 / 0.15);
-    --badge-override-fg: oklch(0.7 0.12 175);
-    --badge-matched-bg:  oklch(0.72 0.16 155 / 0.15);
-    --badge-matched-fg:  oklch(0.72 0.16 155);
-    --badge-noprice-bg:  oklch(0.68 0.18 25 / 0.12);
-    --badge-noprice-fg:  oklch(0.68 0.18 25);
-    --shadow-sm:        0 1px 2px oklch(0 0 0 / 0.2);
-    --shadow-md:        0 1px 3px oklch(0 0 0 / 0.3), 0 4px 12px oklch(0 0 0 / 0.15);
-    --shadow-lg:        0 4px 8px oklch(0 0 0 / 0.3), 0 12px 32px oklch(0 0 0 / 0.2);
-    --overlay:          oklch(0 0 0 / 0.5);
-    --chart-input:      oklch(0.72 0.13 175);
-    --chart-output:     oklch(0.68 0.14 250);
-    --chart-cache-read: oklch(0.75 0.09 65);
-    --chart-cache-write: oklch(0.72 0.11 310);
-    --chart-thinking:   oklch(0.7 0.17 20);
-    --chart-total:      oklch(0.7 0.12 175);
+    --bg:               oklch(0.13 0.008 175);
+    --surface:          oklch(0.19 0.01 175);
+    --raised:           oklch(0.25 0.012 175);
+    --hover:            oklch(0.28 0.014 175);
+    --sidebar-bg:       oklch(0.11 0.006 175);
+    --border-subtle:    oklch(0.30 0.012 175);
+    --border-medium:    oklch(0.38 0.014 175);
+    --text:             oklch(0.95 0.005 175);
+    --text-secondary:   oklch(0.78 0.01 175);
+    --text-muted:       oklch(0.64 0.008 175);
+    --accent:           oklch(0.72 0.12 175);
+    --accent-dim:       oklch(0.72 0.12 175 / 0.15);
+    --accent-hover:     oklch(0.78 0.11 175);
+    --green:            oklch(0.74 0.16 155);
+    --green-dim:        oklch(0.74 0.16 155 / 0.15);
+    --blue:             oklch(0.72 0.14 250);
+    --blue-dim:         oklch(0.72 0.14 250 / 0.15);
+    --purple:           oklch(0.73 0.14 300);
+    --purple-dim:       oklch(0.73 0.14 300 / 0.15);
+    --rose:             oklch(0.72 0.18 25);
+    --rose-dim:         oklch(0.72 0.18 25 / 0.15);
+    --badge-override-bg: oklch(0.72 0.12 175 / 0.18);
+    --badge-override-fg: oklch(0.72 0.12 175);
+    --badge-matched-bg:  oklch(0.74 0.16 155 / 0.18);
+    --badge-matched-fg:  oklch(0.74 0.16 155);
+    --badge-noprice-bg:  oklch(0.72 0.18 25 / 0.15);
+    --badge-noprice-fg:  oklch(0.72 0.18 25);
+    --shadow-sm:        0 1px 2px oklch(0 0 0 / 0.3);
+    --shadow-md:        0 1px 3px oklch(0 0 0 / 0.4), 0 4px 12px oklch(0 0 0 / 0.2);
+    --shadow-lg:        0 4px 8px oklch(0 0 0 / 0.4), 0 12px 32px oklch(0 0 0 / 0.25);
+    --overlay:          oklch(0 0 0 / 0.55);
+    --chart-input:      oklch(0.74 0.13 175);
+    --chart-output:     oklch(0.72 0.14 250);
+    --chart-cache-read: oklch(0.78 0.09 65);
+    --chart-cache-write: oklch(0.74 0.11 310);
+    --chart-thinking:   oklch(0.73 0.17 20);
+    --chart-total:      oklch(0.72 0.12 175);
   }
 
   /* ── App shell ────────────────────────────────────────────────────────── */
