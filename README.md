@@ -9,7 +9,7 @@
 Track token usage, cost, and sessions across **22 AI coding tools** in one local dashboard. No account is required for local use. No telemetry. No cloud required.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/juliantanx/aiusage/main/packages/site/static/screenshots/aiusage-demo.gif" alt="aiusage dashboard demo" width="92%" />
+  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@b179e5a37c92e7040a07b84a7b2048821d120aed/packages/site/static/screenshots/aiusage-demo.gif" alt="aiusage dashboard demo" width="92%" />
 </p>
 
 ## Quick Start
