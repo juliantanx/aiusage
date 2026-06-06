@@ -72,7 +72,7 @@
 </div>
 
 {#if qrOpen}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
   <div class="qr-overlay" role="dialog" aria-modal="true" aria-label={$t('support.wechat')} on:click={handleScrimClick}>
     <div class="qr-card">
       <img src="/wechat-support-qr.jpg" alt="WeChat QR" width="280" height="280" />
