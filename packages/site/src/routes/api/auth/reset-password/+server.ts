@@ -9,17 +9,17 @@ export const POST: RequestHandler = async ({ request }) => {
   const { token, password } = body
 
   if (!token || !password) {
-    return json({ error: 'Token and password are required' }, { status: 400 })
+    return json({ error: 'missing_fields' }, { status: 400 })
   }
 
   const passwordError = await validatePassword(password)
   if (passwordError) {
-    return json({ error: passwordError }, { status: 400 })
+    return json({ error: passwordError.code, params: passwordError.params }, { status: 400 })
   }
 
   const result = await consumePasswordResetToken(token)
   if (!result) {
-    return json({ error: 'Invalid or expired reset link' }, { status: 400 })
+    return json({ error: 'invalid_reset_token' }, { status: 400 })
   }
 
   const passwordHash = await hashPassword(password)

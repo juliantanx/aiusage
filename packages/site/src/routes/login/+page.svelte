@@ -29,6 +29,21 @@
     return match ? match[1] : ''
   }
 
+  function formatError(code) {
+    if (zh) {
+      switch (code) {
+        case 'invalid_credentials': return '用户名或密码错误'
+        case 'missing_fields': return '请填写用户名和密码'
+        default: return code || '登录失败'
+      }
+    }
+    switch (code) {
+      case 'invalid_credentials': return 'Invalid username or password'
+      case 'missing_fields': return 'Please enter username and password'
+      default: return code || 'Login failed'
+    }
+  }
+
   async function handleLogin() {
     error = ''
     isBanned = false
@@ -51,10 +66,10 @@
         error = zh ? '你的账号已被封禁。' : 'Your account has been banned.'
         isBanned = true
         banReason = data.ban_reason || ''
+      } else if (data.error === 'email_not_verified') {
+        error = zh ? '请先打开邮箱中的验证链接，再登录。' : 'Please verify your email before signing in.'
       } else {
-        error = data.error === 'email_not_verified'
-            ? (zh ? '请先打开邮箱中的验证链接，再登录。' : 'Please verify your email before signing in.')
-          : data.error || (zh ? '登录失败' : 'Login failed')
+        error = formatError(data.error)
       }
     } catch {
       error = zh ? '网络错误' : 'Network error'

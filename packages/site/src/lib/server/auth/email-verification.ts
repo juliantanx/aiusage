@@ -5,6 +5,7 @@ import { env } from '$env/dynamic/private'
 import { nanoid } from 'nanoid'
 import { sql } from '$lib/server/db/pool.js'
 import { getConfigValue, CFG } from '$lib/server/config.js'
+import { wrapBrandedEmail } from './email-template.js'
 
 const PURPOSE = 'email_verification'
 
@@ -66,7 +67,7 @@ export async function createEmailVerification(userId: string, email: string): Pr
   return `${getSiteUrl()}/verify-email?token=${encodeURIComponent(token)}`
 }
 
-export async function checkVerificationEmailRateLimit(ip: string, email: string): Promise<string | null> {
+export async function checkVerificationEmailRateLimit(ip: string, email: string): Promise<{ code: string } | null> {
   const [
     ipLimitWindowMinutes,
     ipLimit,
@@ -110,13 +111,13 @@ export async function checkVerificationEmailRateLimit(ip: string, email: string)
   ])
 
   if (Number(ipRows[0]?.count || 0) >= ipLimit) {
-    return 'Too many registration attempts from this network. Please try again later.'
+    return { code: 'rate_limit_ip' }
   }
   if (Number(emailRows[0]?.count || 0) >= emailLimit) {
-    return 'Too many verification emails for this address. Please try again later.'
+    return { code: 'rate_limit_email' }
   }
   if (Number(globalRows[0]?.count || 0) >= globalLimit) {
-    return 'Email sending is temporarily rate limited. Please try again later.'
+    return { code: 'rate_limit_global' }
   }
 
   return null
@@ -149,12 +150,14 @@ export async function sendVerificationEmail(email: string, username: string, ver
     `This link expires in ${tokenTtlHours} hours.`
   ].join('\n')
 
-  const html = [
-    `<p>Hi ${escapeHtml(username)},</p>`,
-    '<p>Open this link to verify your AIUsage email address:</p>',
-    `<p><a href="${verificationUrl}">Verify email address</a></p>`,
-    `<p>This link expires in ${tokenTtlHours} hours.</p>`
-  ].join('')
+  const html = wrapBrandedEmail({
+    title: 'Verify Your Email',
+    preheader: `Hi ${username}, verify your AIUsage email address to get started.`,
+    greeting: `Hi ${escapeHtml(username)},`,
+    bodyHtml: `Thanks for signing up for AIUsage. Click the button below to verify your email address and activate your account.`,
+    button: { label: 'Verify Email Address', url: verificationUrl },
+    footerHtml: `This link expires in <strong>${tokenTtlHours} hours</strong>. If you didn't create an account, you can safely ignore this email.`
+  })
 
   if (hasSesConfig()) {
     await getSesClient().send(new SendEmailCommand({
@@ -252,7 +255,7 @@ export async function createPasswordResetToken(userId: string): Promise<string> 
   return `${getSiteUrl()}/reset-password?token=${encodeURIComponent(token)}`
 }
 
-export async function checkPasswordResetRateLimit(ip: string, email: string): Promise<string | null> {
+export async function checkPasswordResetRateLimit(ip: string, email: string): Promise<{ code: string } | null> {
   const [
     ipLimitWindowMinutes,
     ipLimit,
@@ -286,10 +289,10 @@ export async function checkPasswordResetRateLimit(ip: string, email: string): Pr
   ])
 
   if (Number(ipRows[0]?.count || 0) >= ipLimit) {
-    return 'Too many reset attempts from this network. Please try again later.'
+    return { code: 'rate_limit_ip' }
   }
   if (Number(emailRows[0]?.count || 0) >= emailLimit) {
-    return 'Too many reset emails for this address. Please try again later.'
+    return { code: 'rate_limit_email' }
   }
 
   return null
@@ -303,7 +306,6 @@ export async function recordPasswordResetAttempt(ip: string, email: string): Pro
 }
 
 export async function sendPasswordResetEmail(email: string, username: string, resetUrl: string): Promise<void> {
-  console.info(`[email] Password reset link for ${email}: ${resetUrl}`)
   const tokenTtlHours = await getConfigValue(CFG.EMAIL_TOKEN_TTL_HOURS)
 
   const subject = 'Reset your AIUsage password'
@@ -318,13 +320,14 @@ export async function sendPasswordResetEmail(email: string, username: string, re
     'If you did not request this, you can safely ignore this email.'
   ].join('\n')
 
-  const html = [
-    `<p>Hi ${escapeHtml(username)},</p>`,
-    '<p>Open this link to reset your AIUsage password:</p>',
-    `<p><a href="${resetUrl}">Reset password</a></p>`,
-    `<p>This link expires in ${tokenTtlHours} hours.</p>`,
-    '<p>If you did not request this, you can safely ignore this email.</p>'
-  ].join('')
+  const html = wrapBrandedEmail({
+    title: 'Reset Your Password',
+    preheader: `Hi ${username}, reset your AIUsage password.`,
+    greeting: `Hi ${escapeHtml(username)},`,
+    bodyHtml: `We received a request to reset the password for your AIUsage account. Click the button below to set a new password.`,
+    button: { label: 'Reset Password', url: resetUrl },
+    footerHtml: `This link expires in <strong>${tokenTtlHours} hours</strong>. If you didn't request a password reset, you can safely ignore this email — your password will remain unchanged.`
+  })
 
   if (hasSesConfig()) {
     await getSesClient().send(new SendEmailCommand({

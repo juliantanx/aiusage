@@ -15,6 +15,18 @@ export const DELETE: RequestHandler = async ({ cookies, params }) => {
     return json({ error: 'Invalid provider' }, { status: 400 })
   }
 
+  // Check if user has a password or other linked identities
+  const [userRow, otherIdentities] = await Promise.all([
+    sql`SELECT password_hash FROM users WHERE id = ${user.id}`,
+    sql`SELECT provider FROM user_identities WHERE user_id = ${user.id} AND provider != ${provider}`
+  ])
+  const hasPassword = Boolean((userRow[0] as { password_hash: string | null } | undefined)?.password_hash)
+  const hasOtherIdentities = otherIdentities.length > 0
+
+  if (!hasPassword && !hasOtherIdentities) {
+    return json({ error: 'cannot_unlink_last' }, { status: 400 })
+  }
+
   const deleted = await sql`
     DELETE FROM user_identities
     WHERE user_id = ${user.id} AND provider = ${provider}

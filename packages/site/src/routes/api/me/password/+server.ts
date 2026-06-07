@@ -10,7 +10,7 @@ export const PUT: RequestHandler = async (event) => {
   const { current_password, new_password } = body
 
   const passwordError = await validatePassword(new_password)
-  if (passwordError) return json({ error: passwordError }, { status: 400 })
+  if (passwordError) return json({ error: passwordError.code, params: passwordError.params }, { status: 400 })
 
   // Check if user already has a password
   const rows = await sql`SELECT password_hash FROM users WHERE id = ${user.id}`
@@ -19,11 +19,11 @@ export const PUT: RequestHandler = async (event) => {
 
   if (hasExistingPassword) {
     if (!current_password) {
-      return json({ error: 'Current password is required' }, { status: 400 })
+      return json({ error: 'current_password_required' }, { status: 400 })
     }
     const valid = await verifyPassword(current_password, existing!.password_hash!)
     if (!valid) {
-      return json({ error: 'Current password is incorrect' }, { status: 403 })
+      return json({ error: 'current_password_incorrect' }, { status: 403 })
     }
   }
 

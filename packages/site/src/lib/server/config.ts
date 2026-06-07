@@ -292,21 +292,21 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   [CFG.DISPLAY_NAME_MAX_LENGTH]:  'Maximum characters for display name',
   [CFG.PASSWORD_MIN_LENGTH]:      'Minimum characters for password',
 
-  [CFG.AVATAR_MAX_FILE_SIZE]: 'Maximum file size for avatar upload (bytes)',
+  [CFG.AVATAR_MAX_FILE_SIZE]: 'Maximum file size for avatar upload (MB)',
   [CFG.AVATAR_OUTPUT_SIZE]:   'Avatar image output size in pixels',
   [CFG.AVATAR_QUALITY]:       'Avatar compression quality (1-100)',
 
   [CFG.SYNC_MAX_RECORDS]:        'Max records per sync push from CLI',
   [CFG.SYNC_MAX_TOMBSTONES]:     'Max deleted record markers per sync',
-  [CFG.SYNC_BODY_MAX_SIZE]:      'Max request body size for sync (bytes)',
+  [CFG.SYNC_BODY_MAX_SIZE]:      'Max request body size for sync (MB)',
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: 'Default number of records returned per sync pull',
   [CFG.SYNC_PULL_MAX_LIMIT]:     'Maximum records allowed per sync pull',
   [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: 'How long to cache GitHub star check results (hours)',
 
-  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        'Max data size per upload (bytes)',
+  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        'Max data size per upload (MB)',
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           'Max usage snapshots per upload',
   [CFG.UPLOAD_MAX_BREAKDOWNS]:          'Max model breakdowns per snapshot',
-  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     'Allowed time drift for upload signatures (ms)',
+  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     'Allowed time drift for upload signatures (sec)',
   [CFG.UPLOAD_RATE_LIMIT]:              'Max uploads per device in time window',
   [CFG.UPLOAD_RATE_LIMIT_WINDOW_HOURS]: 'Upload rate limit time window (hours)',
 
@@ -319,7 +319,7 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   [CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS]:'Days of history used for spike comparison',
 
   [CFG.LEADERBOARD_PAGE_SIZE]:   'Entries shown per leaderboard page',
-  [CFG.LEADERBOARD_CACHE_TTL_MS]:'How long leaderboard data is cached (ms)',
+  [CFG.LEADERBOARD_CACHE_TTL_MS]:'How long leaderboard data is cached (sec)',
 
   [CFG.DEVICE_AUTH_EXPIRY_MINUTES]: 'How long a CLI login code stays valid (minutes)',
   [CFG.DEVICE_AUTH_POLL_INTERVAL_SECONDS]: 'How often the CLI checks if login is approved (seconds)',
@@ -352,21 +352,21 @@ export const CONFIG_DESCRIPTIONS_ZH: Record<string, string> = {
   [CFG.DISPLAY_NAME_MAX_LENGTH]:  '显示名称最多几个字符',
   [CFG.PASSWORD_MIN_LENGTH]:      '密码最少几个字符',
 
-  [CFG.AVATAR_MAX_FILE_SIZE]: '头像文件最大多少字节',
+  [CFG.AVATAR_MAX_FILE_SIZE]: '头像文件最大多少 MB',
   [CFG.AVATAR_OUTPUT_SIZE]:   '头像输出尺寸（像素）',
   [CFG.AVATAR_QUALITY]:       '头像压缩质量（1-100）',
 
   [CFG.SYNC_MAX_RECORDS]:        'CLI 单次同步最多推送几条记录',
   [CFG.SYNC_MAX_TOMBSTONES]:     '单次同步最多推送几条删除标记',
-  [CFG.SYNC_BODY_MAX_SIZE]:      '同步请求体最大多少字节',
+  [CFG.SYNC_BODY_MAX_SIZE]:      '同步请求体最大多少 MB',
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: '同步拉取时默认返回几条',
   [CFG.SYNC_PULL_MAX_LIMIT]:     '同步拉取时最多返回几条',
   [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: 'GitHub Star 检查结果缓存多少小时',
 
-  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        '单次上传数据最大多少字节',
+  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        '单次上传数据最大多少 MB',
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           '单次上传最多包含几个快照',
   [CFG.UPLOAD_MAX_BREAKDOWNS]:          '每个快照最多包含几条模型明细',
-  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     '上传签名允许的时间偏差（毫秒）',
+  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     '上传签名允许的时间偏差（秒）',
   [CFG.UPLOAD_RATE_LIMIT]:              '每台设备在限制窗口内最多上传几次',
   [CFG.UPLOAD_RATE_LIMIT_WINDOW_HOURS]: '上传频率限制的时间窗口（小时）',
 
@@ -379,7 +379,7 @@ export const CONFIG_DESCRIPTIONS_ZH: Record<string, string> = {
   [CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS]:'计算历史平均值时回溯几天的数据',
 
   [CFG.LEADERBOARD_PAGE_SIZE]:   '排行榜每页显示几条',
-  [CFG.LEADERBOARD_CACHE_TTL_MS]:'排行榜数据缓存多久（毫秒）',
+  [CFG.LEADERBOARD_CACHE_TTL_MS]:'排行榜数据缓存多久（秒）',
 
   [CFG.DEVICE_AUTH_EXPIRY_MINUTES]: 'CLI 登录码在几分钟内有效',
   [CFG.DEVICE_AUTH_POLL_INTERVAL_SECONDS]: 'CLI 每隔几秒检查一次登录是否通过',
@@ -405,20 +405,20 @@ export const CONFIG_UNITS: Record<string, { en: string; zh: string }> = {
 
   [CFG.USERNAME_COOLDOWN_DAYS]:   { en: 'days', zh: '天' },
 
-  [CFG.AVATAR_MAX_FILE_SIZE]: { en: 'bytes', zh: '字节' },
+  [CFG.AVATAR_MAX_FILE_SIZE]: { en: 'MB', zh: 'MB' },
   [CFG.AVATAR_OUTPUT_SIZE]:   { en: 'px', zh: 'px' },
 
-  [CFG.SYNC_BODY_MAX_SIZE]:      { en: 'bytes', zh: '字节' },
+  [CFG.SYNC_BODY_MAX_SIZE]:      { en: 'MB', zh: 'MB' },
   [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: { en: 'hours', zh: '小时' },
 
-  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        { en: 'bytes', zh: '字节' },
-  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     { en: 'ms', zh: '毫秒' },
+  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        { en: 'MB', zh: 'MB' },
+  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     { en: 'sec', zh: '秒' },
   [CFG.UPLOAD_RATE_LIMIT_WINDOW_HOURS]: { en: 'hours', zh: '小时' },
 
   [CFG.RISK_REPEAT_WINDOW_HOURS]:      { en: 'hours', zh: '小时' },
   [CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS]:{ en: 'days', zh: '天' },
 
-  [CFG.LEADERBOARD_CACHE_TTL_MS]:{ en: 'ms', zh: '毫秒' },
+  [CFG.LEADERBOARD_CACHE_TTL_MS]:{ en: 'sec', zh: '秒' },
 
   [CFG.DEVICE_AUTH_EXPIRY_MINUTES]: { en: 'min', zh: '分钟' },
   [CFG.DEVICE_AUTH_POLL_INTERVAL_SECONDS]: { en: 'sec', zh: '秒' },
@@ -432,6 +432,17 @@ export const CONFIG_UNITS: Record<string, { en: string; zh: string }> = {
   [CFG.RETENTION_SYNC_BATCH_DAYS]:     { en: 'days', zh: '天' },
   [CFG.RETENTION_TOMBSTONE_DAYS]:      { en: 'days', zh: '天' },
   [CFG.RETENTION_DEVICE_AUTH_HOURS]:   { en: 'hours', zh: '小时' },
+}
+
+// ── Display multiplier for admin UI ──
+// When set, the admin UI divides the stored value by this number for display,
+// and multiplies back when saving. E.g. 1048576 bytes → 1 MB in UI.
+export const CONFIG_DISPLAY_MULTIPLIER: Record<string, number> = {
+  [CFG.AVATAR_MAX_FILE_SIZE]:      1024 * 1024,  // bytes → MB
+  [CFG.SYNC_BODY_MAX_SIZE]:        1024 * 1024,  // bytes → MB
+  [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:   1024 * 1024,  // bytes → MB
+  [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]: 1000,         // ms → sec
+  [CFG.LEADERBOARD_CACHE_TTL_MS]:  1000,         // ms → sec
 }
 
 export function getDefaultValue(key: string): number {

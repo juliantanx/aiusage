@@ -9,8 +9,6 @@ function loadLocalEnv(): void {
 
   const candidates = [
     resolve(process.cwd(), '.env'),
-    resolve(process.cwd(), 'packages/site/.env'),
-    resolve(process.cwd(), '../site/.env'),
   ]
 
   for (const envPath of candidates) {

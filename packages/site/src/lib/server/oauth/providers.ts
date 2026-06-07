@@ -55,7 +55,23 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile, accessToken?:
     }
   }
 
-  // 3. Create new user
+  // 3. Create new user (or re-link to existing user by email)
+  if (profile.email) {
+    const existingEmail = await sql`
+      SELECT id, username, email, display_name, avatar_url, role, status
+      FROM users WHERE email = ${profile.email}
+    `
+    if (existingEmail[0]) {
+      const user = existingEmail[0] as SessionUser
+      await sql`
+        INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile, access_token)
+        VALUES (${nanoid()}, ${user.id}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)}, ${accessToken || null})
+      `
+      await maybeGrantAdmin(user.id, profile.email)
+      return user
+    }
+  }
+
   const userId = nanoid()
   let username = profile.username
   const existingUsername = await sql`SELECT id FROM users WHERE username = ${username}`

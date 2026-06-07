@@ -42,7 +42,9 @@ export const GET: RequestHandler = async (event) => {
       cursor,
       currentUserId: user?.id ?? null,
     })
-    return json(result)
+    return json(result, {
+      headers: { 'Cache-Control': 'no-store' }
+    })
   } catch (err) {
     console.error('Leaderboard query failed:', err)
     return json({
@@ -55,6 +57,8 @@ export const GET: RequestHandler = async (event) => {
       scope: event.url.searchParams.get('scope') || 'all',
       tool: null,
       model: null,
+    }, {
+      headers: { 'Cache-Control': 'no-store' }
     })
   }
 }

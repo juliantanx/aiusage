@@ -82,9 +82,11 @@
   }
 
   let unbindingProvider = ''
+  let unbindError = ''
   async function unbindIdentity(provider) {
     if (!confirm(zh ? `确定要解绑 ${provider === 'github' ? 'GitHub' : 'Linux.do'} 账号吗？` : `Unlink ${provider === 'github' ? 'GitHub' : 'Linux.do'} account?`)) return
     unbindingProvider = provider
+    unbindError = ''
     try {
       const res = await fetch(`/api/me/identities/${provider}`, {
         method: 'DELETE',
@@ -92,7 +94,12 @@
       })
       if (res.ok) {
         identities = identities.filter(i => i.provider !== provider)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        unbindError = getError(data.error)
       }
+    } catch {
+      unbindError = getError('network_error')
     } finally {
       unbindingProvider = ''
     }
@@ -119,6 +126,9 @@
     display_name_length: { zh: '显示名称需要 1-64 个字符', en: 'Display name must be 1-64 characters' },
     network_error: { zh: '网络错误', en: 'Network error' },
     passwords_mismatch: { zh: '两次输入的密码不一致', en: 'Passwords do not match' },
+    cannot_unlink_last: { zh: '无法解绑唯一的登录方式，请先设置密码', en: 'Cannot unlink your only sign-in method. Please set a password first' },
+    current_password_required: { zh: '请输入当前密码', en: 'Current password is required' },
+    current_password_incorrect: { zh: '当前密码不正确', en: 'Current password is incorrect' },
   }
 
   function getError(key) {
@@ -159,9 +169,11 @@
         avatarPreviewSrc = me?.avatar_url || ''
         profileError = data.error || (zh ? '上传失败' : 'Failed to upload avatar')
       }
-    } catch {
+    } catch (e) {
       avatarPreviewSrc = me?.avatar_url || ''
-      profileError = getError('network_error')
+      profileError = e instanceof SyntaxError
+        ? (zh ? '文件过大' : 'File too large')
+        : getError('network_error')
     } finally {
       avatarUploading = false
       if (fileInput) fileInput.value = ''
@@ -246,7 +258,7 @@
         confirmPassword = ''
         if (me) me = { ...me, has_password: true }
       } else {
-        pwError = data.error || (zh ? '更新失败' : 'Failed to update password')
+        pwError = getError(data.error)
       }
     } catch {
       pwError = getError('network_error')
@@ -450,6 +462,9 @@
                   </div>
                 {/each}
               </div>
+              {#if unbindError}
+                <div class="error-msg" style="margin-top: 0.5rem;">{unbindError}</div>
+              {/if}
             {:else}
               <p class="text-muted" style="font-size: 0.875rem;">{zh ? '暂无关联账号。' : 'No linked accounts yet.'}</p>
             {/if}

@@ -7,6 +7,7 @@ export type RankingScope = 'all' | 'tool' | 'model' | 'tool_model'
 export interface RankingEntry {
   rank: number
   user_id: string
+  username: string
   display_name: string
   avatar_url: string | null
   scope_type: RankingScope
@@ -82,6 +83,7 @@ export async function queryLeaderboard(options: {
     WITH ranked AS (
       SELECT
         CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(lm.user_id), 1, 8) ELSE lm.user_id END AS user_id,
+        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.username END AS username,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
         lm.scope_type,
@@ -190,6 +192,7 @@ async function queryRollingLeaderboard(options: {
     ranked AS (
       SELECT
         CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(a.user_id), 1, 8) ELSE a.user_id END AS user_id,
+        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.username END AS username,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
         a.scope_type,
@@ -237,6 +240,7 @@ function toRankingEntry(row: RankingEntry & { rn: string }): RankingEntry {
   return {
     rank: Number(row.rn),
     user_id: row.user_id,
+    username: row.username,
     display_name: row.display_name,
     avatar_url: row.avatar_url,
     scope_type: row.scope_type,
@@ -262,6 +266,7 @@ async function getCurrentUserRanking(options: {
   const userEntry = await sql`
     SELECT
       CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(lm.user_id), 1, 8) ELSE lm.user_id END AS user_id,
+      CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.username END AS username,
       CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
       CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
       lm.scope_type,
@@ -369,6 +374,7 @@ async function getRollingCurrentUserRanking(options: {
       SELECT
         a.user_id AS raw_user_id,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(a.user_id), 1, 8) ELSE a.user_id END AS user_id,
+        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.username END AS username,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
         CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
         a.scope_type,

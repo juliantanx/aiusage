@@ -10,7 +10,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
   const { login, password } = body
 
   if (!login || !password) {
-    return json({ error: 'Login and password are required' }, { status: 400 })
+    return json({ error: 'missing_fields' }, { status: 400 })
   }
 
   // Find user by username or email
@@ -22,7 +22,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
   const user = users[0] as { id: string; username: string; email: string; email_verified: boolean; display_name: string; avatar_url: string | null; role: string; status: string; password_hash: string; ban_reason: string | null } | undefined
 
   if (!user || !(await verifyPassword(password, user.password_hash))) {
-    return json({ error: 'Invalid credentials' }, { status: 401 })
+    return json({ error: 'invalid_credentials' }, { status: 401 })
   }
 
   if (!user.email_verified) {

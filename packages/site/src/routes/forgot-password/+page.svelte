@@ -13,6 +13,23 @@
     return match ? match[1] : ''
   }
 
+  function formatError(code) {
+    if (zh) {
+      switch (code) {
+        case 'email_required': return '请输入邮箱地址'
+        case 'rate_limit_ip': return '该网络请求次数过多，请稍后再试'
+        case 'rate_limit_email': return '该邮箱请求次数过多，请稍后再试'
+        default: return code || '发送失败'
+      }
+    }
+    switch (code) {
+      case 'email_required': return 'Email is required'
+      case 'rate_limit_ip': return 'Too many attempts from this network. Please try again later.'
+      case 'rate_limit_email': return 'Too many attempts for this email. Please try again later.'
+      default: return code || 'Failed to send'
+    }
+  }
+
   async function handleSubmit() {
     error = ''
     loading = true
@@ -29,7 +46,7 @@
       if (res.ok) {
         success = true
       } else {
-        error = data.error || (zh ? '发送失败' : 'Failed to send')
+        error = formatError(data.error)
       }
     } catch {
       error = zh ? '网络错误' : 'Network error'

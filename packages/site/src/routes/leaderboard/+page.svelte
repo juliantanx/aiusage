@@ -415,7 +415,12 @@
           {:else}
             <span class="avatar-placeholder">{avatarText(data.current_user.display_name)}</span>
           {/if}
-          <span class="me-name">{data.current_user.display_name}</span>
+          <span class="me-info">
+            <span class="me-name">{data.current_user.display_name}</span>
+            {#if data.current_user.username !== data.current_user.display_name}
+              <span class="me-handle">@{data.current_user.username}</span>
+            {/if}
+          </span>
         </span>
         <span class="me-stat">
           <small>{valueLabel}</small>
@@ -475,6 +480,9 @@
                   {/if}
                 </div>
                 <div class="podium-name">{podiumEntries[1].display_name}</div>
+                {#if podiumEntries[1].username !== podiumEntries[1].display_name}
+                  <div class="podium-username">@{podiumEntries[1].username}</div>
+                {/if}
               </div>
               <div class="podium-value">{formatFullValue(podiumEntries[1])}</div>
               <div class="podium-secondary">{formatSecondaryValue(podiumEntries[1])}</div>
@@ -499,6 +507,9 @@
                   {/if}
                 </div>
                 <div class="podium-name">{podiumEntries[0].display_name}</div>
+                {#if podiumEntries[0].username !== podiumEntries[0].display_name}
+                  <div class="podium-username">@{podiumEntries[0].username}</div>
+                {/if}
               </div>
               <div class="podium-value">{formatFullValue(podiumEntries[0])}</div>
               <div class="podium-secondary">{formatSecondaryValue(podiumEntries[0])}</div>
@@ -522,6 +533,9 @@
                   {/if}
                 </div>
                 <div class="podium-name">{podiumEntries[2].display_name}</div>
+                {#if podiumEntries[2].username !== podiumEntries[2].display_name}
+                  <div class="podium-username">@{podiumEntries[2].username}</div>
+                {/if}
               </div>
               <div class="podium-value">{formatFullValue(podiumEntries[2])}</div>
               <div class="podium-secondary">{formatSecondaryValue(podiumEntries[2])}</div>
@@ -565,7 +579,12 @@
                   {:else}
                     <span class="avatar-placeholder">{avatarText(entry.display_name)}</span>
                   {/if}
-                  <span class="user-name">{entry.display_name}</span>
+                  <span class="user-info">
+                    <span class="user-name">{entry.display_name}</span>
+                    {#if entry.username !== entry.display_name}
+                      <span class="user-handle">@{entry.username}</span>
+                    {/if}
+                  </span>
                 </span>
                 {#if activeScope !== 'all'}
                   <span class="col-scope" role="cell" title={scopeValue(entry)}>{scopeValue(entry)}</span>
@@ -742,7 +761,9 @@
   .me-rank, .me-stat strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .me-rank { color: var(--accent); font-weight: 800; font-size: 1rem; }
   .me-user { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+  .me-info { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
   .me-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me-handle { font-size: 0.6875rem; color: var(--text-muted); font-family: var(--mono); }
   .me-stat { display: grid; gap: 2px; justify-items: end; min-width: 0; }
   .me-stat small { color: var(--text-muted); font-size: 0.6875rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
   .me-stat strong { color: var(--text); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
@@ -895,6 +916,15 @@
     white-space: nowrap;
   }
   .podium-card.first .podium-name { font-size: 1rem; }
+  .podium-username {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .podium-value {
     font-family: var(--mono);
@@ -1003,7 +1033,9 @@
   .col-rank { color: var(--text-muted); font-weight: 650; }
   .rank-num { font-size: 0.8125rem; }
   .col-user { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
+  .user-info { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
   .user-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-handle { font-size: 0.6875rem; color: var(--text-muted); font-family: var(--mono); font-weight: 400; }
   .col-scope { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.8125rem; }
   .col-tokens { text-align: right; font-weight: 650; }
   .col-secondary { color: var(--text-secondary); text-align: right; font-size: 0.8125rem; }

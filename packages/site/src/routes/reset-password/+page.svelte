@@ -16,6 +16,23 @@
     return match ? match[1] : ''
   }
 
+  function formatError(code, params) {
+    if (zh) {
+      switch (code) {
+        case 'missing_fields': return '请填写所有必填项'
+        case 'password_length': return `密码至少需要 ${params?.min} 个字符`
+        case 'invalid_reset_token': return '重置链接无效或已过期'
+        default: return code || '重置失败'
+      }
+    }
+    switch (code) {
+      case 'missing_fields': return 'Please fill in all required fields'
+      case 'password_length': return `Password must be at least ${params?.min} characters`
+      case 'invalid_reset_token': return 'Invalid or expired reset link'
+      default: return code || 'Reset failed'
+    }
+  }
+
   async function handleSubmit() {
     error = ''
 
@@ -38,7 +55,7 @@
       if (res.ok) {
         success = true
       } else {
-        error = data.error || (zh ? '重置失败' : 'Reset failed')
+        error = formatError(data.error, data.params)
       }
     } catch {
       error = zh ? '网络错误' : 'Network error'

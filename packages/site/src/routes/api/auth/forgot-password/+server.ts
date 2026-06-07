@@ -13,13 +13,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   const email = String(body.email || '').trim().toLowerCase()
 
   if (!email) {
-    return json({ error: 'Email is required' }, { status: 400 })
+    return json({ error: 'email_required' }, { status: 400 })
   }
 
   const ip = getClientAddress()
   const rateLimitError = await checkPasswordResetRateLimit(ip, email)
   if (rateLimitError) {
-    return json({ error: rateLimitError }, { status: 429 })
+    return json({ error: rateLimitError.code }, { status: 429 })
   }
 
   const users = await sql`

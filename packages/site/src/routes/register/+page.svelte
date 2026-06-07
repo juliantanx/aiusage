@@ -2,6 +2,7 @@
   import { invalidateAll } from '$app/navigation'
   import { page } from '$app/stores'
   import { lang } from '$lib/lang'
+  import { onDestroy } from 'svelte'
 
   $: zh = $lang === 'zh'
   $: oauth = $page.data.oauth || {}
@@ -16,10 +17,61 @@
   let sentEmail = ''
   let resendLoading = false
   let resendMsg = ''
+  let pollTimer = null
   $: redirectTo = getSafeRedirect($page.url.searchParams.get('redirect'))
   $: loginHref = redirectTo === '/leaderboard'
     ? '/login'
     : `/login?redirect=${encodeURIComponent(redirectTo)}`
+
+  function startPolling(checkEmail) {
+    stopPolling()
+    pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/auth/check-verified?email=${encodeURIComponent(checkEmail)}`)
+        const data = await res.json()
+        if (data.verified) {
+          stopPolling()
+          window.location.href = loginHref
+        }
+      } catch { /* ignore network errors during polling */ }
+    }, 5000)
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+  }
+
+  onDestroy(stopPolling)
+
+  function formatError(code, params) {
+    if (zh) {
+      switch (code) {
+        case 'username_length': return `用户名长度须为 ${params?.min}-${params?.max} 个字符`
+        case 'username_chars': return '用户名只能包含字母、数字、下划线和连字符'
+        case 'invalid_email': return '邮箱格式不正确'
+        case 'password_length': return `密码至少需要 ${params?.min} 个字符`
+        case 'username_taken': return '用户名或邮箱已被注册'
+        case 'rate_limit_ip': return '该网络注册次数过多，请稍后再试'
+        case 'rate_limit_email': return '该邮箱验证邮件发送次数过多，请稍后再试'
+        case 'rate_limit_global': return '邮件发送已被限流，请稍后再试'
+        default: return code || '注册失败'
+      }
+    }
+    switch (code) {
+      case 'username_length': return `Username must be ${params?.min}-${params?.max} characters`
+      case 'username_chars': return 'Username can only contain letters, numbers, underscores, and hyphens'
+      case 'invalid_email': return 'Invalid email format'
+      case 'password_length': return `Password must be at least ${params?.min} characters`
+      case 'username_taken': return 'Username or email already taken'
+      case 'rate_limit_ip': return 'Too many registration attempts from this network. Please try again later.'
+      case 'rate_limit_email': return 'Too many verification emails for this address. Please try again later.'
+      case 'rate_limit_global': return 'Email sending is temporarily rate limited. Please try again later.'
+      default: return code || 'Registration failed'
+    }
+  }
 
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
@@ -51,16 +103,17 @@
       const data = await res.json()
       if (res.ok) {
         success = zh
-          ? '验证邮件已发送。请打开邮箱中的链接后再登录。'
-          : 'Verification email sent. Open the link in your inbox before signing in.'
+          ? '验证邮件已发送。请打开邮箱中的链接，验证后将自动跳转到登录页。'
+          : 'Verification email sent. Open the link in your inbox — this page will redirect to sign in once verified.'
         sentEmail = email
+        startPolling(email)
         username = ''
         email = ''
         password = ''
         confirmPassword = ''
         await invalidateAll()
       } else {
-        error = data.error || (zh ? '注册失败' : 'Registration failed')
+        error = formatError(data.error, data.params)
       }
     } catch {
       error = zh ? '网络错误' : 'Network error'

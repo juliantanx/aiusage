@@ -12,6 +12,7 @@ export async function banUser(adminUserId: string, targetUserId: string, reason:
 export async function unbanUser(adminUserId: string, targetUserId: string): Promise<void> {
   await sql`UPDATE users SET status = 'active', banned_at = NULL, ban_reason = NULL, updated_at = NOW() WHERE id = ${targetUserId}`
   await logAdminAction(adminUserId, 'unban_user', 'users', targetUserId, 'User unbanned')
+  invalidateLeaderboardCache()
 }
 
 export async function approveSnapshot(adminUserId: string, snapshotId: string, note?: string): Promise<void> {
@@ -93,6 +94,7 @@ export async function setCloudSync(adminUserId: string, targetUserId: string, en
 export async function setUserRole(adminUserId: string, targetUserId: string, role: string): Promise<void> {
   await sql`UPDATE users SET role = ${role}::user_role WHERE id = ${targetUserId}`
   await logAdminAction(adminUserId, 'set_role', 'users', targetUserId, `Role set to ${role}`)
+  invalidateLeaderboardCache()
 }
 
 export async function getFlaggedSnapshots(limit = 50, offset = 0) {

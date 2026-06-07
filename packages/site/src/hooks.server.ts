@@ -48,7 +48,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
 
-  if (!event.url.pathname.startsWith('/api/')) {
+  // Prevent CDNs from caching dynamic API responses
+  if (event.url.pathname.startsWith('/api/')) {
+    response.headers.set('Cache-Control', 'no-store')
+  } else {
     response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'")
   }
 

@@ -840,15 +840,15 @@
                             {:else}
                               <code class="config-key">{key}</code>
                             {/if}
-                            <span class="config-meta mono">{key} &middot; {zh ? '默认' : 'default'} {entry.default}{#if entry.value !== entry.default}{' '}<button class="config-reset-link" on:click={() => resetConfigToDefault(key)}>{zh ? '恢复' : 'reset'}</button>{/if}</span>
+                            <span class="config-meta mono">{key} &middot; {zh ? '默认' : 'default'} {entry.displayMultiplier ? Number(entry.default).toFixed(2) : entry.default}{#if entry.value !== entry.default}{' '}<button class="config-reset-link" on:click={() => resetConfigToDefault(key)}>{zh ? '恢复' : 'reset'}</button>{/if}</span>
                           </div>
                           <div class="config-control">
                             <input
                               type="number"
                               class="config-input"
-                              value={entry.value}
+                              value={entry.displayMultiplier ? Number(entry.value.toFixed(2)) : entry.value}
                               on:input={(e) => setConfigValue(key, Number(e.target.value))}
-                              step={entry.value % 1 === 0 ? 1 : 0.01}
+                              step={entry.displayMultiplier ? 0.01 : (entry.value % 1 === 0 ? 1 : 0.01)}
                             />
                             <span class="config-unit">{(zh ? entry.unit_zh : entry.unit) || ''}</span>
                           </div>
