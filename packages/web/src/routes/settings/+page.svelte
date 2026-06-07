@@ -652,6 +652,10 @@
 
         {#if syncData.backend === 'cloud'}
           <div class="field full">
+            <div class="cloud-star-prompt">
+              <span>{$t('settings.syncCloudStarPrompt')}</span>
+              <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="star-link">github.com/juliantanx/aiusage</a>
+            </div>
             <div class="cloud-status" class:logged-in={cloudLoggedIn}>
               {#if cloudLoggedIn}
                 <span class="status-dot ok"></span>
@@ -819,7 +823,16 @@
             {#if displayedSyncStatus?.lastSyncError && displayedSyncStatus?.lastSyncStatus !== 'ok'}
               <div class="sync-status-item full">
                 <span class="sync-status-label">{$t('settings.syncError')}</span>
-                <span class="sync-status-value err">{displayedSyncStatus.lastSyncError}</span>
+                <span class="sync-status-value err">
+                  {#if displayedSyncStatus.lastSyncError.includes('star the repository') || displayedSyncStatus.lastSyncError.includes('Star')}
+                    {$t('settings.syncStarRequired')}
+                    <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="star-link">GitHub</a>
+                  {:else if displayedSyncStatus.lastSyncError.includes('bind') || displayedSyncStatus.lastSyncError.includes('GitHub account')}
+                    {$t('settings.syncGithubBindingRequired')}
+                  {:else}
+                    {displayedSyncStatus.lastSyncError}
+                  {/if}
+                </span>
               </div>
             {/if}
             {#if displayedSyncStatus?.lastSyncDurationMs != null && displayedSyncStatus?.lastSyncStatus === 'ok'}
@@ -1163,6 +1176,23 @@
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
   .state-msg.error { color: var(--rose); }
 
+  .cloud-star-prompt {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    padding: 0.375rem 0;
+    flex-wrap: wrap;
+  }
+  .star-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .star-link:hover {
+    text-decoration: underline;
+  }
   .cloud-status {
     display: flex;
     align-items: center;

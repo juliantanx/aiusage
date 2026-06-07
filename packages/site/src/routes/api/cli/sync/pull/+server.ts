@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { verifyUploadRequest } from '$lib/server/uploads/verify.js'
 import { getConfigValue, CFG } from '$lib/server/config.js'
+import { checkCloudSyncAccess } from '$lib/server/cloud/star-check.js'
 
 export const GET: RequestHandler = async ({ request, url }) => {
   const defaultLimit = await getConfigValue(CFG.SYNC_PULL_DEFAULT_LIMIT)
@@ -18,6 +19,14 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
   const userId = verification.userId!
   const deviceId = verification.deviceId!
+
+  // Star gate check
+  const starCheck = await checkCloudSyncAccess(userId)
+  if (!starCheck.allowed) {
+    return json({
+      error: { code: starCheck.error_code, message: starCheck.message, repo: starCheck.repo, url: starCheck.url }
+    }, { status: 403 })
+  }
 
   const cursor = url.searchParams.get('cursor')
   const limit = Math.min(Math.max(1, parseInt(url.searchParams.get('limit') || String(defaultLimit))), maxLimit)

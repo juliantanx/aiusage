@@ -85,6 +85,11 @@ export async function restoreLeaderboardEntry(adminUserId: string, entryId: stri
   invalidateLeaderboardCache()
 }
 
+export async function setCloudSync(adminUserId: string, targetUserId: string, enabled: boolean): Promise<void> {
+  await sql`UPDATE users SET cloud_sync_enabled = ${enabled}, updated_at = NOW() WHERE id = ${targetUserId}`
+  await logAdminAction(adminUserId, 'set_cloud_sync', 'users', targetUserId, `Cloud sync ${enabled ? 'enabled' : 'disabled'}`)
+}
+
 export async function setUserRole(adminUserId: string, targetUserId: string, role: string): Promise<void> {
   await sql`UPDATE users SET role = ${role}::user_role WHERE id = ${targetUserId}`
   await logAdminAction(adminUserId, 'set_role', 'users', targetUserId, `Role set to ${role}`)

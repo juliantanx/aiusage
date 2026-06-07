@@ -27,6 +27,9 @@
   let lbMsg = ''
   let lbError = ''
   let lbSaving = false
+  $: identities = $page.data.identities || []
+  $: hasGithub = identities.some(i => i.provider === 'github')
+
   let activeSection = 'profile'
 
   $: COOLDOWN_DAYS = $page.data.usernameCooldownDays ?? 30
@@ -41,6 +44,11 @@
       id: 'password',
       title: me?.has_password ? (zh ? '修改密码' : 'Change Password') : (zh ? '设置密码' : 'Set Password'),
       desc: zh ? '账号登录凭据。' : 'Account sign-in credentials.'
+    },
+    {
+      id: 'accounts',
+      title: zh ? '关联账号' : 'Linked Accounts',
+      desc: zh ? '管理已关联的第三方账号。' : 'Manage linked third-party accounts.'
     },
     {
       id: 'leaderboard',
@@ -382,6 +390,38 @@
               </button>
             </form>
           </section>
+        {:else if activeSection === 'accounts'}
+          <section class="settings-section">
+            <h2>{zh ? '关联账号' : 'Linked Accounts'}</h2>
+            <p class="section-desc">{zh ? '查看和管理已关联的第三方登录账号。' : 'View and manage linked third-party login accounts.'}</p>
+
+            {#if identities.length > 0}
+              <div class="linked-accounts-list">
+                {#each identities as identity}
+                  <div class="linked-account-item">
+                    <span class="linked-provider">{identity.provider === 'github' ? 'GitHub' : identity.provider === 'linux_do' ? 'Linux.do' : identity.provider}</span>
+                    <span class="linked-username">{identity.username || '—'}</span>
+                    {#if identity.email}
+                      <span class="linked-email text-muted">{identity.email}</span>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <p class="text-muted" style="font-size: 0.875rem;">{zh ? '暂无关联账号。' : 'No linked accounts yet.'}</p>
+            {/if}
+
+            {#if !hasGithub}
+              <div style="margin-top: 1rem;">
+                <a href="/api/oauth/github/start" class="btn-primary" style="display: inline-block; text-decoration: none;">
+                  {zh ? '绑定 GitHub' : 'Bind GitHub'}
+                </a>
+                <span class="field-hint" style="margin-top: 0.5rem;">
+                  {zh ? '绑定 GitHub 后可使用 Cloud Sync 功能。' : 'Bind GitHub to use Cloud Sync.'}
+                </span>
+              </div>
+            {/if}
+          </section>
         {:else}
           <section class="settings-section">
             <h2>{zh ? '排行榜设置' : 'Leaderboard Settings'}</h2>
@@ -513,6 +553,13 @@
   .btn-primary { padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600; color: oklch(0.99 0.002 85); background: var(--accent); border: none; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .linked-accounts-list { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
+  .linked-account-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem; border-radius: 6px; background: var(--bg); border: 1px solid var(--border-subtle); font-size: 0.875rem; }
+  .linked-provider { font-weight: 600; min-width: 80px; }
+  .linked-username { color: var(--text); }
+  .linked-email { font-size: 0.8125rem; }
+  .text-muted { color: var(--text-muted); }
 
   @media (max-width: 760px) {
     .settings-page { padding-top: 1rem; }

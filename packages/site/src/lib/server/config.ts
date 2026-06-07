@@ -93,6 +93,9 @@ export const CFG = {
   SYNC_PULL_DEFAULT_LIMIT:'sync.pull_default_limit',
   SYNC_PULL_MAX_LIMIT:    'sync.pull_max_limit',
 
+  // ── Cloud Sync Gating ──
+  CLOUD_STAR_CACHE_TTL_HOURS: 'cloud.star_cache_ttl_hours',
+
   // ── Upload ──
   UPLOAD_MAX_PAYLOAD_SIZE:    'upload.max_payload_size',
   UPLOAD_MAX_SNAPSHOTS:       'upload.max_snapshots',
@@ -163,6 +166,8 @@ const DEFAULTS: Record<string, number> = {
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: 1000,
   [CFG.SYNC_PULL_MAX_LIMIT]:     2000,
 
+  [CFG.CLOUD_STAR_CACHE_TTL_HOURS]:     24,
+
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        1_000_000,
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           5,
   [CFG.UPLOAD_MAX_BREAKDOWNS]:          1000,
@@ -225,6 +230,7 @@ export const CONFIG_CATEGORIES: Record<string, { label: string; label_zh: string
     keys: [
       CFG.SYNC_MAX_RECORDS, CFG.SYNC_MAX_TOMBSTONES, CFG.SYNC_BODY_MAX_SIZE,
       CFG.SYNC_PULL_DEFAULT_LIMIT, CFG.SYNC_PULL_MAX_LIMIT,
+      CFG.CLOUD_STAR_CACHE_TTL_HOURS,
     ],
   },
   upload: {
@@ -295,6 +301,7 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   [CFG.SYNC_BODY_MAX_SIZE]:      'Max request body size for sync (bytes)',
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: 'Default number of records returned per sync pull',
   [CFG.SYNC_PULL_MAX_LIMIT]:     'Maximum records allowed per sync pull',
+  [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: 'How long to cache GitHub star check results (hours)',
 
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        'Max data size per upload (bytes)',
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           'Max usage snapshots per upload',
@@ -354,6 +361,7 @@ export const CONFIG_DESCRIPTIONS_ZH: Record<string, string> = {
   [CFG.SYNC_BODY_MAX_SIZE]:      '同步请求体最大多少字节',
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: '同步拉取时默认返回几条',
   [CFG.SYNC_PULL_MAX_LIMIT]:     '同步拉取时最多返回几条',
+  [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: 'GitHub Star 检查结果缓存多少小时',
 
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        '单次上传数据最大多少字节',
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           '单次上传最多包含几个快照',
@@ -401,6 +409,7 @@ export const CONFIG_UNITS: Record<string, { en: string; zh: string }> = {
   [CFG.AVATAR_OUTPUT_SIZE]:   { en: 'px', zh: 'px' },
 
   [CFG.SYNC_BODY_MAX_SIZE]:      { en: 'bytes', zh: '字节' },
+  [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: { en: 'hours', zh: '小时' },
 
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        { en: 'bytes', zh: '字节' },
   [CFG.UPLOAD_TIMESTAMP_WINDOW_MS]:     { en: 'ms', zh: '毫秒' },

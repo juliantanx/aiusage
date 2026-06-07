@@ -469,5 +469,20 @@ const migrations = [
       await tx`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id, consumed_at)`
       await tx`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at)`
     }
+  },
+  {
+    version: 12,
+    name: 'cloud_sync_star_gating',
+    up: async (tx: ReturnType<typeof sql>) => {
+      // Store GitHub OAuth access token for star verification
+      await tx`ALTER TABLE user_identities ADD COLUMN IF NOT EXISTS access_token TEXT`
+
+      // Admin override: allow user to use Cloud Sync regardless of star status
+      await tx`ALTER TABLE users ADD COLUMN IF NOT EXISTS cloud_sync_enabled BOOLEAN DEFAULT FALSE`
+      // Cached GitHub star check result
+      await tx`ALTER TABLE users ADD COLUMN IF NOT EXISTS github_starred BOOLEAN DEFAULT FALSE`
+      // When the star check was last performed
+      await tx`ALTER TABLE users ADD COLUMN IF NOT EXISTS github_star_checked_at TIMESTAMPTZ`
+    }
   }
 ]

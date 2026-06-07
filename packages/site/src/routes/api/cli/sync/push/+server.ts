@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { verifyUploadRequest } from '$lib/server/uploads/verify.js'
 import { getConfigValue, CFG } from '$lib/server/config.js'
+import { checkCloudSyncAccess } from '$lib/server/cloud/star-check.js'
 import { nanoid } from 'nanoid'
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -37,6 +38,14 @@ export const POST: RequestHandler = async ({ request }) => {
   const userId = verification.userId!
   const deviceId = verification.deviceId!
   const idempotencyKey = verification.idempotencyKey!
+
+  // Star gate check
+  const starCheck = await checkCloudSyncAccess(userId)
+  if (!starCheck.allowed) {
+    return json({
+      error: { code: starCheck.error_code, message: starCheck.message, repo: starCheck.repo, url: starCheck.url }
+    }, { status: 403 })
+  }
 
   // Check idempotency
   const existing = await sql`

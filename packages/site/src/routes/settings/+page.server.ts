@@ -34,5 +34,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const usernameCooldownDays = await getConfigValue(CFG.USERNAME_COOLDOWN_DAYS)
 
-  return { profile: base, usernameCooldownDays }
+  // Load linked identities
+  let identities: Array<{ provider: string; username: string | null; email: string | null; created_at: string }> = []
+  try {
+    const rows = await sql`
+      SELECT provider, provider_username AS username, email, created_at
+      FROM user_identities
+      WHERE user_id = ${locals.user.id}
+      ORDER BY created_at ASC
+    `
+    identities = rows as typeof identities
+  } catch {}
+
+  return { profile: base, usernameCooldownDays, identities }
 }

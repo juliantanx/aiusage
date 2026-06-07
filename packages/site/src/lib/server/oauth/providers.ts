@@ -13,7 +13,7 @@ export interface OAuthProfile {
   rawProfile: Record<string, unknown>
 }
 
-export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<SessionUser> {
+export async function findOrCreateOAuthUser(profile: OAuthProfile, accessToken?: string): Promise<SessionUser> {
   // 1. Check if identity already exists
   const existing = await sql`
     SELECT u.id, u.username, u.email, u.display_name, u.avatar_url, u.role, u.status
@@ -24,6 +24,13 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<Sess
 
   if (existing[0]) {
     const user = existing[0] as SessionUser
+    // Update access token on every login
+    if (accessToken) {
+      await sql`
+        UPDATE user_identities SET access_token = ${accessToken}
+        WHERE provider = ${profile.provider} AND provider_user_id = ${profile.providerUserId}
+      `
+    }
     if (profile.email && profile.emailVerified) {
       await maybeGrantAdmin(user.id, profile.email)
     }
@@ -40,8 +47,8 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<Sess
     if (emailUser[0]) {
       const user = emailUser[0] as SessionUser
       await sql`
-        INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile)
-        VALUES (${nanoid()}, ${user.id}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)})
+        INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile, access_token)
+        VALUES (${nanoid()}, ${user.id}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)}, ${accessToken || null})
       `
       await maybeGrantAdmin(user.id, profile.email)
       return user
@@ -63,8 +70,8 @@ export async function findOrCreateOAuthUser(profile: OAuthProfile): Promise<Sess
   `
 
   await sql`
-    INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile)
-    VALUES (${nanoid()}, ${userId}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)})
+    INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile, access_token)
+    VALUES (${nanoid()}, ${userId}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)}, ${accessToken || null})
   `
 
   // Check admin emails
@@ -90,7 +97,7 @@ export async function maybeGrantAdmin(userId: string, email: string): Promise<vo
   }
 }
 
-export async function bindOAuthIdentity(userId: string, profile: OAuthProfile): Promise<{ error?: string }> {
+export async function bindOAuthIdentity(userId: string, profile: OAuthProfile, accessToken?: string): Promise<{ error?: string }> {
   // Check if already bound to another user
   const existing = await sql`
     SELECT user_id FROM user_identities
@@ -98,14 +105,21 @@ export async function bindOAuthIdentity(userId: string, profile: OAuthProfile): 
   `
   if (existing[0]) {
     if ((existing[0] as { user_id: string }).user_id === userId) {
-      return {} // Already bound
+      // Already bound — update token if provided
+      if (accessToken) {
+        await sql`
+          UPDATE user_identities SET access_token = ${accessToken}
+          WHERE provider = ${profile.provider} AND provider_user_id = ${profile.providerUserId}
+        `
+      }
+      return {}
     }
     return { error: 'This account is already linked to another user' }
   }
 
   await sql`
-    INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile)
-    VALUES (${nanoid()}, ${userId}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)})
+    INSERT INTO user_identities (id, user_id, provider, provider_user_id, provider_username, email, email_verified, raw_profile, access_token)
+    VALUES (${nanoid()}, ${userId}, ${profile.provider}, ${profile.providerUserId}, ${profile.username}, ${profile.email}, ${profile.emailVerified}, ${JSON.stringify(profile.rawProfile)}, ${accessToken || null})
   `
   return {}
 }

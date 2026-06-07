@@ -254,7 +254,7 @@
 
   // Group audit log actions into categories
   const LOG_CATEGORIES = {
-    user: ['ban_user', 'unban_user', 'set_role'],
+    user: ['ban_user', 'unban_user', 'set_role', 'set_cloud_sync'],
     upload: ['approve_snapshot', 'reject_snapshot', 'hide_snapshot'],
     leaderboard: ['hide_metric', 'restore_metric'],
     pricing: ['sync_pricing', 'update_price_entries', 'add_price_entry', 'delete_price_entry'],
@@ -450,6 +450,12 @@
       await searchUsers()
   }
 
+  async function toggleCloudSync(id, username, currentValue) {
+    const enabled = !currentValue
+    if (await doAction(`/api/admin/users/${id}/cloud-sync`, { enabled }, zh ? `@${username} Cloud Sync ${enabled ? '已开启' : '已关闭'}` : `@${username} Cloud Sync ${enabled ? 'enabled' : 'disabled'}`))
+      await searchUsers()
+  }
+
   // Pricing actions
   async function syncPricing() {
     if (!confirm(zh ? '从 Core 同步最新价格？已有模型会更新，新模型会添加。' : 'Sync latest prices from Core? Existing models will be updated, new ones added.')) return
@@ -601,6 +607,12 @@
                       <span class="badge" class:badge-success={user.role === 'admin'} class:badge-danger={user.status === 'banned'}>
                         {user.role}{user.status !== 'active' ? ` / ${user.status}` : ''}
                       </span>
+                      {#if user.github_username}
+                        <span class="badge badge-github" title="GitHub">GH: {user.github_username}</span>
+                      {/if}
+                      {#if user.github_starred}
+                        <span class="badge badge-star" title={zh ? '已 Star' : 'Starred'}>★</span>
+                      {/if}
                     </div>
                     <div class="list-item-sub">
                       <span>{user.email}</span>
@@ -609,6 +621,10 @@
                     </div>
                   </div>
                   <div class="list-item-actions">
+                    <label class="toggle-label" title={zh ? 'Cloud Sync' : 'Cloud Sync'}>
+                      <input type="checkbox" checked={user.cloud_sync_enabled} on:change={() => toggleCloudSync(user.id, user.username, user.cloud_sync_enabled)} disabled={!!actionLoading} />
+                      <span class="toggle-text">Cloud</span>
+                    </label>
                     {#if user.status === 'active'}
                       <button class="btn btn-danger" on:click={() => banUser(user.id, user.username)} disabled={!!actionLoading}>{zh ? '封禁' : 'Ban'}</button>
                     {:else if user.status === 'banned'}
@@ -1118,6 +1134,35 @@
     color: var(--rose);
     background: oklch(0.55 0.22 25 / 0.08);
   }
+
+  .badge-github {
+    color: oklch(0.72 0.02 250);
+    background: oklch(0.72 0.02 250 / 0.08);
+    text-transform: none;
+  }
+
+  .badge-star {
+    color: oklch(0.75 0.18 85);
+    background: oklch(0.75 0.18 85 / 0.12);
+    font-size: 0.75rem;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .toggle-label input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .toggle-text { white-space: nowrap; }
 
   /* ── Buttons ─────────────────────────────────────────────────────────────── */
   .btn {

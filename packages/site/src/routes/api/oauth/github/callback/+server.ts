@@ -35,12 +35,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   if (existingSid) {
     const existingUser = await getSessionUser(existingSid)
     if (existingUser) {
-      const result = await bindOAuthIdentity(existingUser.id, profile)
+      const result = await bindOAuthIdentity(existingUser.id, profile, tokenData.access_token)
       throw redirect(302, result.error ? '/settings?error=bind_failed' : '/settings?bound=github')
     }
   }
 
-  const user = await findOrCreateOAuthUser(profile)
+  const user = await findOrCreateOAuthUser(profile, tokenData.access_token)
   const sid = await createSession(user.id)
   await setSessionCookie(cookies, sid)
 
