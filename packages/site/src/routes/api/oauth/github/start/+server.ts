@@ -1,10 +1,9 @@
-import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { nanoid } from 'nanoid'
 import { env } from '$env/dynamic/private'
 import { getConfigValue, CFG } from '$lib/server/config.js'
 
-export const GET: RequestHandler = async ({ cookies }) => {
+export const GET: RequestHandler = async () => {
   const clientId = env.GITHUB_CLIENT_ID
   if (!clientId) return new Response('GitHub OAuth not configured', { status: 500 })
 
@@ -13,15 +12,23 @@ export const GET: RequestHandler = async ({ cookies }) => {
   const siteUrl = env.SITE_URL || 'http://localhost:5173'
   const isSecure = siteUrl.startsWith('https://')
 
-  cookies.set('oauth_state', state, {
-    path: '/',
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: 'lax',
-    maxAge: stateMaxAge
-  })
   const redirectUri = `${siteUrl}/api/oauth/github/callback`
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email&state=${state}`
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email&state=${state}`
 
-  throw redirect(302, url)
+  const cookieParts = [
+    `oauth_state=${state}`,
+    'Path=/',
+    'HttpOnly',
+    `SameSite=Lax`,
+    `Max-Age=${stateMaxAge}`,
+  ]
+  if (isSecure) cookieParts.push('Secure')
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: authUrl,
+      'Set-Cookie': cookieParts.join('; '),
+    }
+  })
 }
