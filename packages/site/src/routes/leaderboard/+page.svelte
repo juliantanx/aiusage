@@ -37,6 +37,7 @@
   let availableTools = []
   let availableModels = []
   let chipsExpanded = false
+  let joinHintDismissed = false
 
   $: zh = $lang === 'zh'
   $: user = $page.data.user
@@ -393,6 +394,20 @@
       {/if}
     </div>
 
+    {#if !joinHintDismissed && rows.length > 0 && !data?.current_user}
+      <div class="join-hint">
+        <div class="join-hint-text">
+          <strong>{zh ? '想要上榜？' : 'Want to join?'}</strong>
+          <span>{zh
+            ? '注册账号，运行 npx @juliantanx/aiusage serve 启动仪表盘，在排行榜页面一键上传。'
+            : 'Sign up, run npx @juliantanx/aiusage serve, then upload from the dashboard /leaderboard page.'
+          }</span>
+          <a href="/docs#lb-upload" class="join-hint-link">{zh ? '查看完整指南' : 'Full guide'}</a>
+        </div>
+        <button class="join-hint-close" on:click={() => joinHintDismissed = true} aria-label={zh ? '关闭' : 'Dismiss'}>×</button>
+      </div>
+    {/if}
+
     {#if data?.current_user}
       <div class="me-row">
         <span class="me-label">{zh ? '我的排名' : 'My rank'}</span>
@@ -437,8 +452,44 @@
     {:else if loading}
       <div class="state">{zh ? '加载中...' : 'Loading...'}</div>
     {:else if rows.length === 0}
-      <div class="state">
-        {zh ? '暂无数据' : 'No public entries yet.'}
+      <div class="join-banner empty-state">
+        <div class="join-content">
+          <h2>{zh ? '成为首位上榜者' : 'Be the first to join'}</h2>
+          <p class="join-desc">{zh
+            ? '排行榜尚无数据。只需三步即可上传你的 AI 编程用量，参与排名。'
+            : 'The leaderboard is empty. Upload your AI coding usage in three steps to join the rankings.'
+          }</p>
+          <ol class="join-steps">
+            <li>
+              <span class="step-num">1</span>
+              <div class="step-body">
+                <strong>{zh ? '注册账号' : 'Create an account'}</strong>
+                <p>{zh ? '在本站注册并登录。' : 'Sign up and sign in on this site.'}</p>
+              </div>
+            </li>
+            <li>
+              <span class="step-num">2</span>
+              <div class="step-body">
+                <strong>{zh ? '启动本地仪表盘' : 'Start the local dashboard'}</strong>
+                <p><code>npx @juliantanx/aiusage serve</code></p>
+                <p class="step-hint">{zh
+                  ? '仪表盘会自动解析日志，排行榜页面内置设备授权和一键上传。'
+                  : 'The dashboard auto-parses logs. Its /leaderboard page has built-in device auth and one-click upload.'
+                }</p>
+              </div>
+            </li>
+          </ol>
+          <p class="join-alt">{zh
+            ? '也可以使用 CLI 手动操作：'
+            : 'Or use the CLI manually:'
+          } <code>login</code> → <code>parse</code> → <code>upload</code></p>
+          <div class="join-actions">
+            {#if !user}
+              <a href="/login" class="btn-primary">{zh ? '登录 / 注册' : 'Sign in / Sign up'}</a>
+            {/if}
+            <a href="/docs#lb-upload" class="btn-ghost">{zh ? '查看文档' : 'Read the docs'}</a>
+          </div>
+        </div>
       </div>
     {:else}
       <!-- Podium: Top 3 -->
@@ -599,7 +650,7 @@
 
 <style>
   .lb-page { padding: 16px 0 48px; }
-  .lb-container { width: min(calc(100vw - 32px), 1280px); margin: 0 auto; }
+  .lb-container { width: var(--content-width); margin: 0 auto; }
 
   /* ── Controls ─────────────────────────────────────────────────────── */
   .ranking-controls {
@@ -1083,6 +1134,83 @@
 
   .retry-btn { margin-top: 0.5rem; padding: 0.375rem 1rem; border: 1px solid var(--border-medium); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 600; font-size: 0.8125rem; cursor: pointer; }
   .retry-btn:hover { background: var(--hover); }
+
+  /* ── Join banner (empty state) ─────────────────────────────────── */
+  .join-banner.empty-state {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+  }
+  .join-content { max-width: 520px; margin: 0 auto; }
+  .join-content h2 {
+    font-size: 1.375rem; font-weight: 700; color: var(--text);
+    margin-bottom: 0.5rem; letter-spacing: -0.02em;
+  }
+  .join-desc { color: var(--text-secondary); font-size: 0.9375rem; line-height: 1.6; margin-bottom: 1.5rem; }
+  .join-steps {
+    list-style: none; padding: 0; margin: 0 0 1.5rem;
+    display: flex; flex-direction: column; gap: 12px; text-align: left;
+  }
+  .join-steps li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border-radius: 8px;
+    background: var(--raised); border: 1px solid var(--border-subtle);
+  }
+  .step-num {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; flex-shrink: 0;
+    border-radius: 50%; background: var(--accent-dim); color: var(--accent);
+    font-family: var(--mono); font-size: 0.75rem; font-weight: 750;
+  }
+  .step-body { flex: 1; min-width: 0; }
+  .step-body strong { display: block; font-size: 0.875rem; margin-bottom: 2px; }
+  .step-body p { margin: 0; font-size: 0.8125rem; color: var(--text-secondary); }
+  .step-body code { font-family: var(--mono); font-size: 0.8125rem; color: var(--accent); }
+  .step-hint { margin-top: 4px; font-size: 0.75rem !important; color: var(--text-muted) !important; }
+  .join-alt { margin: 0 0 1.5rem; font-size: 0.8125rem; color: var(--text-muted); text-align: left; }
+  .join-alt code { font-family: var(--mono); font-size: 0.8125rem; color: var(--text-secondary); }
+  .join-actions { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    display: inline-flex; align-items: center; font-size: 0.875rem; font-weight: 600;
+    color: oklch(0.99 0.002 85); background: var(--accent); text-decoration: none;
+    padding: 0.5rem 1.25rem; border-radius: 8px; transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-ghost {
+    display: inline-flex; align-items: center; font-size: 0.875rem; font-weight: 600;
+    color: var(--text-secondary); text-decoration: none; padding: 0.5rem 1.25rem;
+    border-radius: 8px; border: 1px solid var(--border-medium);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+
+  /* ── Join hint (when data exists) ─────────────────────────────── */
+  .join-hint {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; margin-bottom: 16px;
+    border-radius: 8px; background: var(--accent-dim);
+    border: 1px solid oklch(0.52 0.14 165 / 0.15);
+  }
+  .join-hint-text {
+    flex: 1; min-width: 0;
+    font-size: 0.8125rem; line-height: 1.5; color: var(--text-secondary);
+  }
+  .join-hint-text strong { color: var(--text); }
+  .join-hint-link {
+    color: var(--accent); text-decoration: none; font-weight: 600;
+    margin-left: 4px; white-space: nowrap;
+  }
+  .join-hint-link:hover { text-decoration: underline; }
+  .join-hint-close {
+    flex-shrink: 0; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; color: var(--text-muted);
+    font-size: 1.125rem; cursor: pointer; border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .join-hint-close:hover { color: var(--text); background: var(--hover); }
 
   /* ── Responsive ───────────────────────────────────────────────────── */
   @media (max-width: 760px) {

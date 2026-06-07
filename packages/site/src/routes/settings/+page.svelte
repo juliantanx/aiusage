@@ -527,7 +527,7 @@
 
 <style>
   .settings-page { padding: 2rem 0 4rem; }
-  .settings-container { width: var(--content-width); margin: 0 auto; max-width: 1040px; }
+  .settings-container { width: var(--content-width); margin: 0 auto; max-width: 1280px; }
   .settings-header { margin-bottom: 1.5rem; }
   h1 { font-size: 2rem; font-weight: 700; margin: 0 0 0.375rem; }
   .settings-header p { margin: 0; color: var(--text-muted); font-size: 0.875rem; }

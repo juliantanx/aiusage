@@ -1,6 +1,7 @@
 <script>
   import { browser } from '$app/environment'
   import { onMount, tick } from 'svelte'
+  import { afterNavigate } from '$app/navigation'
   import { lang } from '$lib/lang'
   import TableOfContents from '$lib/components/TableOfContents.svelte'
   import CodeBlock from '$lib/components/CodeBlock.svelte'
@@ -99,7 +100,7 @@
     { id: 'uploads-page', en: 'Upload Status', zh: '上传状态', children: [] },
     { id: 'admin-page', en: 'Admin Dashboard', zh: '管理后台', children: [] },
     { id: 'support', en: 'Support & Contact', zh: '服务与支持', children: [] },
-    { id: 'cli', en: 'CLI Reference', zh: 'CLI 命令',
+    { id: 'cli-reference', en: 'CLI Reference', zh: 'CLI 命令',
       children: [
         { id: 'cli-parse', en: 'parse', zh: 'parse' },
         { id: 'cli-serve', en: 'serve', zh: 'serve' },
@@ -128,23 +129,20 @@
     return 0
   }
 
-  function scrollTo(id) {
+  function scrollTo(id, behavior = 'smooth') {
     const el = document.getElementById(id)
-    if (el) {
-      activeSection = id
-      scrollLock = id
-      const headerOffset = 76
-      const top = el.getBoundingClientRect().top + window.scrollY
-      window.scrollTo({ top: top - headerOffset, behavior: 'smooth' })
-      mobileTocOpen = false
-      for (const s of sections) {
-        if (s.id === id || s.children?.some(c => c.id === id)) {
-          expandedSections.add(s.id)
-          expandedSections = expandedSections
-        }
+    if (!el) return
+    activeSection = id
+    scrollLock = id
+    mobileTocOpen = false
+    for (const s of sections) {
+      if (s.id === id || s.children?.some(c => c.id === id)) {
+        expandedSections.add(s.id)
+        expandedSections = expandedSections
       }
-      setTimeout(() => { scrollLock = null }, 600)
     }
+    el.scrollIntoView({ behavior, block: 'start' })
+    setTimeout(() => { scrollLock = null }, behavior === 'instant' ? 100 : 600)
   }
 
   function handleTocNavigate(e) {
@@ -203,10 +201,40 @@
     })
   }
 
+  function scrollToHash() {
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    // Wait for layout to settle, then scroll instantly (no smooth animation timing issues)
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const el = document.getElementById(hash)
+        if (el) scrollTo(hash, 'instant')
+      }, 50)
+    })
+  }
+
   onMount(() => {
+    // Prevent browser from restoring scroll position on reload
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
     updateActiveFromScroll()
+    scrollToHash()
     window.addEventListener('scroll', updateActiveFromScroll, { passive: true })
-    return () => window.removeEventListener('scroll', updateActiveFromScroll)
+    return () => {
+      window.removeEventListener('scroll', updateActiveFromScroll)
+      if ('scrollRestoration' in history) history.scrollRestoration = 'auto'
+    }
+  })
+
+  afterNavigate(({ to }) => {
+    if (to?.url?.hash) {
+      const hash = to.url.hash.slice(1)
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const el = document.getElementById(hash)
+          if (el) scrollTo(hash, 'instant')
+        }, 50)
+      })
+    }
   })
 </script>
 
@@ -1311,7 +1339,7 @@
     </section>
 
     <!-- ══════ CLI Reference ══════ -->
-    <section id="cli">
+    <section id="cli-reference">
       <div class="sec-head">
         <span class="sec-idx">22</span>
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
@@ -1622,7 +1650,6 @@
   section {
     margin-bottom: 2.5rem;
     padding-top: 0.25rem;
-    scroll-margin-top: 76px;
   }
 
   .sec-head {

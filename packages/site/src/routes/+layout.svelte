@@ -367,7 +367,7 @@
     --shadow-md:         0 1px 3px oklch(0 0 0 / 0.06), 0 4px 12px oklch(0 0 0 / 0.03);
     --shadow-lg:         0 4px 8px oklch(0 0 0 / 0.06), 0 12px 32px oklch(0 0 0 / 0.04);
     --mono:              'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
-    --content-width:     min(1320px, 92vw);
+    --content-width:     min(1600px, 92vw);
   }
 
   /* ── Header ─────────────────────────────────────────────────────────────── */
