@@ -52,10 +52,11 @@ export function getWindowPosition({
   windowBounds: Bounds
   displayBounds: Bounds
 }): { x: number; y: number } {
-  const preferredX = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2)
+  const anchorBounds = normalizeTrayBounds({ platform, trayBounds, displayBounds })
+  const preferredX = Math.round(anchorBounds.x + anchorBounds.width / 2 - windowBounds.width / 2)
   const preferredY = platform === 'darwin'
-    ? trayBounds.y + trayBounds.height + 4
-    : trayBounds.y - windowBounds.height - 4
+    ? anchorBounds.y + anchorBounds.height + 4
+    : anchorBounds.y - windowBounds.height - 4
 
   const maxX = Math.max(displayBounds.x, displayBounds.x + displayBounds.width - windowBounds.width)
   const maxY = Math.max(displayBounds.y, displayBounds.y + displayBounds.height - windowBounds.height)
@@ -63,6 +64,45 @@ export function getWindowPosition({
   return {
     x: Math.min(Math.max(preferredX, displayBounds.x), maxX),
     y: Math.min(Math.max(preferredY, displayBounds.y), maxY),
+  }
+}
+
+export function hasUsableTrayBounds({
+  platform,
+  trayBounds,
+  displayBounds,
+}: {
+  platform: NodeJS.Platform
+  trayBounds: Bounds
+  displayBounds: Bounds
+}): boolean {
+  if (platform !== 'darwin') return true
+
+  const isLeftBottomFallback =
+    trayBounds.x <= displayBounds.x + 1 &&
+    trayBounds.y >= displayBounds.y + displayBounds.height - Math.max(trayBounds.height, 1) - 8
+
+  const isEmpty = trayBounds.width <= 0 && trayBounds.height <= 0
+
+  return !isLeftBottomFallback && !isEmpty
+}
+
+function normalizeTrayBounds({
+  platform,
+  trayBounds,
+  displayBounds,
+}: {
+  platform: NodeJS.Platform
+  trayBounds: Bounds
+  displayBounds: Bounds
+}): Bounds {
+  if (hasUsableTrayBounds({ platform, trayBounds, displayBounds })) return trayBounds
+
+  return {
+    x: displayBounds.x + displayBounds.width - 48,
+    y: displayBounds.y,
+    width: 32,
+    height: 24,
   }
 }
 

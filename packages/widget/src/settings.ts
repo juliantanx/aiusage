@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import type { CurrencyCode } from './currency'
 
 export interface WidgetSettings {
   theme: 'system' | 'light' | 'dark'
@@ -10,6 +11,7 @@ export interface WidgetSettings {
   showHeatmap: boolean
   showTokenBreakdown: boolean
   locale: 'en' | 'zh'
+  currency: CurrencyCode
 }
 
 const SETTINGS_PATH = join(homedir(), '.aiusage', 'widget-settings.json')
@@ -22,6 +24,7 @@ const DEFAULT_SETTINGS: WidgetSettings = {
   showHeatmap: true,
   showTokenBreakdown: true,
   locale: 'en',
+  currency: 'USD',
 }
 
 export function loadSettings(): WidgetSettings {

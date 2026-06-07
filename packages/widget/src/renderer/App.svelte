@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { afterUpdate, onMount, tick } from 'svelte'
   import Header from './components/Header.svelte'
   import StatRow from './components/StatRow.svelte'
   import TokenBreakdown from './components/TokenBreakdown.svelte'
@@ -7,6 +7,8 @@
   import SettingsPanel from './components/SettingsPanel.svelte'
   import { t } from './i18n'
   import type { Locale } from './i18n'
+  import { formatUsdCost } from '../currency'
+  import type { CurrencyCode, ExchangeRateState } from '../currency'
 
   interface TodayTokens {
     total: number; input: number; output: number
@@ -32,24 +34,27 @@
     showCost: boolean
     showHeatmap: boolean
     showTokenBreakdown: boolean
+    locale: Locale
+    currency: CurrencyCode
+  }
+
+  function detectInitialLocale(): Locale {
+    return typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
   }
 
   let data: WidgetData | null = null
   let settings: WidgetSettings | null = null
+  let exchangeRate: ExchangeRateState | null = null
+  let initialLocale: Locale = detectInitialLocale()
   let loading = true
   let showSettings = false
+  let panelEl: HTMLDivElement
+  let lastReportedHeight = 0
 
   function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
     return String(n)
-  }
-
-  function formatCost(n: number): string {
-    if (n >= 100) return `$${n.toFixed(0)}`
-    if (n >= 1) return `$${n.toFixed(2)}`
-    if (n > 0) return `$${n.toFixed(3)}`
-    return '$0'
   }
 
   function formatModelName(name: string): string {
@@ -58,8 +63,9 @@
       .replace(/-\d{8}$/, '')
   }
 
-  $: locale = (settings?.locale ?? 'en') as Locale
+  $: locale = settings?.locale ?? initialLocale
   $: i18n = t(locale)
+  $: currency = settings?.currency ?? 'USD'
 
   function rangeLabel(days: number): string {
     return i18n.lastNDays(days)
@@ -86,25 +92,50 @@
     settings = await (window as any).widget.getSettings()
   }
 
+  async function loadExchangeRate() {
+    exchangeRate = await (window as any).widget.getExchangeRate()
+  }
+
   async function saveSettings(e: CustomEvent<WidgetSettings>) {
     settings = await (window as any).widget.saveSettings(e.detail)
     // Re-fetch data since rangeDays may have changed
     refresh()
   }
 
+  function reportWindowHeight() {
+    if (!panelEl) return
+
+    const height = Math.ceil(panelEl.getBoundingClientRect().height)
+    if (height <= 0 || Math.abs(height - lastReportedHeight) < 2) return
+
+    lastReportedHeight = height
+    ;(window as any).widget.resizeWindow(height)
+  }
+
   onMount(() => {
     refresh()
     doLoadSettings()
+    loadExchangeRate()
     ;(window as any).widget.onDataUpdate((d: WidgetData) => {
       data = d
       loading = false
     })
+
+    const resizeObserver = new ResizeObserver(() => reportWindowHeight())
+    resizeObserver.observe(panelEl)
+    void tick().then(reportWindowHeight)
+
+    return () => resizeObserver.disconnect()
+  })
+
+  afterUpdate(() => {
+    void tick().then(reportWindowHeight)
   })
 
   $: todayStr = data ? formatTokens(data.todayTokens.total) : '--'
   $: rangeStr = data ? formatTokens(data.rangeTokens.total) : '--'
-  $: todayCostStr = data ? formatCost(data.todayCost) : '--'
-  $: rangeCostStr = data ? formatCost(data.rangeCost) : '--'
+  $: todayCostStr = data ? formatUsdCost(data.todayCost, currency, locale, exchangeRate) : '--'
+  $: rangeCostStr = data ? formatUsdCost(data.rangeCost, currency, locale, exchangeRate) : '--'
   $: rangeLabelStr = data ? rangeLabel(data.rangeDays) : i18n.lastNDays(30)
   $: modelStr = data?.topModel ? formatModelName(data.topModel.name) : '--'
   $: modelSubStr = data?.topModel ? `${data.topModel.share}%` : ''
@@ -114,16 +145,21 @@
   $: updatedStr = data ? formatSyncTime(data.lastUpdated) : ''
 </script>
 
-<div class="panel" class:loading>
+<div class="panel" class:loading bind:this={panelEl}>
   <Header
     onRefresh={refresh}
     onClose={close}
     onToggleSettings={() => { showSettings = !showSettings }}
+    refreshLabel={i18n.refresh}
+    settingsLabel={i18n.settings}
+    closeLabel={i18n.close}
+    statusText={updatedStr}
   />
 
   {#if showSettings && settings}
     <SettingsPanel
       {settings}
+      {exchangeRate}
       on:save={saveSettings}
       on:close={() => { showSettings = false }}
     />
@@ -167,7 +203,13 @@
       {#if settings?.showHeatmap && data}
         <div class="section">
           <div class="section-title">{i18n.trend}</div>
-          <ActivityChart data={data.dailyHistory} showCost={settings?.showCost ?? false} />
+          <ActivityChart
+            data={data.dailyHistory}
+            showCost={settings?.showCost ?? false}
+            {locale}
+            {currency}
+            {exchangeRate}
+          />
         </div>
       {/if}
 
@@ -176,11 +218,6 @@
         <StatRow label={i18n.topModel} value={modelStr} sub={modelSubStr} />
         <StatRow label={i18n.topTool} value={toolStr} sub={toolSubStr} />
         <StatRow label={i18n.sessions} value={sessionStr} />
-      </div>
-
-      <!-- Footer with sync time -->
-      <div class="footer">
-        <span class="updated">{updatedStr}</span>
       </div>
     </div>
   {/if}
@@ -191,6 +228,12 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+  }
+  :global(html),
+  :global(body) {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
   :global(body) {
     background: transparent;
@@ -213,7 +256,7 @@
     --chart-cache-read: oklch(0.7 0.1 65);
     --chart-cache-write: oklch(0.65 0.12 310);
     --chart-thinking: oklch(0.6 0.16 300);
-    --shadow: 0 1px 3px oklch(0 0 0 / 0.08), 0 8px 24px oklch(0 0 0 / 0.06);
+    --shadow: none;
   }
   @media (prefers-color-scheme: dark) {
     :global(:root) {
@@ -231,7 +274,7 @@
       --chart-cache-read: oklch(0.7 0.1 65);
       --chart-cache-write: oklch(0.65 0.12 310);
       --chart-thinking: oklch(0.6 0.16 300);
-      --shadow: 0 1px 3px oklch(0 0 0 / 0.3), 0 8px 24px oklch(0 0 0 / 0.25);
+      --shadow: none;
     }
   }
   .panel {
@@ -239,7 +282,7 @@
     border-radius: 10px;
     border: 1px solid var(--border);
     overflow: hidden;
-    width: 380px;
+    width: 100vw;
     box-shadow: var(--shadow);
     transition: opacity 0.15s;
   }
@@ -247,7 +290,7 @@
     opacity: 0.7;
   }
   .content {
-    padding: 0 14px 10px;
+    padding: 0 14px 8px;
   }
   .section {
     padding: 8px 0;
@@ -297,13 +340,5 @@
   }
   .details {
     padding: 4px 0;
-  }
-  .footer {
-    padding: 4px 0 2px;
-    text-align: right;
-  }
-  .updated {
-    font-size: 9px;
-    color: var(--text-muted);
   }
 </style>

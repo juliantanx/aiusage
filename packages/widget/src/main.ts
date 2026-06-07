@@ -1,15 +1,19 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog, screen, nativeTheme } from 'electron'
 import { join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
+import { EXCHANGE_RATE_SOURCE } from './currency'
+import type { ExchangeRateState } from './currency'
 import { queryWidgetData } from './data'
+import { t } from './i18n'
 import { loadSettings, saveSettings } from './settings'
 import type { WidgetSettings } from './settings'
 import {
   getTrayIconNativeImage,
   getWidgetNativeBindingPath,
   getWindowPosition,
+  hasUsableTrayBounds,
   shouldHideWindowOnBlur,
   shouldHideWindowOnClose,
   shouldShowWindowOnLaunch,
@@ -20,13 +24,21 @@ const Database = nodeRequire('better-sqlite3') as typeof import('better-sqlite3'
 
 const DB_PATH = join(homedir(), '.aiusage', 'cache.db')
 const PORT_FILE = join(homedir(), '.aiusage', '.serve-port')
+const FX_CACHE_FILE = join(homedir(), '.aiusage', 'widget-exchange-rate.json')
 const DASHBOARD_PORT = 3847
+const WINDOW_WIDTH = 380
+const DEFAULT_WINDOW_HEIGHT = 500
+const MIN_WINDOW_HEIGHT = 320
+const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 
 let tray: Tray | null = null
 let win: BrowserWindow | null = null
 let db: InstanceType<typeof Database> | null = null
 let refreshTimer: ReturnType<typeof setInterval> | null = null
+let positionRetryTimers: Array<ReturnType<typeof setTimeout>> = []
 let settings: WidgetSettings = loadSettings()
+let exchangeRate: ExchangeRateState = loadExchangeRateCache()
+let exchangeRatePromise: Promise<ExchangeRateState> | null = null
 
 app.setName('AIUsage Widget')
 
@@ -47,9 +59,10 @@ app.whenReady().then(() => {
   createTray()
   createWindow()
   startAutoRefresh()
+  void refreshExchangeRate()
 
   if (shouldShowWindowOnLaunch(app.isPackaged)) {
-    showWindow()
+    showWindowWhenTrayReady()
   }
 })
 
@@ -73,12 +86,13 @@ function createTray(): void {
 
   tray.on('click', () => toggleWindow())
   tray.on('right-click', () => {
+    const i18n = t(settings.locale)
     const menu = Menu.buildFromTemplate([
-      { label: 'Show Panel', click: () => showWindow() },
-      { label: 'Open Dashboard', click: () => openDashboardAction() },
-      { label: 'Refresh', click: () => pushDataUpdate() },
+      { label: i18n.showPanel, click: () => showWindow() },
+      { label: i18n.openDashboard, click: () => openDashboardAction() },
+      { label: i18n.refresh, click: () => pushDataUpdate() },
       { type: 'separator' },
-      { label: 'Quit', click: () => { app.exit(0) } },
+      { label: i18n.quit, click: () => { app.exit(0) } },
     ])
     tray!.popUpContextMenu(menu)
   })
@@ -86,8 +100,8 @@ function createTray(): void {
 
 function createWindow(): void {
   win = new BrowserWindow({
-    width: 380,
-    height: 520,
+    width: WINDOW_WIDTH,
+    height: DEFAULT_WINDOW_HEIGHT,
     show: false,
     frame: false,
     resizable: false,
@@ -112,10 +126,35 @@ function createWindow(): void {
 function showWindow(): void {
   if (!win) return
 
-  // Position near tray icon
+  positionWindowNearTray()
+  win.show()
+  win.focus()
+  pushDataUpdate()
+  schedulePositionRetries()
+}
+
+function showWindowWhenTrayReady(attempt = 0): void {
+  if (!tray) return
+
+  const trayBounds = tray.getBounds()
+  if (hasUsableTrayBounds({
+    platform: process.platform,
+    trayBounds,
+    displayBounds: screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y }).workArea,
+  }) || attempt >= 12) {
+    showWindow()
+    return
+  }
+
+  setTimeout(() => showWindowWhenTrayReady(attempt + 1), 80)
+}
+
+function positionWindowNearTray(): boolean {
+  if (!win || !tray) return false
+
   const trayBounds = tray!.getBounds()
-  const winBounds = win.getBounds()
   const displayBounds = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y }).workArea
+  const winBounds = win.getBounds()
   const { x, y } = getWindowPosition({
     platform: process.platform,
     trayBounds,
@@ -124,9 +163,19 @@ function showWindow(): void {
   })
 
   win.setPosition(x, y, false)
-  win.show()
-  win.focus()
-  pushDataUpdate()
+  return hasUsableTrayBounds({ platform: process.platform, trayBounds, displayBounds })
+}
+
+function schedulePositionRetries(): void {
+  for (const timer of positionRetryTimers) clearTimeout(timer)
+  positionRetryTimers = [80, 200, 500, 1000].map((delay) => setTimeout(() => {
+    if (!win?.isVisible()) return
+    const positionedWithRealTrayBounds = positionWindowNearTray()
+    if (positionedWithRealTrayBounds) {
+      for (const timer of positionRetryTimers) clearTimeout(timer)
+      positionRetryTimers = []
+    }
+  }, delay))
 }
 
 function toggleWindow(): void {
@@ -191,6 +240,79 @@ function notifyRenderer(channel: string, payload: Record<string, unknown>): void
   }
 }
 
+function loadExchangeRateCache(): ExchangeRateState {
+  try {
+    if (existsSync(FX_CACHE_FILE)) {
+      const raw = JSON.parse(readFileSync(FX_CACHE_FILE, 'utf-8')) as ExchangeRateState
+      if (raw.base === 'USD' && raw.target === 'CNY' && typeof raw.rate === 'number') {
+        return raw
+      }
+    }
+  } catch {
+    // Fall through to empty state
+  }
+
+  return {
+    base: 'USD',
+    target: 'CNY',
+    rate: null,
+    fetchedAt: null,
+    source: EXCHANGE_RATE_SOURCE,
+  }
+}
+
+function saveExchangeRateCache(rate: ExchangeRateState): void {
+  const dir = join(homedir(), '.aiusage')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  writeFileSync(FX_CACHE_FILE, JSON.stringify(rate, null, 2), 'utf-8')
+}
+
+async function refreshExchangeRate(force = false): Promise<ExchangeRateState> {
+  const hasFreshRate = exchangeRate.rate !== null &&
+    exchangeRate.fetchedAt !== null &&
+    Date.now() - exchangeRate.fetchedAt < FX_CACHE_TTL_MS
+
+  if (!force && hasFreshRate) return exchangeRate
+  if (exchangeRatePromise) return exchangeRatePromise
+
+  exchangeRatePromise = (async () => {
+    try {
+      const response = await fetch(EXCHANGE_RATE_SOURCE)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+      const payload = await response.json() as { date?: string; usd?: { cny?: number } }
+      const rate = payload.usd?.cny
+      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+        throw new Error('USD/CNY rate missing')
+      }
+
+      exchangeRate = {
+        base: 'USD',
+        target: 'CNY',
+        rate,
+        fetchedAt: Date.now(),
+        date: payload.date,
+        source: EXCHANGE_RATE_SOURCE,
+      }
+      saveExchangeRateCache(exchangeRate)
+    } catch (error) {
+      exchangeRate = {
+        ...exchangeRate,
+        error: error instanceof Error ? error.message : 'Failed to fetch exchange rate',
+        source: EXCHANGE_RATE_SOURCE,
+      }
+    } finally {
+      exchangeRatePromise = null
+    }
+
+    return exchangeRate
+  })()
+
+  return exchangeRatePromise
+}
+
 async function installAiusageCli(): Promise<{ success: boolean; error?: string }> {
   const { execFile } = nodeRequire('child_process') as typeof import('child_process')
 
@@ -233,6 +355,10 @@ ipcMain.handle('widget:get-settings', () => {
   return settings
 })
 
+ipcMain.handle('widget:get-exchange-rate', async () => {
+  return refreshExchangeRate()
+})
+
 ipcMain.handle('widget:save-settings', (_event, newSettings: WidgetSettings) => {
   settings = newSettings
   saveSettings(settings)
@@ -243,6 +369,24 @@ ipcMain.handle('widget:save-settings', (_event, newSettings: WidgetSettings) => 
 
 ipcMain.on('widget:hide-window', () => {
   win?.hide()
+})
+
+ipcMain.on('widget:resize-window', (_event, height: number) => {
+  if (!win || !Number.isFinite(height)) return
+
+  const bounds = win.getBounds()
+  const displayBounds = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y }).workArea
+  const nextHeight = Math.min(
+    Math.max(Math.ceil(height), MIN_WINDOW_HEIGHT),
+    displayBounds.height
+  )
+
+  if (Math.abs(bounds.height - nextHeight) < 2) return
+
+  win.setSize(WINDOW_WIDTH, nextHeight, false)
+  if (win.isVisible()) {
+    positionWindowNearTray()
+  }
 })
 
 function getDashboardPort(): number {

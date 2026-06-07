@@ -7,6 +7,7 @@ import {
   shouldHideWindowOnClose,
   shouldShowWindowOnLaunch,
 } from '../src/ui'
+import { t } from '../src/i18n'
 
 describe('widget UI helpers', () => {
   it('shows the window automatically in development', () => {
@@ -27,10 +28,19 @@ describe('widget UI helpers', () => {
   it('keeps a tray-positioned window within the visible display bounds', () => {
     expect(getWindowPosition({
       platform: 'darwin',
+      trayBounds: { x: 1200, y: 0, width: 32, height: 24 },
+      windowBounds: { x: 575, y: 328, width: 320, height: 300 },
+      displayBounds: { x: 0, y: 0, width: 1470, height: 956 },
+    })).toEqual({ x: 1056, y: 28 })
+  })
+
+  it('falls back to the menu-bar side when macOS reports a bogus bottom-left tray bound', () => {
+    expect(getWindowPosition({
+      platform: 'darwin',
       trayBounds: { x: 0, y: 956, width: 32, height: 0 },
       windowBounds: { x: 575, y: 328, width: 320, height: 300 },
       displayBounds: { x: 0, y: 0, width: 1470, height: 956 },
-    })).toEqual({ x: 0, y: 656 })
+    })).toEqual({ x: 1150, y: 28 })
   })
 
   it('keeps an oversized window anchored inside the display origin', () => {
@@ -50,5 +60,12 @@ describe('widget UI helpers', () => {
     const { buffer } = getTrayIconNativeImage()
 
     expect(buffer.length).toBeGreaterThan(30)
+  })
+
+  it('localizes tray context menu labels', () => {
+    expect(t('en').openDashboard).toBe('Open Dashboard')
+    expect(t('zh').openDashboard).toBe('打开仪表盘')
+    expect(t('zh').showPanel).toBe('显示面板')
+    expect(t('zh').quit).toBe('退出')
   })
 })

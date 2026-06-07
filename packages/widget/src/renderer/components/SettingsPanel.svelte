@@ -2,6 +2,8 @@
   import { createEventDispatcher } from 'svelte'
   import { t } from '../i18n'
   import type { Locale } from '../i18n'
+  import { currencies } from '../../currency'
+  import type { CurrencyCode, ExchangeRateState } from '../../currency'
 
   interface WidgetSettings {
     theme: 'system' | 'light' | 'dark'
@@ -11,9 +13,11 @@
     showHeatmap: boolean
     showTokenBreakdown: boolean
     locale: Locale
+    currency: CurrencyCode
   }
 
   export let settings: WidgetSettings
+  export let exchangeRate: ExchangeRateState | null = null
 
   const dispatch = createEventDispatcher<{ save: WidgetSettings; close: void }>()
 
@@ -23,6 +27,19 @@
 
   function save() {
     dispatch('save', local)
+  }
+
+  function formatRate(): string {
+    if (!exchangeRate?.rate) return i18n.exchangeRateUnavailable
+    return `1 USD = ${exchangeRate.rate.toFixed(4)} CNY`
+  }
+
+  function formatRateUpdated(): string {
+    if (!exchangeRate?.fetchedAt) return ''
+    const d = new Date(exchangeRate.fetchedAt)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return i18n.exchangeRateUpdated(`${hh}:${mm}`)
   }
 
   function toggle(key: keyof WidgetSettings) {
@@ -82,6 +99,33 @@
         </button>
       {/each}
     </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">{i18n.currency}</div>
+    <div class="button-group">
+      {#each currencies as c}
+        <button
+          class="option-btn"
+          class:active={local.currency === c.code}
+          on:click={() => { local = { ...local, currency: c.code }; save() }}
+        >
+          {c.label}
+        </button>
+      {/each}
+    </div>
+    {#if local.currency === 'CNY'}
+      <div class="rate-info" class:error={!exchangeRate?.rate}>
+        <span>{i18n.exchangeRate}</span>
+        <strong>{formatRate()}</strong>
+        {#if formatRateUpdated()}
+          <small>{formatRateUpdated()}</small>
+        {/if}
+        {#if exchangeRate?.error}
+          <small>{exchangeRate.error}</small>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <div class="section">
@@ -202,6 +246,32 @@
     border-radius: 6px;
     overflow: hidden;
     border: 1px solid var(--border);
+  }
+  .rate-info {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 8px;
+    align-items: baseline;
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+  .rate-info strong {
+    justify-self: end;
+    color: var(--text-secondary);
+    font-family: 'Geist Mono', 'SF Mono', 'Menlo', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .rate-info small {
+    grid-column: 1 / -1;
+    justify-self: end;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+  .rate-info.error strong {
+    color: var(--text-muted);
   }
   .option-btn {
     flex: 1;
