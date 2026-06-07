@@ -35,12 +35,15 @@ COPY packages/site/ packages/site/
 RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/site build
 
 # Prepare production directory: copy build output and create a standalone package
-# that uses npm to resolve dependencies (avoids pnpm workspace complexity)
+# with the workspace core package converted to a local file dependency.
 RUN mkdir -p /deploy && \
     cp -r /app/packages/site/build /deploy/build && \
+    mkdir -p /deploy/packages/core && \
+    cp -r /app/packages/core/dist /deploy/packages/core/dist && \
+    cp /app/packages/core/package.json /deploy/packages/core/package.json && \
     cat /app/packages/site/package.json | \
-      node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); delete pkg.devDependencies; delete pkg.scripts; pkg.type='module'; fs.writeFileSync('/deploy/package.json',JSON.stringify(pkg,null,2))" && \
-    cd /deploy && npm install --omit=dev 2>&1 || true
+      node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); delete pkg.devDependencies; delete pkg.scripts; pkg.type='module'; pkg.dependencies=pkg.dependencies||{}; pkg.dependencies['@aiusage/core']='file:./packages/core'; fs.writeFileSync('/deploy/package.json',JSON.stringify(pkg,null,2)+'\n')" && \
+    cd /deploy && npm install --omit=dev
 
 FROM node:20-slim
 
