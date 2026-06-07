@@ -12,13 +12,14 @@ describe('settings source grouping', () => {
   it('separates manual import tools from auto-detected tools', () => {
     const tools = [
       { sourceKey: 'claude-code', label: 'Claude Code', status: 'found' },
-      { sourceKey: 'kelivo', label: 'Kelivo', status: 'not_found' },
+      { sourceKey: 'kelivo', label: 'Kelivo', status: 'not_found', lastImportedAt: 1770000000000 },
       { sourceKey: 'cursor', label: 'Cursor', status: 'not_found' },
     ]
 
     const groups = splitSettingsSources(tools)
 
     expect(groups.manualImportTools.map((tool) => tool.sourceKey)).toEqual(['kelivo'])
+    expect(groups.manualImportTools[0].lastImportedAt).toBe(1770000000000)
     expect(groups.activeDetectedTools.map((tool) => tool.sourceKey)).toEqual(['claude-code'])
     expect(groups.notFoundDetectedTools.map((tool) => tool.sourceKey)).toEqual(['cursor'])
   })
@@ -33,5 +34,17 @@ describe('settings source grouping', () => {
     expect(manualImportsIndex).toBeGreaterThan(dataSourcesIndex)
     expect(detectedToolsIndex).toBeGreaterThan(manualImportsIndex)
     expect(syncIndex).toBeGreaterThan(detectedToolsIndex)
+  })
+
+  it('derives Kelivo last import time from detected tool metadata', () => {
+    expect(settingsSource).toContain('kelivoTool?.lastImportedAt')
+    expect(settingsSource).toContain('mergeKelivoImportMetadata')
+    expect(settingsSource).not.toContain('kelivoLastImportedAt = new Date()')
+  })
+
+  it('uses import-specific copy and incremental result text for manual imports', () => {
+    expect(settingsSource).toContain("settings.neverImported")
+    expect(settingsSource).toContain("settings.added")
+    expect(settingsSource).toContain("kelivoAddedCount")
   })
 })

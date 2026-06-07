@@ -13,6 +13,7 @@ export interface DetectedTool {
   paths?: string[]
   fileCount: number
   status: 'found' | 'empty' | 'not_found'
+  lastImportedAt?: number
 }
 
 // ── Environment variable helpers ─────────────────────────────────────

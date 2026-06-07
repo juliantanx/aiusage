@@ -29,8 +29,46 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
+import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
+
+function getManualImportMetadata(db: Database.Database): Record<string, { lastImportedAt: number }> {
+  const rows = db.prepare(`
+    SELECT tool, MAX(ingested_at) AS lastImportedAt
+    FROM records
+    WHERE tool IN ('kelivo')
+    GROUP BY tool
+  `).all() as Array<{ tool: string; lastImportedAt: number | null }>
+
+  const metadata: Record<string, { lastImportedAt: number }> = {}
+  for (const row of rows) {
+    if (typeof row.lastImportedAt === 'number') {
+      metadata[row.tool] = { lastImportedAt: row.lastImportedAt }
+    }
+  }
+  return metadata
+}
+
+function attachManualImportMetadata(tools: DetectedTool[], db: Database.Database): DetectedTool[] {
+  const metadata = getManualImportMetadata(db)
+  return tools.map((tool) => {
+    const toolMetadata = metadata[tool.tool]
+    return toolMetadata ? { ...tool, ...toolMetadata } : tool
+  })
+}
+
+function countExistingRecordIds(db: Database.Database, ids: string[]): number {
+  const uniqueIds = [...new Set(ids)]
+  if (uniqueIds.length === 0) return 0
+
+  const stmt = db.prepare('SELECT 1 FROM records WHERE id = ? LIMIT 1')
+  let count = 0
+  for (const id of uniqueIds) {
+    if (stmt.get(id)) count++
+  }
+  return count
+}
 
 function recalcCosts(db: Database.Database): number {
   const BATCH_SIZE = 1000
@@ -1616,7 +1654,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/detected-tools ──────────────────────────────────────
       if (url.pathname === '/api/detected-tools' && req.method === 'GET') {
-        const tools = discoverTools()
+        const tools = attachManualImportMetadata(discoverTools(), db)
         json(res, { tools })
         return
       }
@@ -1654,8 +1692,16 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return
           }
 
+          const existingCount = countExistingRecordIds(db, result.records.map((record) => record.id))
           for (const record of result.records) insertRecord(db, record)
-          json(res, { imported: result.records.length, errors: result.errors })
+          const imported = result.records.length
+          const added = Math.max(0, new Set(result.records.map((record) => record.id)).size - existingCount)
+          json(res, {
+            imported,
+            added,
+            lastImportedAt: imported > 0 ? now : undefined,
+            errors: result.errors,
+          })
         } finally {
           if (tempDir) rmSync(tempDir, { recursive: true, force: true })
         }

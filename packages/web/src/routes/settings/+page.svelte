@@ -22,7 +22,7 @@
   let kelivoImporting = false
   let kelivoImportError = ''
   let kelivoImportedCount = null
-  let kelivoLastImportedAt = null
+  let kelivoAddedCount = null
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
 
@@ -87,11 +87,12 @@
     ? new Date(cachedRateFetchedAt).toLocaleString()
     : null
   $: kelivoTool = detectedTools.find(tool => tool.sourceKey === 'kelivo')
+  $: kelivoLastImportedAt = typeof kelivoTool?.lastImportedAt === 'number'
+    ? new Date(kelivoTool.lastImportedAt)
+    : null
   $: kelivoStatus = kelivoLastImportedAt
     ? `${$t('settings.lastImported')} ${kelivoLastImportedAt.toLocaleString()}`
-    : kelivoTool?.status === 'found'
-      ? $t('settings.toolFound')
-      : $t('settings.notConfigured')
+    : $t('settings.neverImported')
 
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
@@ -434,6 +435,13 @@
     kelivoFileInput?.click()
   }
 
+  function mergeKelivoImportMetadata(tools, result) {
+    if (typeof result?.lastImportedAt !== 'number') return tools
+    return tools.map((tool) => tool.sourceKey === 'kelivo'
+      ? { ...tool, lastImportedAt: result.lastImportedAt }
+      : tool)
+  }
+
   async function handleKelivoFileChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -445,12 +453,18 @@
 
     kelivoImporting = true
     kelivoImportError = ''
+    kelivoImportedCount = null
+    kelivoAddedCount = null
     try {
       const result = await importKelivoBackup(file)
       kelivoImportedCount = result.imported ?? 0
-      kelivoLastImportedAt = new Date()
-      const toolsResult = await fetchDetectedTools()
-      detectedTools = toolsResult.tools ?? []
+      kelivoAddedCount = result.added ?? null
+      let nextTools = detectedTools
+      try {
+        const toolsResult = await fetchDetectedTools()
+        nextTools = toolsResult.tools ?? detectedTools
+      } catch {}
+      detectedTools = mergeKelivoImportMetadata(nextTools, result)
       notifySettingsUpdated({ importedTool: 'kelivo' })
     } catch (e) {
       kelivoImportError = e instanceof Error ? e.message : $t('settings.kelivoImportFailed')
@@ -649,7 +663,12 @@
                       {kelivoImporting ? '...' : $t('settings.importBackup')}
                     </button>
                     {#if kelivoImportedCount !== null}
-                      <span class="source-result">{$t('settings.imported')} {kelivoImportedCount} {$t('settings.records')}</span>
+                      <span class="source-result">
+                        {$t('settings.imported')} {kelivoImportedCount} {$t('settings.records')}
+                        {#if kelivoAddedCount !== null}
+                          · {$t('settings.added')} {kelivoAddedCount} {$t('settings.records')}
+                        {/if}
+                      </span>
                     {/if}
                   </div>
                   {#if kelivoImportError}<p class="section-error compact">{kelivoImportError}</p>{/if}
