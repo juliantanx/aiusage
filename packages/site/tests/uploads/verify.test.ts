@@ -82,107 +82,107 @@ function computeHash(snap: UploadSnapshot): string {
 function makeValidPayload(snapOverrides: Partial<UploadSnapshot> = {}) {
   return {
     schema_version: 1,
-    client_version: '1.4.0',
+    client_version: '1.5.0',
     client_platform: 'macos',
     snapshots: [makeSnapshot(snapOverrides)]
   }
 }
 
 describe('validatePayload', () => {
-  it('accepts valid payload', () => {
-    const result = validatePayload(makeValidPayload())
+  it('accepts valid payload', async () => {
+    const result = await validatePayload(makeValidPayload())
     expect(result.valid).toBe(true)
   })
 
-  it('rejects non-object', () => {
-    expect(validatePayload(null).valid).toBe(false)
-    expect(validatePayload('string').valid).toBe(false)
-    expect(validatePayload(42).valid).toBe(false)
+  it('rejects non-object', async () => {
+    expect((await validatePayload(null)).valid).toBe(false)
+    expect((await validatePayload('string')).valid).toBe(false)
+    expect((await validatePayload(42)).valid).toBe(false)
   })
 
-  it('rejects wrong schema_version', () => {
-    const result = validatePayload({ ...makeValidPayload(), schema_version: 2 })
+  it('rejects wrong schema_version', async () => {
+    const result = await validatePayload({ ...makeValidPayload(), schema_version: 2 })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('unsupported_schema_version')
   })
 
-  it('rejects invalid client_platform', () => {
-    const result = validatePayload({ ...makeValidPayload(), client_platform: 'darwin' })
+  it('rejects invalid client_platform', async () => {
+    const result = await validatePayload({ ...makeValidPayload(), client_platform: 'darwin' })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_payload')
   })
 
-  it('rejects empty snapshots', () => {
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [] })
+  it('rejects empty snapshots', async () => {
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [] })
     expect(result.valid).toBe(false)
   })
 
-  it('rejects more than 5 snapshots', () => {
+  it('rejects more than 5 snapshots', async () => {
     const snap = makeSnapshot()
-    const result = validatePayload({ ...makeValidPayload(), snapshots: Array(6).fill(snap) })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: Array(6).fill(snap) })
     expect(result.valid).toBe(false)
   })
 
-  it('rejects negative token values', () => {
+  it('rejects negative token values', async () => {
     const snap = makeSnapshot()
     snap.input_tokens = -1
     snap.token_snapshot_hash = computeHash(snap)
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_token_value')
   })
 
-  it('rejects mismatched total_tokens', () => {
+  it('rejects mismatched total_tokens', async () => {
     const snap = makeSnapshot()
     snap.total_tokens = 999
     snap.token_snapshot_hash = computeHash(snap)
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_token_value')
   })
 
-  it('rejects forbidden payload fields', () => {
-    const result = validatePayload({ ...makeValidPayload(), extra_field: 'x' })
+  it('rejects forbidden payload fields', async () => {
+    const result = await validatePayload({ ...makeValidPayload(), extra_field: 'x' })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('payload_forbidden_field')
   })
 
-  it('rejects invalid period_type', () => {
+  it('rejects invalid period_type', async () => {
     const snap = makeSnapshot({ period_type: 'hourly' as any })
     snap.token_snapshot_hash = computeHash(snap)
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_period_boundary')
   })
 
-  it('rejects snapshot hash mismatch', () => {
+  it('rejects snapshot hash mismatch', async () => {
     const snap = makeSnapshot()
     snap.token_snapshot_hash = 'sha256:wrong'
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_snapshot_hash')
   })
 
-  it('rejects breakdown with wrong scope_type tool/model combo', () => {
+  it('rejects breakdown with wrong scope_type tool/model combo', async () => {
     const snap = makeSnapshot()
     // 'all' scope should have tool=null, model=null
     snap.breakdowns[0] = makeBreakdown({ scope_type: 'all', tool: 'something', model: null })
     snap.token_snapshot_hash = computeHash(snap)
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
   })
 
-  it('rejects duplicate breakdown keys', () => {
+  it('rejects duplicate breakdown keys', async () => {
     const snap = makeSnapshot()
     // Add duplicate tool_model breakdown
     snap.breakdowns.push(makeBreakdown({ scope_type: 'tool_model', tool: 'claude-code', model: 'claude-sonnet-4-20250514' }))
     snap.token_snapshot_hash = computeHash(snap)
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_breakdowns')
   })
 
-  it('rejects inconsistent tool breakdown totals', () => {
+  it('rejects inconsistent tool breakdown totals', async () => {
     const allBd = makeBreakdown({ scope_type: 'all', total_tokens: 100, input_tokens: 40, output_tokens: 30, cache_read_tokens: 10, cache_write_tokens: 10, thinking_tokens: 10 })
     const toolBd = makeBreakdown({ scope_type: 'tool', tool: 'claude-code', total_tokens: 50, input_tokens: 20, output_tokens: 15, cache_read_tokens: 5, cache_write_tokens: 5, thinking_tokens: 5 })
     const modelBd = makeBreakdown({ scope_type: 'model', model: 'claude-sonnet-4-20250514' })
@@ -190,7 +190,7 @@ describe('validatePayload', () => {
 
     const snap = makeSnapshot({ breakdowns: [allBd, toolBd, modelBd, tmBd] })
     snap.token_snapshot_hash = computeHash(snap)
-    const result = validatePayload({ ...makeValidPayload(), snapshots: [snap] })
+    const result = await validatePayload({ ...makeValidPayload(), snapshots: [snap] })
     expect(result.valid).toBe(false)
     expect(result.error_code).toBe('invalid_breakdowns')
   })

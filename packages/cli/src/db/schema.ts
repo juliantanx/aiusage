@@ -141,6 +141,13 @@ export function createV1Schema(db: Database.Database): void {
       PRIMARY KEY (id, device_scope)
     );
 
+    CREATE TABLE sync_record_state (
+      record_id          TEXT NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+      target             TEXT NOT NULL,
+      synced_at          INTEGER NOT NULL,
+      PRIMARY KEY (record_id, target)
+    );
+
     CREATE TABLE tool_calls (
       id          TEXT PRIMARY KEY,
       record_id   TEXT REFERENCES records(id) ON DELETE CASCADE,
@@ -166,6 +173,7 @@ export function createV1Schema(db: Database.Database): void {
     CREATE INDEX idx_synced_records_updated ON synced_records(updated_at DESC);
     CREATE INDEX idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at DESC);
     CREATE INDEX idx_tombstones_device_scope ON sync_tombstones(device_scope);
+    CREATE INDEX idx_sync_record_state_target ON sync_record_state(target, synced_at);
     CREATE INDEX idx_tc_record_id       ON tool_calls(record_id);
     CREATE INDEX idx_tc_name            ON tool_calls(name);
     CREATE INDEX idx_tc_ts              ON tool_calls(ts DESC);

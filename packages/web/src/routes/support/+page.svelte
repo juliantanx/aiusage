@@ -32,11 +32,11 @@
 </div>
 
 <div class="support-layout">
-  <section class="support-section">
+  <section class="support-section wechat-section">
     <h2>{$t('support.personal')}</h2>
     <div class="wechat-block">
       <button class="qr-trigger" on:click={openQr} aria-label={$t('support.qrExpand')}>
-        <img src="/wechat-support-qr.jpg" alt="WeChat QR" width="120" height="120" />
+        <img src="/wechat-support-qr.jpg" alt="WeChat QR" width="180" height="180" />
       </button>
       <div>
         <h3>{$t('support.wechat')}</h3>
@@ -72,7 +72,7 @@
 </div>
 
 {#if qrOpen}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
   <div class="qr-overlay" role="dialog" aria-modal="true" aria-label={$t('support.wechat')} on:click={handleScrimClick}>
     <div class="qr-card">
       <img src="/wechat-support-qr.jpg" alt="WeChat QR" width="280" height="280" />
@@ -84,10 +84,9 @@
 
 <style>
   .support-layout {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
-    max-width: 640px;
   }
 
   .support-section {
@@ -132,8 +131,8 @@
 
   .qr-trigger img {
     display: block;
-    width: 120px;
-    height: 120px;
+    width: 180px;
+    height: 180px;
     object-fit: contain;
     background: var(--surface);
     border-radius: 4px;
@@ -246,7 +245,11 @@
     color: var(--text);
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 640px) {
+    .support-layout {
+      grid-template-columns: 1fr;
+    }
+
     .wechat-block {
       flex-direction: column;
       align-items: flex-start;

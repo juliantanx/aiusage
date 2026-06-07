@@ -56,11 +56,46 @@ export function deleteRecordsBySourceFile(db: Database.Database, sourceFile: str
   return result.changes
 }
 
-export function getUnsyncedRecords(db: Database.Database): StatsRecord[] {
-  const rows = db.prepare(
-    'SELECT * FROM records WHERE synced_at IS NULL OR updated_at > synced_at'
-  ).all() as Record<string, unknown>[]
+export function getUnsyncedRecords(db: Database.Database, target?: string): StatsRecord[] {
+  const rows = target
+    ? db.prepare(`
+        SELECT r.* FROM records r
+        LEFT JOIN sync_record_state s
+          ON s.record_id = r.id AND s.target = ?
+        WHERE r.source_file NOT LIKE 'synced/%'
+          AND (s.synced_at IS NULL OR r.updated_at > s.synced_at)
+      `).all(target) as Record<string, unknown>[]
+    : db.prepare(
+      'SELECT * FROM records WHERE synced_at IS NULL OR updated_at > synced_at'
+    ).all() as Record<string, unknown>[]
   return rows.map(mapRowToRecord)
+}
+
+export function markRecordsSynced(db: Database.Database, ids: string[], syncedAt: number, target?: string): void {
+  if (ids.length === 0) return
+
+  if (target) {
+    const insertStmt = db.prepare(`
+      INSERT INTO sync_record_state (record_id, target, synced_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(record_id, target) DO UPDATE SET synced_at = excluded.synced_at
+    `)
+    const legacyStmt = db.prepare('UPDATE records SET synced_at = ? WHERE id = ?')
+    const tx = db.transaction((recordIds: string[]) => {
+      for (const id of recordIds) {
+        insertStmt.run(id, target, syncedAt)
+        legacyStmt.run(syncedAt, id)
+      }
+    })
+    tx(ids)
+    return
+  }
+
+  const updateStmt = db.prepare('UPDATE records SET synced_at = ? WHERE id = ?')
+  const tx = db.transaction((recordIds: string[]) => {
+    for (const id of recordIds) updateStmt.run(syncedAt, id)
+  })
+  tx(ids)
 }
 
 function mapRowToRecord(row: Record<string, unknown>): StatsRecord {

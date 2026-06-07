@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
-import { insertRecord, getRecordById, getRecordsBySourceFile, deleteRecordsBySourceFile, getUnsyncedRecords } from '../../src/db/records.js'
+import { insertRecord, getRecordById, getRecordsBySourceFile, deleteRecordsBySourceFile, getUnsyncedRecords, markRecordsSynced } from '../../src/db/records.js'
 import type { StatsRecord } from '@aiusage/core'
 
 function createTestRecord(overrides: Partial<StatsRecord> = {}): StatsRecord {
@@ -91,6 +91,14 @@ describe('Records CRUD', () => {
     const unsynced = getUnsyncedRecords(db)
     expect(unsynced).toHaveLength(1)
     expect(unsynced[0].id).toBe('r1')
+  })
+
+  it('tracks sync state independently for each target', () => {
+    insertRecord(db, createTestRecord({ id: 'r1' }))
+    markRecordsSynced(db, ['r1'], 1776738085800, 'cloud')
+
+    expect(getUnsyncedRecords(db, 'cloud')).toHaveLength(0)
+    expect(getUnsyncedRecords(db, 's3:aiusage-data')).toHaveLength(1)
   })
 
   it('upserts record on duplicate id', () => {

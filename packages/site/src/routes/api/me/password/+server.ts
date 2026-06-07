@@ -9,7 +9,7 @@ export const PUT: RequestHandler = async (event) => {
   const body = await event.request.json()
   const { current_password, new_password } = body
 
-  const passwordError = validatePassword(new_password)
+  const passwordError = await validatePassword(new_password)
   if (passwordError) return json({ error: passwordError }, { status: 400 })
 
   // Check if user already has a password

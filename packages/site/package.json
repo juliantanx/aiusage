@@ -1,6 +1,6 @@
 {
   "name": "@aiusage/site",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -33,6 +33,7 @@
     "nanoid": "^5.0.0",
     "node-cron": "^3.0.3",
     "postgres": "^3.4.0",
+    "resend": "^6.12.4",
     "sharp": "^0.34.5"
   }
 }

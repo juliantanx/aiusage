@@ -5,6 +5,28 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [1.5.0] - 2026-06-07
+
+### 新增
+- **Windows 仪表盘启动器** ([#23](https://github.com/juliantanx/aiusage/pull/23)，@joyshan1986 贡献) — 提供专用的 Windows 启动器，避免依赖 shell 包装即可打开仪表盘。
+- **token 排行榜、云同步与 Web 增强** ([#24](https://github.com/juliantanx/aiusage/pull/24)) — 引入 token 排行榜，扩展云同步流程，并围绕同步与排行榜工作流更新 Web 仪表盘。
+- **交互式 `aiusage menu` 命令** ([#25](https://github.com/juliantanx/aiusage/pull/25)) — 新增终端菜单，把常用 CLI 操作集中到一个入口。
+- **仪表盘密码解锁流程** ([#27](https://github.com/juliantanx/aiusage/pull/27)，@Fiveo9 贡献) — 新增本地仪表盘密码保护与解锁流程。
+- **会话详情和排行榜功能增强** ([#28](https://github.com/juliantanx/aiusage/pull/28)) — 扩展会话详情页和排行榜工作流，提供更多上下文与管理端可用性优化。
+- **密码重置流程与 Resend 邮件服务** — 新增忘记密码和重置密码支持，并补充账号恢复与管理相关增强。
+- **Widget 费用显示与 UI 刷新** — Widget 会根据所选货币显示费用，并带来重新设计的 i18n / 设置 / 图表体验。
+
+### 修复
+- **云同步校验与同步可靠性** — 通过 GitHub 星标校验限制 Cloud Sync，正确保留同步配置，修复 R2 路径风格处理，并修正上传记录计数。
+- **OAuth 与认证流程加固** — 用内存存储替换基于 cookie 的 OAuth state，修复显式 `Set-Cookie` 处理，从 `SITE_URL` 推导安全 cookie，并在 GitHub OAuth 启动流程中使用 SvelteKit redirect。
+- **仪表盘与排行榜打磨** — `serve` 启动时自动解析日志，用成功 toast 替代上传结果摘要，改进排行榜前三名展示和排序筛选，并优化管理后台徽章与角色切换布局。
+- **Web 界面清理** — 改善深色主题对比度，抑制对话框遮罩层的可访问性警告，并减少筛选器布局冲突。
+
+### 变更
+- **文档与发布内容刷新** — 更新仪表盘文档/截图、项目概览与安全策略、演示 GIF 托管，以及站点/版本元数据到 `1.5.0`。
+
+---
+
 ## [1.4.0] - 2026-06-03
 
 ### 新增
@@ -262,6 +284,7 @@
 
 ---
 
+[1.5.0]: https://github.com/juliantanx/aiusage/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/juliantanx/aiusage/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/juliantanx/aiusage/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/juliantanx/aiusage/compare/v1.3.2...v1.3.3

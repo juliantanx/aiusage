@@ -15,6 +15,7 @@
         { id: 'install', en: 'Installation', zh: '安装' },
         { id: 'parse', en: 'Parse Data', zh: '解析数据' },
         { id: 'serve', en: 'Start Dashboard', zh: '启动仪表盘' },
+        { id: 'dashboard-password', en: 'Dashboard Password', zh: '仪表盘密码' },
         { id: 'pm2', en: 'Background (PM2)', zh: '后台运行 (PM2)' },
         { id: 'docker', en: 'Docker', zh: 'Docker 部署' },
       ]
@@ -60,6 +61,7 @@
       children: [
         { id: 'settings-general', en: 'General', zh: '通用' },
         { id: 'settings-sources', en: 'Data Sources', zh: '数据源' },
+        { id: 'settings-env', en: 'Source Env Vars', zh: '数据源环境变量' },
         { id: 'settings-data', en: 'Data Management', zh: '数据管理' },
       ]
     },
@@ -295,7 +297,7 @@
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
         <span class="meta-tag">MIT</span>
-        <span class="meta-tag">v1.4.0</span>
+        <span class="meta-tag">v1.5.0</span>
       </div>
     </header>
 
@@ -350,6 +352,28 @@
       </Callout>
     </section>
 
+    <section id="dashboard-password">
+      <h3>{zh ? '仪表盘密码' : 'Dashboard Password'}</h3>
+      <p>{zh
+        ? '本地仪表盘默认不需要登录。设置 AIUSAGE_DASHBOARD_PASSWORD 后，除首页、静态资源和公开 summary / quotas API 外，其他 API 会要求先输入密码。密码仅用于本地 dashboard cookie，不会写入数据库。'
+        : 'The local dashboard does not require sign-in by default. Set AIUSAGE_DASHBOARD_PASSWORD to protect dashboard APIs except the home page, static assets, and public summary / quotas endpoints. The password is used only for the local dashboard cookie and is not stored in the database.'
+      }</p>
+      <DocsTable
+        headers={zh ? ['系统 / Shell', '一次性启动命令'] : ['System / Shell', 'One-time start command']}
+        rows={[
+          ['macOS / Linux (bash, zsh)', '<code>AIUSAGE_DASHBOARD_PASSWORD="change-me" aiusage serve</code>'],
+          ['Windows PowerShell', '<code>$env:AIUSAGE_DASHBOARD_PASSWORD="change-me"; aiusage serve</code>'],
+          ['Windows CMD', '<code>set AIUSAGE_DASHBOARD_PASSWORD=change-me && aiusage serve</code>'],
+        ]}
+      />
+      <Callout type="tip">
+        {zh
+          ? '如果要长期保存密码，请使用所在系统的环境变量管理方式，或在 PM2 ecosystem 配置中显式写入 env。不要把真实密码提交到仓库。'
+          : 'For persistent use, configure the variable with your OS environment manager or write it explicitly in the PM2 ecosystem env block. Do not commit real passwords to the repository.'
+        }
+      </Callout>
+    </section>
+
     <section id="pm2">
       <h3>{zh ? '后台运行 (PM2)' : 'Running in Background (PM2)'}</h3>
       <p>{zh
@@ -367,10 +391,38 @@
       </CodeBlock>
       <Callout type="info">
         {zh
-          ? '前两条命令会立即把服务跑起来；pm2 startup 则负责开机自启，二者缺一不可。pm2 startup 会打印一条 sudo env PATH=… pm2 startup … 命令，需要复制并执行它才能真正生效。'
-          : 'The first two commands start the service right away; pm2 startup handles auto-start on reboot — you need both. Note that pm2 startup prints a sudo env PATH=… pm2 startup … command that you must copy and run for it to take effect.'
+          ? '前两条命令会立即把服务跑起来；pm2 startup 负责 macOS / Linux 的开机自启。pm2 startup 会打印一条需要复制执行的命令，通常包含 sudo env PATH=… pm2 startup …。Windows 上 PM2 可以后台运行，但开机自启通常需要额外的 Windows service / startup 工具。'
+          : 'The first two commands start the service right away; pm2 startup handles auto-start on macOS / Linux. It prints a command you must copy and run, often including sudo env PATH=… pm2 startup …. PM2 can run in the background on Windows, but reboot startup usually requires an additional Windows service / startup helper.'
         }
       </Callout>
+      <p>{zh ? '如需同时启用仪表盘密码，请按当前系统选择命令：' : 'To enable the dashboard password at the same time, use the command for your shell:'}</p>
+      <DocsTable
+        headers={zh ? ['系统 / Shell', '启动 PM2 后台服务'] : ['System / Shell', 'Start PM2 service']}
+        rows={[
+          ['macOS / Linux (bash, zsh)', '<code>AIUSAGE_DASHBOARD_PASSWORD="change-me" aiusage pm2-start</code>'],
+          ['Windows PowerShell', '<code>$env:AIUSAGE_DASHBOARD_PASSWORD="change-me"; aiusage pm2-start</code>'],
+          ['Windows CMD', '<code>set AIUSAGE_DASHBOARD_PASSWORD=change-me && aiusage pm2-start</code>'],
+        ]}
+      />
+      <p>{zh
+        ? 'pm2-start 会生成 ~/.aiusage/ecosystem.config.cjs，并通过 wrapper 继承启动命令当时的环境变量。修改密码后需要用新环境重启：'
+        : 'pm2-start generates ~/.aiusage/ecosystem.config.cjs and its wrapper inherits the environment from the start command. After changing the password, restart with the new environment:'
+      }</p>
+      <DocsTable
+        headers={zh ? ['系统 / Shell', '更新密码后重启'] : ['System / Shell', 'Restart after password change']}
+        rows={[
+          ['macOS / Linux (bash, zsh)', '<code>AIUSAGE_DASHBOARD_PASSWORD="new-password" pm2 restart aiusage-server --update-env</code>'],
+          ['Windows PowerShell', '<code>$env:AIUSAGE_DASHBOARD_PASSWORD="new-password"; pm2 restart aiusage-server --update-env</code>'],
+          ['Windows CMD', '<code>set AIUSAGE_DASHBOARD_PASSWORD=new-password && pm2 restart aiusage-server --update-env</code>'],
+        ]}
+      />
+      <CodeBlock lang="Terminal" copyText={'pm2 logs aiusage-server\npm2 list\npm2 save\naiusage pm2-start --server-only'}>
+        <span slot="lines"><span>1</span><span>2</span><span>3</span><span>4</span></span>
+        <span class="tk-kw">pm2</span> logs aiusage-server
+<span class="tk-kw">pm2</span> list
+<span class="tk-kw">pm2</span> save
+<span class="tk-kw">aiusage</span> pm2-start --server-only  <span class="tk-cmt"># skip widget process</span>
+      </CodeBlock>
     </section>
 
     <section id="docker">
@@ -389,6 +441,21 @@
         {zh
           ? '官方镜像当前提供在 Docker Hub（juliantanx/aiusage），支持 amd64 和 arm64 架构。'
           : 'The official image is currently published on Docker Hub (juliantanx/aiusage) with amd64 and arm64 support.'
+        }
+      </Callout>
+      <p>{zh ? 'Docker 中启用仪表盘密码：' : 'Enable the dashboard password in Docker:'}</p>
+      <CodeBlock lang="Terminal" copyText={'docker run -d \\\n  -p 3847:3847 \\\n  -e AIUSAGE_DASHBOARD_PASSWORD=change-me \\\n  -v ~/.aiusage:/root/.aiusage \\\n  juliantanx/aiusage'}>
+        <span slot="lines"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></span>
+        <span class="tk-kw">docker</span> run -d \
+  -p 3847:3847 \
+  -e AIUSAGE_DASHBOARD_PASSWORD=change-me \
+  -v ~/.aiusage:/root/.aiusage \
+  juliantanx/aiusage
+      </CodeBlock>
+      <Callout type="warn">
+        {zh
+          ? '如果需要解析宿主机上的 AI 工具日志，还需要额外挂载对应日志目录，并用 AIUSAGE_*_PATH 指向容器内路径。只挂载 ~/.aiusage 只能持久化 aiusage 自己的数据库和配置。'
+          : 'To parse AI tool logs from the host, mount each source log directory and point AIUSAGE_*_PATH to the path inside the container. Mounting only ~/.aiusage persists aiusage data and config, but not the source logs.'
         }
       </Callout>
     </section>
@@ -750,9 +817,9 @@
       <p>{zh ? '为每种 AI 工具指定自定义日志目录路径。留空则使用默认路径：' : 'Specify custom log directory paths for each AI tool. Leave blank for defaults:'}</p>
       <ul>
         <li><strong>Claude Code</strong> — <code>~/.claude/projects</code></li>
-        <li><strong>Codex</strong> — <code>~/.codex/sessions</code></li>
+        <li><strong>Codex</strong> — <code>~/.codex/sessions</code> + <code>~/.codex/archived_sessions</code></li>
         <li><strong>OpenClaw</strong> — <code>~/.openclaw/agents</code></li>
-        <li><strong>OpenCode</strong> — {zh ? '平台相关的 SQLite 数据库路径' : 'platform-specific SQLite database path'}</li>
+        <li><strong>OpenCode</strong> — <code>~/.local/share/opencode/opencode.db</code> {zh ? '及 opencode-*.db' : 'and opencode-*.db'}</li>
         <li><strong>Hermes</strong> — <code>~/.hermes/state.db</code></li>
         <li><strong>Qoder</strong> — <code>~/.qoder/logs/sessions</code> + {zh ? '平台相关的' : 'platform-specific'} <code>local.db</code></li>
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
@@ -779,20 +846,71 @@
           : 'Copilot CLI (v1.0.4+) supports exporting usage data via OpenTelemetry. Add the following env vars to your shell profile to enable it:'
         }
       </Callout>
-      <CodeBlock lang="bash" code={`export COPILOT_OTEL_ENABLED=true
-export COPILOT_OTEL_EXPORTER_TYPE=file
-mkdir -p "$HOME/.copilot/otel"
-export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"`} />
+      <DocsTable
+        headers={zh ? ['系统 / Shell', 'Copilot OTEL 配置'] : ['System / Shell', 'Copilot OTEL setup']}
+        rows={[
+          ['macOS / Linux (bash, zsh)', '<code>export COPILOT_OTEL_ENABLED=true<br>export COPILOT_OTEL_EXPORTER_TYPE=file<br>mkdir -p "$HOME/.copilot/otel"<br>export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date +%Y%m%d).jsonl"</code>'],
+          ['Windows PowerShell', '<code>$env:COPILOT_OTEL_ENABLED="true"<br>$env:COPILOT_OTEL_EXPORTER_TYPE="file"<br>New-Item -ItemType Directory -Force "$HOME\\.copilot\\otel"<br>$env:COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME\\.copilot\\otel\\copilot-otel.jsonl"</code>'],
+          ['Windows CMD', '<code>set COPILOT_OTEL_ENABLED=true<br>set COPILOT_OTEL_EXPORTER_TYPE=file<br>mkdir "%USERPROFILE%\\.copilot\\otel"<br>set COPILOT_OTEL_FILE_EXPORTER_PATH=%USERPROFILE%\\.copilot\\otel\\copilot-otel.jsonl</code>'],
+        ]}
+      />
       <Callout type="info">
         {zh
           ? 'aiusage 从 OTEL JSONL 文件中提取 GenAI Semantic Conventions 标准的 token 用量（input_tokens、output_tokens、cache_read、cache_write、reasoning_tokens）。Copilot 用量统计需要 Copilot CLI v1.0.4 或更高版本，并且 OTEL 文件会写入你配置的本地路径（默认 ~/.copilot/otel）。'
           : 'aiusage extracts token usage from OTEL JSONL files following GenAI Semantic Conventions (input_tokens, output_tokens, cache_read, cache_write, reasoning_tokens). Copilot usage tracking requires Copilot CLI v1.0.4 or later, and OTEL files are written to your configured local path (default: ~/.copilot/otel).'
         }
       </Callout>
-      <Callout type="warning">
+      <Callout type="warn">
         {zh
           ? 'aiusage 会持久化已解析的记录和解析水位线，但不会备份各 AI 工具的原始日志。执行 reset 或 clean 删除 aiusage 数据后，历史用量只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，总 token 可能会变少。'
           : 'aiusage persists parsed records and parse watermarks, but it does not back up raw logs from each AI tool. After reset or clean deletes aiusage data, history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease.'
+        }
+      </Callout>
+    </section>
+
+    <section id="settings-env">
+      <h3>{zh ? '数据源环境变量' : 'Source Environment Variables'}</h3>
+      <p>{zh
+        ? '所有数据源都可以通过 AIUSAGE_*_PATH 覆盖默认路径。环境变量优先级高于旧版 config.sources，适合 Docker、PM2、WSL 或日志目录不在默认位置的机器。'
+        : 'Every source can override its default path with AIUSAGE_*_PATH. Environment variables take priority over legacy config.sources and are useful for Docker, PM2, WSL, or machines where logs are not in the default location.'
+      }</p>
+      <DocsTable
+        headers={zh ? ['工具 / 来源', '覆盖变量'] : ['Tool / Source', 'Override variable']}
+        rows={[
+          ['Claude Code', '<code>AIUSAGE_CLAUDE_CODE_PATH</code>'],
+          ['Codex', '<code>AIUSAGE_CODEX_PATH</code>'],
+          ['OpenClaw', '<code>AIUSAGE_OPENCLAW_PATH</code>'],
+          ['OpenCode', '<code>AIUSAGE_OPENCODE_PATH</code>'],
+          ['Hermes', '<code>AIUSAGE_HERMES_PATH</code>'],
+          ['Qoder sessions / desktop DB', '<code>AIUSAGE_QODER_PATH</code> / <code>AIUSAGE_QODER_DB_PATH</code>'],
+          ['Cursor', '<code>AIUSAGE_CURSOR_PATH</code>'],
+          ['KiloCode extension / DB', '<code>AIUSAGE_KILOCODE_PATH</code> / <code>AIUSAGE_KILOCODE_DB_PATH</code>'],
+          ['Copilot', '<code>AIUSAGE_COPILOT_PATH</code>'],
+          ['Gemini CLI', '<code>AIUSAGE_GEMINI_PATH</code>'],
+          ['Kimi Code', '<code>AIUSAGE_KIMI_PATH</code>'],
+          ['CodeBuddy', '<code>AIUSAGE_CODEBUDDY_PATH</code>'],
+          ['Kiro', '<code>AIUSAGE_KIRO_PATH</code>'],
+          ['Grok Build', '<code>AIUSAGE_GROK_PATH</code>'],
+          ['Antigravity', '<code>AIUSAGE_ANTIGRAVITY_PATH</code>'],
+          ['Roo Code', '<code>AIUSAGE_ROOCODE_PATH</code>'],
+          ['Zed', '<code>AIUSAGE_ZED_PATH</code>'],
+          ['Goose', '<code>AIUSAGE_GOOSE_PATH</code>'],
+          ['oh-my-pi / pi / Craft / Droid', '<code>AIUSAGE_OMP_PATH</code> / <code>AIUSAGE_PI_PATH</code> / <code>AIUSAGE_CRAFT_PATH</code> / <code>AIUSAGE_DROID_PATH</code>'],
+        ]}
+      />
+      <p>{zh ? '跨平台示例：' : 'Cross-platform examples:'}</p>
+      <DocsTable
+        headers={zh ? ['系统 / Shell', '示例'] : ['System / Shell', 'Example']}
+        rows={[
+          ['macOS / Linux (bash, zsh)', '<code>AIUSAGE_CODEX_PATH="/data/codex/sessions" aiusage parse --tool codex</code>'],
+          ['Windows PowerShell', '<code>$env:AIUSAGE_CODEX_PATH="D:\\logs\\codex\\sessions"; aiusage parse --tool codex</code>'],
+          ['Windows CMD', '<code>set AIUSAGE_CODEX_PATH=D:\\logs\\codex\\sessions && aiusage parse --tool codex</code>'],
+        ]}
+      />
+      <Callout type="info">
+        {zh
+          ? '部分工具也支持它们自己的变量，例如 CLAUDE_CONFIG_DIR、CODEX_HOME、OPENCODE_DB、HERMES_HOME、KILO_DB、GEMINI_HOME、KIRO_HOME、GROK_HOME、GOOSE_PATH_ROOT、OMP_HOME、PI_CODING_AGENT_DIR 和 CRAFT_CONFIG_DIR。AIUSAGE_*_PATH 始终是 aiusage 侧最直接的覆盖方式。'
+          : 'Some tools also support their own variables, such as CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_DB, HERMES_HOME, KILO_DB, GEMINI_HOME, KIRO_HOME, GROK_HOME, GOOSE_PATH_ROOT, OMP_HOME, PI_CODING_AGENT_DIR, and CRAFT_CONFIG_DIR. AIUSAGE_*_PATH is the most direct aiusage-side override.'
         }
       </Callout>
     </section>
@@ -832,6 +950,24 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
           : 'Official sync uses HMAC-signed authentication with encrypted transport. Supports incremental sync, tombstone propagation, and a generation mechanism to prevent stale devices from overwriting cleared data.'
         }
       </Callout>
+      <DocsTable
+        headers={zh ? ['后端', '配置命令'] : ['Backend', 'Configuration command']}
+        rows={[
+          ['Official Cloud', '<code>aiusage login<br>aiusage init --backend cloud<br>aiusage sync</code>'],
+          ['GitHub', '<code>aiusage init --backend github --repo owner/repo --token ghp_xxx<br>aiusage sync</code>'],
+          ['S3 / R2 / MinIO', '<code>aiusage init --backend s3 --bucket my-bucket --prefix aiusage/ --endpoint https://example.r2.cloudflarestorage.com --access-key-id xxx --secret-access-key yyy<br>aiusage sync</code>'],
+        ]}
+      />
+      <Callout type="warn">
+        {zh
+          ? 'GitHub 和 S3 同步会记录 consent 指纹。如果 repo、bucket、prefix、endpoint、region 或同步字段发生变化，需要重新运行 aiusage init 批准新目标。'
+          : 'GitHub and S3 sync record a consent fingerprint. If repo, bucket, prefix, endpoint, region, or synced fields change, run aiusage init again to approve the new target.'
+        }
+      </Callout>
+      <p>{zh
+        ? '设置页还支持自动同步间隔。设为 0 或留空可关闭；启用后 serve 进程会按间隔触发同步。'
+        : 'The Settings page also supports an auto-sync interval. Set it to 0 or empty to disable it; when enabled, the serve process triggers sync on schedule.'
+      }</p>
     </section>
 
     <!-- ══════ Export ══════ -->
@@ -901,15 +1037,15 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         <li><strong>TOP MODEL</strong> — {zh ? '本月使用最多的模型及其占比' : 'Most-used model this month and its share percentage'}</li>
       </ul>
       <p>{zh
-        ? '面板底部的「Open Full Dashboard →」按钮会在浏览器中打开 aiusage 仪表盘（如服务未运行会自动尝试启动）。右上角的 ↻ 按钮可立即手动刷新数据。'
-        : 'The "Open Full Dashboard →" button opens the aiusage dashboard in your browser, starting the server automatically if it is not already running. The ↻ button triggers an immediate manual refresh.'
+        ? '面板右上角的刷新图标按钮会立即重新读取本地用量数据。打开完整仪表盘入口位于托盘右键菜单的 Open Dashboard；如果本地 dashboard 服务未运行，Widget 会先尝试启动 aiusage serve，再在浏览器中打开仪表盘。'
+        : 'The refresh icon in the panel header immediately reloads local usage data. To open the full dashboard, use Open Dashboard from the tray context menu; if the local dashboard server is not running, the widget tries to start aiusage serve before opening it in your browser.'
       }</p>
     </section>
 
     <section>
       <figure class="doc-shot">
-        <img src="/screenshots/widget.png" alt={zh ? 'aiusage Widget 面板截图' : 'aiusage Widget panel screenshot'} loading="lazy" />
-        <figcaption>{zh ? 'Widget 悬浮面板：今日 / 本月 Token、Top Model，以及打开完整仪表盘的快捷入口。' : 'Widget panel showing today and month tokens, top model, and a shortcut to the full dashboard.'}</figcaption>
+        <img src="/screenshots/widget.png" alt={zh ? 'AIUsage Widget 面板截图' : 'AIUsage Widget panel screenshot'} loading="lazy" />
+        <figcaption>{zh ? 'Widget 悬浮面板：近 30 天 Token、费用、Token 分布、趋势、常用模型、常用工具和会话数。' : 'Widget floating panel showing last-30-day tokens, cost, token breakdown, trend, top model, top tool, and sessions.'}</figcaption>
       </figure>
     </section>
 
@@ -1182,8 +1318,8 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
-        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、leaderboard、login、upload、upload-status、logout、pm2-setup 和 pm2-start。'
-        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, leaderboard, login, upload, upload-status, logout, pm2-setup, and pm2-start.'
+        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、leaderboard、login、upload、upload-status、logout、menu、pm2-setup 和 pm2-start。'
+        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, leaderboard, login, upload, upload-status, logout, menu, pm2-setup, and pm2-start.'
       }</p>
     </section>
 
@@ -1192,8 +1328,8 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
       <DocsTable
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
-          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具' : 'Only parse specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, copilot'],
-          ['<code>--progress</code>', zh ? '显示实时进度条（仅 TTY）' : 'Show real-time progress bar (TTY only)'],
+          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具；支持 claude-code、codex、openclaw、opencode、hermes、qoder、cursor、kilocode、copilot、gemini、kimi、codebuddy、kiro、grok、antigravity、roocode、zed、goose、omp、pi、craft、droid' : 'Only parse a specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, kilocode, copilot, gemini, kimi, codebuddy, kiro, grok, antigravity, roocode, zed, goose, omp, pi, craft, droid'],
+          ['<code>--no-progress</code>', zh ? '隐藏实时进度输出' : 'Hide real-time progress output'],
         ]}
       />
     </section>
@@ -1302,14 +1438,30 @@ export COPILOT_OTEL_FILE_EXPORTER_PATH="$HOME/.copilot/otel/copilot-otel-$(date 
         headers={zh ? ['命令', '说明'] : ['Command', 'Description']}
         rows={[
           ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、对象数量、记录数、数据库大小、同步后端和同步状态' : 'Show version, device name, DB path, schema version, object counts, record count, DB size, sync backend, and sync status'],
+          ['<code>menu</code>', zh ? '打开交互式管理菜单，覆盖仪表盘、数据、同步、排行榜和系统命令' : 'Open the interactive management menu for dashboard, data, sync, leaderboard, and system commands'],
           ['<code>login</code>', zh ? '授权当前设备（用于云同步和排行榜上传）' : 'Authorize this device (for cloud sync and leaderboard uploads)'],
           ['<code>logout</code>', zh ? '删除本地设备凭证' : 'Remove local device credentials'],
           ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步（支持 cloud / GitHub / S3）' : 'Push, pull, and merge data with the remote backend (cloud / GitHub / S3)'],
           ['<code>recalc</code>', zh ? '按最新定价重新计算费用' : 'Recalculate costs with latest pricing'],
           ['<code>init</code>', zh ? '初始化同步后端（支持 cloud / GitHub / S3）' : 'Initialize sync backend (cloud / GitHub / S3)'],
           ['<code>widget</code>', zh ? '启动桌面托盘 Widget' : 'Launch the desktop tray widget'],
-          ['<code>pm2-setup</code>', zh ? '生成 PM2 ecosystem.config.cjs' : 'Generate PM2 ecosystem.config.cjs'],
-          ['<code>pm2-start</code>', zh ? '生成配置并启动 PM2 后台服务' : 'Generate config and start PM2 background services'],
+          ['<code>pm2-setup [--server-only]</code>', zh ? '生成 PM2 ecosystem.config.cjs，可跳过 widget' : 'Generate PM2 ecosystem.config.cjs, optionally skipping the widget'],
+          ['<code>pm2-start [--server-only]</code>', zh ? '生成配置并启动 PM2 后台服务，可跳过 widget' : 'Generate config and start PM2 background services, optionally skipping the widget'],
+        ]}
+      />
+      <DocsTable
+        headers={zh ? ['init 选项', '说明'] : ['init option', 'Description']}
+        rows={[
+          ['<code>--backend &lt;backend&gt;</code>', zh ? 'cloud、github、s3 或 skip' : 'cloud, github, s3, or skip'],
+          ['<code>--device &lt;alias&gt;</code>', zh ? '设置当前设备别名' : 'Set this device alias'],
+          ['<code>--repo &lt;owner/repo&gt;</code>', zh ? 'GitHub 同步仓库' : 'GitHub sync repository'],
+          ['<code>--token &lt;token&gt;</code>', zh ? 'GitHub Personal Access Token' : 'GitHub Personal Access Token'],
+          ['<code>--bucket &lt;bucket&gt;</code>', zh ? 'S3 / R2 bucket 名称' : 'S3 / R2 bucket name'],
+          ['<code>--prefix &lt;prefix&gt;</code>', zh ? 'S3 object 前缀，默认 aiusage/' : 'S3 object prefix, defaults to aiusage/'],
+          ['<code>--endpoint &lt;url&gt;</code>', zh ? 'S3 兼容 endpoint URL' : 'S3-compatible endpoint URL'],
+          ['<code>--region &lt;region&gt;</code>', zh ? 'S3 region，默认 auto' : 'S3 region, defaults to auto'],
+          ['<code>--access-key-id &lt;id&gt;</code>', zh ? 'S3 access key ID' : 'S3 access key ID'],
+          ['<code>--secret-access-key &lt;key&gt;</code>', zh ? 'S3 secret access key' : 'S3 secret access key'],
         ]}
       />
     </section>

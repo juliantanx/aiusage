@@ -2,9 +2,14 @@ import { sql } from '../db/pool.js'
 import { nanoid } from 'nanoid'
 import type { RequestEvent } from '@sveltejs/kit'
 import { error } from '@sveltejs/kit'
+import { getConfigValue, CFG } from '../config.js'
 
-const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const SESSION_COOKIE = 'ai_session'
+
+async function getSessionDurationMs(): Promise<number> {
+  const days = await getConfigValue(CFG.SESSION_DURATION_DAYS)
+  return days * 24 * 60 * 60 * 1000
+}
 
 export interface SessionUser {
   id: string
@@ -18,7 +23,8 @@ export interface SessionUser {
 
 export async function createSession(userId: string): Promise<string> {
   const sid = nanoid(32)
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS)
+  const durationMs = await getSessionDurationMs()
+  const expiresAt = new Date(Date.now() + durationMs)
   await sql`INSERT INTO sessions (sid, user_id, expires_at) VALUES (${sid}, ${userId}, ${expiresAt})`
   return sid
 }
@@ -37,13 +43,16 @@ export async function destroySession(sid: string): Promise<void> {
   await sql`DELETE FROM sessions WHERE sid = ${sid}`
 }
 
-export function setSessionCookie(event: RequestEvent, sid: string): void {
-  event.cookies.set(SESSION_COOKIE, sid, {
+export async function setSessionCookie(cookies: RequestEvent['cookies'], sid: string): Promise<void> {
+  const durationMs = await getSessionDurationMs()
+  const { env } = await import('$env/dynamic/private')
+  const siteUrl = env.SITE_URL || 'http://localhost:5173'
+  cookies.set(SESSION_COOKIE, sid, {
     path: '/',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: siteUrl.startsWith('https://'),
     sameSite: 'lax',
-    maxAge: SESSION_DURATION_MS / 1000
+    maxAge: durationMs / 1000
   })
 }
 

@@ -97,7 +97,7 @@
       '@type': 'Organization',
       name: 'AIUsage'
     },
-    softwareVersion: '1.4.0',
+    softwareVersion: '1.5.0',
     downloadUrl: 'https://www.npmjs.com/package/@juliantanx/aiusage',
     featureList: zh
       ? 'Token用量追踪,费用估算与分析,模型使用排名,工具调用分析,项目维度统计,配额监控,多设备同步,数据导出'
@@ -173,6 +173,11 @@
                 <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
                   {zh ? '上传状态' : 'Upload status'}
                 </a>
+                {#if user.role === 'admin'}
+                  <a href="/admin" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                    {zh ? '管理后台' : 'Admin'}
+                  </a>
+                {/if}
                 <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
                   {zh ? '退出登录' : 'Sign out'}
                 </button>
@@ -228,6 +233,11 @@
               <a href="/uploads" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
                 {zh ? '上传状态' : 'Upload status'}
               </a>
+              {#if user.role === 'admin'}
+                <a href="/admin" class="user-menu-item" role="menuitem" on:click|stopPropagation={closeMenu}>
+                  {zh ? '管理后台' : 'Admin'}
+                </a>
+              {/if}
               <button class="user-menu-item danger" role="menuitem" on:click={handleLogout}>
                 {zh ? '退出登录' : 'Sign out'}
               </button>

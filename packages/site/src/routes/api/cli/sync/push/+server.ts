@@ -2,19 +2,22 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { verifyUploadRequest } from '$lib/server/uploads/verify.js'
+import { getConfigValue, CFG } from '$lib/server/config.js'
+import { checkCloudSyncAccess } from '$lib/server/cloud/star-check.js'
 import { nanoid } from 'nanoid'
 
-const MAX_RECORDS = 1000
-const MAX_TOMBSTONES = 500
-
 export const POST: RequestHandler = async ({ request }) => {
+  const maxRecords = await getConfigValue(CFG.SYNC_MAX_RECORDS)
+  const maxTombstones = await getConfigValue(CFG.SYNC_MAX_TOMBSTONES)
+  const bodyMaxSize = await getConfigValue(CFG.SYNC_BODY_MAX_SIZE)
+
   const contentType = request.headers.get('Content-Type')
   if (!contentType || !contentType.includes('application/json')) {
     return json({ error: 'Content-Type must be application/json', error_code: 'invalid_content_type' }, { status: 415 })
   }
 
   const bodyText = await request.text()
-  if (bodyText.length > 2 * 1024 * 1024) {
+  if (bodyText.length > bodyMaxSize) {
     return json({ error: 'Payload too large', error_code: 'payload_too_large' }, { status: 413 })
   }
 
@@ -35,6 +38,14 @@ export const POST: RequestHandler = async ({ request }) => {
   const userId = verification.userId!
   const deviceId = verification.deviceId!
   const idempotencyKey = verification.idempotencyKey!
+
+  // Star gate check
+  const starCheck = await checkCloudSyncAccess(userId)
+  if (!starCheck.allowed) {
+    return json({
+      error: { code: starCheck.error_code, message: starCheck.message, repo: starCheck.repo, url: starCheck.url }
+    }, { status: 403 })
+  }
 
   // Check idempotency
   const existing = await sql`
@@ -70,11 +81,11 @@ export const POST: RequestHandler = async ({ request }) => {
   const records = Array.isArray(body.records) ? body.records : []
   const tombstones = Array.isArray(body.tombstones) ? body.tombstones : []
 
-  if (records.length > MAX_RECORDS) {
-    return json({ error: `Too many records (max ${MAX_RECORDS})`, error_code: 'payload_too_large' }, { status: 400 })
+  if (records.length > maxRecords) {
+    return json({ error: `Too many records (max ${maxRecords})`, error_code: 'payload_too_large' }, { status: 400 })
   }
-  if (tombstones.length > MAX_TOMBSTONES) {
-    return json({ error: `Too many tombstones (max ${MAX_TOMBSTONES})`, error_code: 'payload_too_large' }, { status: 400 })
+  if (tombstones.length > maxTombstones) {
+    return json({ error: `Too many tombstones (max ${maxTombstones})`, error_code: 'payload_too_large' }, { status: 400 })
   }
 
   // Get or create cloud device instance

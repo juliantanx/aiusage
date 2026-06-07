@@ -164,6 +164,10 @@ export async function saveConfig(data) {
   return response.json()
 }
 
+export async function fetchTools(params) {
+  return apiFetch(buildUrl('/api/tools', params))
+}
+
 export async function fetchDetectedTools() {
   return apiFetch('/api/detected-tools')
 }
@@ -203,6 +207,7 @@ export async function login(password) {
 export async function fetchLeaderboard(baseUrl, params = {}) {
   const data = await apiFetch(buildUrl('/api/leaderboard', {
     period_type: params.period_type,
+    period_start: params.period_start,
     cursor: params.cursor,
   }))
   if (!data || !Array.isArray(data.entries)) {

@@ -13,6 +13,9 @@
   let error = ''
   let success = ''
   let loading = false
+  let sentEmail = ''
+  let resendLoading = false
+  let resendMsg = ''
   $: redirectTo = getSafeRedirect($page.url.searchParams.get('redirect'))
   $: loginHref = redirectTo === '/leaderboard'
     ? '/login'
@@ -50,6 +53,7 @@
         success = zh
           ? '验证邮件已发送。请打开邮箱中的链接后再登录。'
           : 'Verification email sent. Open the link in your inbox before signing in.'
+        sentEmail = email
         username = ''
         email = ''
         password = ''
@@ -62,6 +66,32 @@
       error = zh ? '网络错误' : 'Network error'
     } finally {
       loading = false
+    }
+  }
+
+  async function handleResend() {
+    if (!sentEmail || resendLoading) return
+    resendLoading = true
+    resendMsg = ''
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': getCsrfToken()
+        },
+        body: JSON.stringify({ email: sentEmail })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        resendMsg = zh ? '验证邮件已重新发送。' : 'Verification email resent.'
+      } else {
+        resendMsg = data.error || (zh ? '发送失败' : 'Failed to resend')
+      }
+    } catch {
+      resendMsg = zh ? '网络错误' : 'Network error'
+    } finally {
+      resendLoading = false
     }
   }
 </script>
@@ -80,6 +110,14 @@
     {/if}
     {#if success}
       <div class="success-msg">{success}</div>
+      <div class="resend-area">
+        <button type="button" class="btn-resend" on:click={handleResend} disabled={resendLoading}>
+          {resendLoading ? (zh ? '发送中...' : 'Sending...') : (zh ? '未收到邮件？重新发送' : "Didn't receive it? Resend")}
+        </button>
+        {#if resendMsg}
+          <span class="resend-msg">{resendMsg}</span>
+        {/if}
+      </div>
     {/if}
 
     <form on:submit|preventDefault={handleRegister}>
@@ -150,4 +188,8 @@
   .btn-oauth:hover { background: var(--surface-hover, oklch(0.92 0.005 250)); }
   .auth-footer { text-align: center; font-size: 0.875rem; color: var(--text-muted); margin-top: 1.5rem; }
   .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .resend-area { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .btn-resend { background: none; border: none; color: var(--accent); font-size: 0.8125rem; cursor: pointer; padding: 0; text-decoration: underline; }
+  .btn-resend:disabled { opacity: 0.5; cursor: not-allowed; }
+  .resend-msg { font-size: 0.8125rem; color: var(--text-muted); }
 </style>

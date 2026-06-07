@@ -28,10 +28,13 @@ export interface Config {
   device?: string
   platform?: string                    // 'win32' | 'darwin' | 'linux'
   retentionDays?: number
+  refreshInterval?: number
+  /** @deprecated Use refreshInterval. Kept for migration only. */
   parseInterval?: number
+  /** @deprecated Use refreshInterval. Kept for migration only. */
+  dashboardPollInterval?: number
   leaderboardAutoUpload?: boolean
   leaderboardUploadInterval?: number
-  dashboardPollInterval?: number
   credentials?: Record<string, string>
   priceOverrides?: Record<string, PriceEntry>
   /** @deprecated Legacy source paths — use AIUSAGE_*_PATH env vars instead. Kept for migration only. */
@@ -44,6 +47,8 @@ export interface Config {
   exchangeRate?: number
   /** Auto-fetched exchange rate cache */
   exchangeRateCache?: ExchangeRateCache
+  /** Auto-sync interval in milliseconds (0 or undefined = disabled) */
+  syncInterval?: number
 }
 
 export function loadConfig(): Config | null {
@@ -73,7 +78,7 @@ export function buildConsentConfig(config: Config): ConsentConfig | null {
   const endpoint = backend === 'github'
     ? 'https://api.github.com'
     : sync.endpoint ?? 'https://s3.amazonaws.com'
-  const region = sync.region ?? 'global'
+  const region = backend === 'github' ? 'global' : (sync.region ?? 'auto')
 
   return {
     backend,

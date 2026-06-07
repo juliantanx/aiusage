@@ -1,16 +1,15 @@
 import { sql } from '../db/pool.js'
 import { decryptDeviceSecret, sha256, buildCanonicalString, hashIp, computeHmac } from '../crypto/hmac.js'
 import { invalidateLeaderboardCache } from '../leaderboard/query.js'
+import { getConfigValue, CFG } from '../config.js'
 import { calculateDefaultCost, resolveDefaultPrice } from '@aiusage/core'
 import { nanoid } from 'nanoid'
 import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
 
 const CORE_PRICING_VERSION = 'core_v1'
 
-const TIMESTAMP_WINDOW_MS = 5 * 60 * 1000
 const ALLOWED_PERIOD_TYPES = ['daily', 'weekly', 'monthly', 'yearly', 'all_time'] as const
 const ALLOWED_SCOPE_TYPES = ['all', 'tool', 'model', 'tool_model'] as const
-const MAX_PAYLOAD_SIZE = 1_000_000
 
 type PeriodType = (typeof ALLOWED_PERIOD_TYPES)[number]
 type ScopeType = (typeof ALLOWED_SCOPE_TYPES)[number]
@@ -273,7 +272,7 @@ function validateBreakdownConsistency(snapshot: UploadSnapshot): { valid: boolea
   return { valid: true }
 }
 
-export function validatePayload(body: unknown): { valid: boolean; error?: string; error_code?: string } {
+export async function validatePayload(body: unknown): Promise<{ valid: boolean; error?: string; error_code?: string }> {
   if (!isObject(body)) {
     return { valid: false, error: 'Invalid JSON body', error_code: 'invalid_payload' }
   }
@@ -293,7 +292,9 @@ export function validatePayload(body: unknown): { valid: boolean; error?: string
   if (!['macos', 'linux', 'windows'].includes(body.client_platform as string)) {
     return { valid: false, error: 'Invalid client_platform', error_code: 'invalid_payload' }
   }
-  if (!Array.isArray(body.snapshots) || body.snapshots.length === 0 || body.snapshots.length > 5) {
+
+  const maxSnapshots = await getConfigValue(CFG.UPLOAD_MAX_SNAPSHOTS)
+  if (!Array.isArray(body.snapshots) || body.snapshots.length === 0 || body.snapshots.length > maxSnapshots) {
     return { valid: false, error: 'Invalid snapshots', error_code: 'invalid_payload' }
   }
 
@@ -315,7 +316,8 @@ export function validatePayload(body: unknown): { valid: boolean; error?: string
     if (!validateTokenTotals(rawSnap)) {
       return { valid: false, error: 'Invalid token totals', error_code: 'invalid_token_value' }
     }
-    if (!Array.isArray(rawSnap.breakdowns) || rawSnap.breakdowns.length === 0 || rawSnap.breakdowns.length > 1000) {
+    const maxBreakdowns = await getConfigValue(CFG.UPLOAD_MAX_BREAKDOWNS)
+    if (!Array.isArray(rawSnap.breakdowns) || rawSnap.breakdowns.length === 0 || rawSnap.breakdowns.length > maxBreakdowns) {
       return { valid: false, error: 'Invalid breakdowns', error_code: 'invalid_breakdowns' }
     }
     for (const rawBreakdown of rawSnap.breakdowns) {
@@ -366,8 +368,9 @@ export async function verifyUploadRequest(
   if (device.status === 'revoked') return { valid: false, error: 'Device revoked', error_code: 'device_revoked' }
   if (device.user_status === 'banned') return { valid: false, error: 'User banned', error_code: 'user_banned' }
 
+  const timestampWindowMs = await getConfigValue(CFG.UPLOAD_TIMESTAMP_WINDOW_MS)
   const ts = parseInt(timestamp, 10)
-  if (Number.isNaN(ts) || Math.abs(Date.now() - ts) > TIMESTAMP_WINDOW_MS) {
+  if (Number.isNaN(ts) || Math.abs(Date.now() - ts) > timestampWindowMs) {
     return { valid: false, error: 'Timestamp expired', error_code: 'timestamp_expired' }
   }
 
@@ -482,22 +485,30 @@ async function assessRisk(
   deviceId: string,
   snapshot: UploadSnapshot
 ): Promise<RiskAssessment> {
+  const inconsistencyPct = await getConfigValue(CFG.RISK_INCONSISTENCY_PCT)
+  const unknownModelPct = await getConfigValue(CFG.RISK_UNKNOWN_MODEL_PCT)
+  const repeatCount = await getConfigValue(CFG.RISK_REPEAT_COUNT)
+  const repeatWindowHours = await getConfigValue(CFG.RISK_REPEAT_WINDOW_HOURS)
+  const tokenSpikeMultiplier = await getConfigValue(CFG.RISK_TOKEN_SPIKE_MULTIPLIER)
+  const tokenSpikeMinAvg = await getConfigValue(CFG.RISK_TOKEN_SPIKE_MIN_AVG)
+  const tokenSpikeLookbackDays = await getConfigValue(CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS)
+
   // Rule 1: Breakdown consistency — all-scope total must equal sum of breakdowns
   const allBd = snapshot.breakdowns.find(b => b.scope_type === 'all')
   if (allBd) {
     const toolModelTotal = snapshot.breakdowns
       .filter(b => b.scope_type === 'tool_model')
       .reduce((sum, b) => sum + b.total_tokens, 0)
-    if (toolModelTotal > 0 && Math.abs(allBd.total_tokens - toolModelTotal) > allBd.total_tokens * 0.01) {
+    if (toolModelTotal > 0 && Math.abs(allBd.total_tokens - toolModelTotal) > allBd.total_tokens * inconsistencyPct) {
       return {
         status: 'flagged',
         reasonCode: 'breakdown_inconsistent',
-        reasonMessage: `All-scope total (${allBd.total_tokens}) differs from tool_model sum (${toolModelTotal}) by >1%`
+        reasonMessage: `All-scope total (${allBd.total_tokens}) differs from tool_model sum (${toolModelTotal}) by >${(inconsistencyPct * 100).toFixed(0)}%`
       }
     }
   }
 
-  // Rule 2: Unknown model ratio — >80% of tokens from unknown models in cost breakdown
+  // Rule 2: Unknown model ratio — tokens from unknown models in cost breakdown
   const { unknownModels } = buildCostMap(snapshot)
   if (unknownModels.size > 0) {
     const toolModelBds = snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')
@@ -505,7 +516,7 @@ async function assessRisk(
     const unknownTokens = toolModelBds
       .filter(b => b.model && unknownModels.has(b.model))
       .reduce((sum, b) => sum + b.total_tokens, 0)
-    if (totalToolModel > 0 && unknownTokens / totalToolModel > 0.8) {
+    if (totalToolModel > 0 && unknownTokens / totalToolModel > unknownModelPct) {
       return {
         status: 'flagged',
         reasonCode: 'unknown_model_ratio',
@@ -514,36 +525,37 @@ async function assessRisk(
     }
   }
 
-  // Rule 3: Repeat uploads — same device uploaded same period > 5 times in 24h
-  const repeatCount = await tx`
+  // Rule 3: Repeat uploads — same device uploaded same period too many times
+  const repeatResult = await tx`
     SELECT COUNT(*) as cnt FROM upload_snapshots
     WHERE device_id = ${deviceId}
       AND period_type = ${snapshot.period_type}
       AND period_start = ${snapshot.period_start}
-      AND created_at > NOW() - INTERVAL '24 hours'
+      AND created_at > NOW() - ${`${repeatWindowHours} hours`}::interval
   `
-  if (Number((repeatCount[0] as { cnt: bigint }).cnt) >= 5) {
+  const repeatCnt = Number((repeatResult[0] as { cnt: bigint }).cnt)
+  if (repeatCnt >= repeatCount) {
     return {
       status: 'flagged',
       reasonCode: 'repeat_upload',
-      reasonMessage: `Same period uploaded ${Number((repeatCount[0] as { cnt: bigint }).cnt)} times in 24h`
+      reasonMessage: `Same period uploaded ${repeatCnt} times in ${repeatWindowHours}h`
     }
   }
 
-  // Rule 4: Massive growth — total_tokens > 10x user's historical average for this period type
+  // Rule 4: Massive growth — total_tokens > N x user's historical average for this period type
   const userAvg = await tx`
     SELECT COALESCE(AVG(total_tokens), 0) as avg_tokens FROM upload_snapshots
     WHERE user_id = ${userId}
       AND period_type = ${snapshot.period_type}
       AND status = 'accepted'
-      AND created_at > NOW() - INTERVAL '30 days'
+      AND created_at > NOW() - ${`${tokenSpikeLookbackDays} days`}::interval
   `
   const avgTokens = Number((userAvg[0] as { avg_tokens: number }).avg_tokens)
-  if (avgTokens > 1000 && snapshot.total_tokens > avgTokens * 10) {
+  if (avgTokens > tokenSpikeMinAvg && snapshot.total_tokens > avgTokens * tokenSpikeMultiplier) {
     return {
       status: 'flagged',
       reasonCode: 'token_spike',
-      reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) is ${Math.round(snapshot.total_tokens / avgTokens)}x the 30-day average (${avgTokens.toLocaleString()})`
+      reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) is ${Math.round(snapshot.total_tokens / avgTokens)}x the ${tokenSpikeLookbackDays}-day average (${avgTokens.toLocaleString()})`
     }
   }
 
@@ -570,11 +582,13 @@ export async function processUpload(
     return { status: 'rejected', snapshots: [], error: 'Idempotency conflict', error_code: 'idempotency_conflict' }
   }
 
+  const rateLimit = await getConfigValue(CFG.UPLOAD_RATE_LIMIT)
+  const rateLimitWindowHours = await getConfigValue(CFG.UPLOAD_RATE_LIMIT_WINDOW_HOURS)
   const recentRequests = await sql`
     SELECT COUNT(*) as cnt FROM upload_requests
-    WHERE device_id = ${deviceId} AND created_at > NOW() - INTERVAL '1 hour'
+    WHERE device_id = ${deviceId} AND created_at > NOW() - ${`${rateLimitWindowHours} hours`}::interval
   `
-  if (Number((recentRequests[0] as { cnt: bigint }).cnt) >= 30) {
+  if (Number((recentRequests[0] as { cnt: bigint }).cnt) >= rateLimit) {
     return { status: 'rejected', snapshots: [], error: 'Rate limited', error_code: 'rate_limited' }
   }
 
@@ -681,4 +695,6 @@ export async function processUpload(
   return { status: overallStatus, snapshots: snapshotResults }
 }
 
-export { MAX_PAYLOAD_SIZE }
+export async function getMaxPayloadSize(): Promise<number> {
+  return getConfigValue(CFG.UPLOAD_MAX_PAYLOAD_SIZE)
+}

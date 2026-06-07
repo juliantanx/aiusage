@@ -134,7 +134,6 @@
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    margin-bottom: 1.5rem;
     flex-wrap: wrap;
   }
   button {

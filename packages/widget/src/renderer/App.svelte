@@ -1,22 +1,81 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { afterUpdate, onMount, tick } from 'svelte'
   import Header from './components/Header.svelte'
-  import StatSection from './components/StatSection.svelte'
+  import StatRow from './components/StatRow.svelte'
+  import TokenBreakdown from './components/TokenBreakdown.svelte'
+  import ActivityChart from './components/ActivityChart.svelte'
+  import SettingsPanel from './components/SettingsPanel.svelte'
+  import { t } from './i18n'
+  import type { Locale } from './i18n'
+  import { formatUsdCost } from '../currency'
+  import type { CurrencyCode, ExchangeRateState } from '../currency'
 
+  interface TodayTokens {
+    total: number; input: number; output: number
+    cacheRead: number; cacheWrite: number; thinking: number
+  }
+  interface DailyEntry { date: string; tokens: number; cost: number }
   interface WidgetData {
-    todayTokens: { total: number; input: number; output: number }
-    monthTokens: { total: number }
+    todayTokens: TodayTokens
+    todayCost: number
+    rangeTokens: { total: number }
+    rangeCost: number
+    rangeDays: number
     topModel: { name: string; share: number } | null
+    topTool: { name: string; share: number } | null
+    dailyHistory: DailyEntry[]
+    sessionCountToday: number
     lastUpdated: number
+  }
+  interface WidgetSettings {
+    theme: 'system' | 'light' | 'dark'
+    refreshIntervalSec: number
+    rangeDays: number
+    showCost: boolean
+    showHeatmap: boolean
+    showTokenBreakdown: boolean
+    locale: Locale
+    currency: CurrencyCode
+  }
+
+  function detectInitialLocale(): Locale {
+    return typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
   }
 
   let data: WidgetData | null = null
+  let settings: WidgetSettings | null = null
+  let exchangeRate: ExchangeRateState | null = null
+  let initialLocale: Locale = detectInitialLocale()
   let loading = true
+  let showSettings = false
+  let panelEl: HTMLDivElement
+  let lastReportedHeight = 0
 
   function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
     return String(n)
+  }
+
+  function formatModelName(name: string): string {
+    return name
+      .replace(/^(claude-|gpt-|gemini-|deepseek-|qwen-)/i, '')
+      .replace(/-\d{8}$/, '')
+  }
+
+  $: locale = settings?.locale ?? initialLocale
+  $: i18n = t(locale)
+  $: currency = settings?.currency ?? 'USD'
+
+  function rangeLabel(days: number): string {
+    return i18n.lastNDays(days)
+  }
+
+  function formatSyncTime(ts: number): string {
+    const d = new Date(ts)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return i18n.syncedAt(`${hh}:${mm}`)
   }
 
   async function refresh() {
@@ -29,52 +88,139 @@
     ;(window as any).widget.hideWindow()
   }
 
-  async function openDashboard() {
-    await (window as any).widget.openDashboard()
+  async function doLoadSettings() {
+    settings = await (window as any).widget.getSettings()
+  }
+
+  async function loadExchangeRate() {
+    exchangeRate = await (window as any).widget.getExchangeRate()
+  }
+
+  async function saveSettings(e: CustomEvent<WidgetSettings>) {
+    settings = await (window as any).widget.saveSettings(e.detail)
+    // Re-fetch data since rangeDays may have changed
+    refresh()
+  }
+
+  function reportWindowHeight() {
+    if (!panelEl) return
+
+    const height = Math.ceil(panelEl.getBoundingClientRect().height)
+    if (height <= 0 || Math.abs(height - lastReportedHeight) < 2) return
+
+    lastReportedHeight = height
+    ;(window as any).widget.resizeWindow(height)
   }
 
   onMount(() => {
     refresh()
+    doLoadSettings()
+    loadExchangeRate()
     ;(window as any).widget.onDataUpdate((d: WidgetData) => {
       data = d
       loading = false
     })
+
+    const resizeObserver = new ResizeObserver(() => reportWindowHeight())
+    resizeObserver.observe(panelEl)
+    void tick().then(reportWindowHeight)
+
+    return () => resizeObserver.disconnect()
   })
 
-  $: todayStr = data ? formatTokens(data.todayTokens.total) : '—'
-  $: todaySubStr = data
-    ? `↑${formatTokens(data.todayTokens.input)}  ↓${formatTokens(data.todayTokens.output)}`
-    : ''
-  $: monthStr = data ? formatTokens(data.monthTokens.total) : '—'
-  $: modelStr = data?.topModel?.name ?? '—'
+  afterUpdate(() => {
+    void tick().then(reportWindowHeight)
+  })
+
+  $: todayStr = data ? formatTokens(data.todayTokens.total) : '--'
+  $: rangeStr = data ? formatTokens(data.rangeTokens.total) : '--'
+  $: todayCostStr = data ? formatUsdCost(data.todayCost, currency, locale, exchangeRate) : '--'
+  $: rangeCostStr = data ? formatUsdCost(data.rangeCost, currency, locale, exchangeRate) : '--'
+  $: rangeLabelStr = data ? rangeLabel(data.rangeDays) : i18n.lastNDays(30)
+  $: modelStr = data?.topModel ? formatModelName(data.topModel.name) : '--'
   $: modelSubStr = data?.topModel ? `${data.topModel.share}%` : ''
+  $: toolStr = data?.topTool?.name ?? '--'
+  $: toolSubStr = data?.topTool ? `${data.topTool.share}%` : ''
+  $: sessionStr = data ? String(data.sessionCountToday) : '--'
+  $: updatedStr = data ? formatSyncTime(data.lastUpdated) : ''
 </script>
 
-<div class="panel" class:loading>
-  <Header onRefresh={refresh} onClose={close} />
-
-  <StatSection
-    label="TODAY"
-    primary={todayStr}
-    secondary={todaySubStr}
+<div class="panel" class:loading bind:this={panelEl}>
+  <Header
+    onRefresh={refresh}
+    onClose={close}
+    onToggleSettings={() => { showSettings = !showSettings }}
+    refreshLabel={i18n.refresh}
+    settingsLabel={i18n.settings}
+    closeLabel={i18n.close}
+    statusText={updatedStr}
   />
 
-  <StatSection
-    label="THIS MONTH"
-    primary={monthStr}
-  />
+  {#if showSettings && settings}
+    <SettingsPanel
+      {settings}
+      {exchangeRate}
+      on:save={saveSettings}
+      on:close={() => { showSettings = false }}
+    />
+  {:else}
+    <div class="content">
+      <!-- Primary metrics -->
+      <div class="section">
+        <div class="metric-grid">
+          <div class="metric">
+            <span class="metric-label">{i18n.today}</span>
+            <span class="metric-value">{todayStr}</span>
+            {#if settings?.showCost}
+              <span class="metric-cost">{todayCostStr}</span>
+            {/if}
+          </div>
+          <div class="metric">
+            <span class="metric-label">{rangeLabelStr}</span>
+            <span class="metric-value">{rangeStr}</span>
+            {#if settings?.showCost}
+              <span class="metric-cost">{rangeCostStr}</span>
+            {/if}
+          </div>
+        </div>
+      </div>
 
-  <StatSection
-    label="TOP MODEL"
-    primary={modelStr}
-    secondary={modelSubStr}
-  />
+      <!-- Token breakdown -->
+      {#if settings?.showTokenBreakdown && data}
+        <div class="section">
+          <div class="section-title">{i18n.tokenBreakdownToday}</div>
+          <TokenBreakdown
+            input={data.todayTokens.input}
+            output={data.todayTokens.output}
+            cacheRead={data.todayTokens.cacheRead}
+            cacheWrite={data.todayTokens.cacheWrite}
+            thinking={data.todayTokens.thinking}
+          />
+        </div>
+      {/if}
 
-  <div class="footer">
-    <button class="open-btn" on:click={openDashboard}>
-      Open Full Dashboard →
-    </button>
-  </div>
+      <!-- Activity chart -->
+      {#if settings?.showHeatmap && data}
+        <div class="section">
+          <div class="section-title">{i18n.trend}</div>
+          <ActivityChart
+            data={data.dailyHistory}
+            showCost={settings?.showCost ?? false}
+            {locale}
+            {currency}
+            {exchangeRate}
+          />
+        </div>
+      {/if}
+
+      <!-- Details -->
+      <div class="section details">
+        <StatRow label={i18n.topModel} value={modelStr} sub={modelSubStr} />
+        <StatRow label={i18n.topTool} value={toolStr} sub={toolSubStr} />
+        <StatRow label={i18n.sessions} value={sessionStr} />
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -83,58 +229,116 @@
     margin: 0;
     padding: 0;
   }
+  :global(html),
+  :global(body) {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
   :global(body) {
     background: transparent;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   :global(:root) {
-    --bg: #1a1a1f;
-    --bg-hover: rgba(255, 255, 255, 0.06);
-    --border: rgba(255, 255, 255, 0.08);
-    --text-primary: #f0f0f2;
-    --text-muted: rgba(240, 240, 242, 0.45);
-    --accent: #6c8eff;
+    --bg: oklch(0.985 0.004 175);
+    --surface: oklch(0.995 0.003 175);
+    --bg-hover: oklch(0.955 0.008 175);
+    --border: oklch(0.92 0.008 175);
+    --border-medium: oklch(0.87 0.01 175);
+    --text-primary: oklch(0.18 0.012 175);
+    --text-secondary: oklch(0.42 0.015 175);
+    --text-muted: oklch(0.6 0.012 175);
+    --accent: oklch(0.55 0.12 175);
+    --chart-input: oklch(0.65 0.14 175);
+    --chart-output: oklch(0.6 0.15 250);
+    --chart-cache-read: oklch(0.7 0.1 65);
+    --chart-cache-write: oklch(0.65 0.12 310);
+    --chart-thinking: oklch(0.6 0.16 300);
+    --shadow: none;
   }
-  @media (prefers-color-scheme: light) {
+  @media (prefers-color-scheme: dark) {
     :global(:root) {
-      --bg: #ffffff;
-      --bg-hover: rgba(0, 0, 0, 0.05);
-      --border: rgba(0, 0, 0, 0.08);
-      --text-primary: #0f0f12;
-      --text-muted: rgba(15, 15, 18, 0.45);
-      --accent: #3b5bdb;
+      --bg: oklch(0.18 0.008 175);
+      --surface: oklch(0.22 0.006 175);
+      --bg-hover: oklch(0.26 0.01 175);
+      --border: oklch(0.3 0.01 175);
+      --border-medium: oklch(0.35 0.012 175);
+      --text-primary: oklch(0.94 0.006 175);
+      --text-secondary: oklch(0.76 0.01 175);
+      --text-muted: oklch(0.58 0.008 175);
+      --accent: oklch(0.65 0.12 175);
+      --chart-input: oklch(0.65 0.14 175);
+      --chart-output: oklch(0.6 0.15 250);
+      --chart-cache-read: oklch(0.7 0.1 65);
+      --chart-cache-write: oklch(0.65 0.12 310);
+      --chart-thinking: oklch(0.6 0.16 300);
+      --shadow: none;
     }
   }
   .panel {
     background: var(--bg);
-    border-radius: 12px;
+    border-radius: 10px;
     border: 1px solid var(--border);
     overflow: hidden;
-    width: 320px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+    width: 100vw;
+    box-shadow: var(--shadow);
     transition: opacity 0.15s;
   }
   .panel.loading {
     opacity: 0.7;
   }
-  .footer {
-    padding: 10px 14px 14px;
+  .content {
+    padding: 0 14px 8px;
   }
-  .open-btn {
-    width: 100%;
-    padding: 9px 14px;
-    border: 1px solid var(--accent);
-    border-radius: 7px;
-    background: transparent;
-    color: var(--accent);
-    font-size: 12px;
+  .section {
+    padding: 8px 0;
+  }
+  .section:not(:last-child):not(.details) {
+    border-bottom: 1px solid var(--border);
+  }
+  .section-title {
+    font-size: 10px;
     font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
   }
-  .open-btn:hover {
-    background: rgba(108, 142, 255, 0.1);
+  .metric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .metric-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .metric-value {
+    font-family: 'Geist Mono', 'SF Mono', 'Menlo', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .metric-cost {
+    font-family: 'Geist Mono', 'SF Mono', 'Menlo', monospace;
+    font-size: 11px;
+    font-weight: 550;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .details {
+    padding: 4px 0;
   }
 </style>

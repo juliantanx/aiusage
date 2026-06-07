@@ -1,13 +1,15 @@
 <script>
   export let lang = 'Terminal'
+  export let code = ''
   export let copyText = ''
   export let id = ''
 
   let copied = false
 
   function copy() {
-    if (!copyText) return
-    navigator.clipboard.writeText(copyText).then(() => {
+    const text = copyText || code
+    if (!text) return
+    navigator.clipboard.writeText(text).then(() => {
       copied = true
       setTimeout(() => copied = false, 2000)
     })
@@ -17,7 +19,7 @@
 <div class="cb" {id}>
   <div class="cb-head">
     <span class="cb-lang">{lang}</span>
-    {#if copyText}
+    {#if copyText || code}
       <button class="cb-copy" class:copied on:click={copy}>
         {copied ? '✓ copied' : 'copy'}
       </button>
@@ -27,7 +29,7 @@
     <div class="cb-gutter" aria-hidden="true">
       <slot name="lines" />
     </div>
-    <pre class="cb-pre"><code><slot /></code></pre>
+    <pre class="cb-pre"><code>{#if code}{code}{:else}<slot />{/if}</code></pre>
   </div>
 </div>
 

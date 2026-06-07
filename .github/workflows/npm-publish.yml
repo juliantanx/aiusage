@@ -56,12 +56,21 @@ jobs:
         run: pnpm build
 
       - name: Publish CLI to npm
-        continue-on-error: true
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          pnpm publish --filter @juliantanx/aiusage --no-git-checks --access public
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          if npm view "@juliantanx/aiusage@${VERSION}" version >/dev/null 2>&1; then
+            echo "@juliantanx/aiusage@${VERSION} already exists; skipping."
+          else
+            pnpm publish --filter @juliantanx/aiusage --no-git-checks --access public
+          fi
 
       - name: Publish Widget to npm
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          pnpm publish --filter @juliantanx/aiusage-widget --no-git-checks --access public
+          VERSION=$(node -p "require('./packages/widget/package.json').version")
+          if npm view "@juliantanx/aiusage-widget@${VERSION}" version >/dev/null 2>&1; then
+            echo "@juliantanx/aiusage-widget@${VERSION} already exists; skipping."
+          else
+            pnpm publish --filter @juliantanx/aiusage-widget --no-git-checks --access public
+          fi

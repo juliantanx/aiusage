@@ -1,5 +1,5 @@
 appId: com.juliantanx.aiusage-widget
-productName: aiusage Widget
+productName: AIUsage Widget
 directories:
   output: dist-electron
   buildResources: build

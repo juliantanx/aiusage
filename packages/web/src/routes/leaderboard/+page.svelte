@@ -3,24 +3,15 @@
   import {
     completeLeaderboardAuth,
     fetchConfig,
-    fetchLeaderboard,
     fetchLeaderboardAuthStatus,
     logoutLeaderboardAuth,
     saveConfig,
     startLeaderboardAuth,
     uploadLeaderboardData,
   } from '$lib/api.js'
-  import { formatTokens } from '$lib/stores.js'
   import { t } from '$lib/i18n.js'
 
-  const periods = ['daily', 'weekly', 'monthly', 'yearly', 'all_time']
-
-  let activePeriod = 'daily'
   let siteUrl = 'https://aiusage.jtanx.com'
-  let data = null
-  let loading = true
-  let loadingMore = false
-  let error = ''
   let authLoading = true
   let authBusy = false
   let authError = ''
@@ -29,26 +20,28 @@
   let authPollTimer = null
   let uploadBusy = false
   let uploadResult = null
+  let uploadSuccessMsg = ''
+  let uploadSuccessTimer = null
   let autoUploadEnabled = false
-  let autoUploadInterval = '86400000'
+  let autoUploadInterval = '604800000'
   let autoUploadSaving = false
+  const defaultAutoUploadInterval = 604800000
 
   const autoUploadIntervals = [
-    { value: '43200000', labelKey: 'leaderboard.autoUploadIntervals.twelveHours' },
     { value: '86400000', labelKey: 'leaderboard.autoUploadIntervals.daily' },
     { value: '604800000', labelKey: 'leaderboard.autoUploadIntervals.weekly' },
+    { value: '2592000000', labelKey: 'leaderboard.autoUploadIntervals.monthly' },
   ]
 
-  $: rows = data?.entries || []
-  $: leaders = rows.slice(0, 3)
   $: recentUpload = authStatus?.uploads?.[0] || null
-  $: uploadSummary = uploadResult?.response?.snapshots
-    ? {
-        accepted: uploadResult.response.snapshots.filter(s => s.status === 'accepted').length,
-        flagged: uploadResult.response.snapshots.filter(s => s.status === 'flagged').length,
-        rejected: uploadResult.response.snapshots.filter(s => s.status === 'rejected').length,
-      }
+  $: accountName = authStatus?.user?.display_name || authStatus?.user?.username || ''
+  $: accountInitial = (accountName || 'A').charAt(0).toUpperCase()
+  $: readableDeviceName = authStatus?.deviceName || (authStatus?.loggedIn ? $t('leaderboard.authorizedDevice') : '')
+  $: latestUploadTime = recentUpload?.created_at || null
+  $: nextUploadTime = autoUploadEnabled && latestUploadTime
+    ? new Date(new Date(latestUploadTime).getTime() + Number(autoUploadInterval || defaultAutoUploadInterval))
     : null
+  $: selectedIntervalLabel = autoUploadIntervals.find(option => option.value === autoUploadInterval)?.labelKey || 'leaderboard.autoUploadIntervals.weekly'
 
   function formatFullTokens(value) {
     const n = Number(value)
@@ -61,43 +54,9 @@
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
-  function avatarText(name) {
-    return (name || 'A').trim().charAt(0).toUpperCase()
-  }
-
-  async function loadLeaderboard(cursor) {
-    const more = Boolean(cursor)
-    if (more) loadingMore = true
-    else {
-      loading = true
-      data = null
-    }
-    error = ''
-
-    try {
-      const next = await fetchLeaderboard(siteUrl, {
-        period_type: activePeriod,
-        cursor,
-      })
-      data = more && data
-        ? { ...next, entries: [...data.entries, ...next.entries] }
-        : next
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load leaderboard'
-    } finally {
-      loading = false
-      loadingMore = false
-    }
-  }
-
-  function switchPeriod(period) {
-    if (period === activePeriod || loading) return
-    activePeriod = period
-    loadLeaderboard()
-  }
-
-  function loadMore() {
-    if (data?.next_cursor) loadLeaderboard(data.next_cursor)
+  function formatUploadStatus(upload) {
+    if (!upload) return $t('leaderboard.noUploads')
+    return `${upload.period_type} · ${upload.status}`
   }
 
   async function loadAuthStatus() {
@@ -175,9 +134,13 @@
     uploadBusy = true
     authError = ''
     uploadResult = null
+    uploadSuccessMsg = ''
+    if (uploadSuccessTimer) { clearTimeout(uploadSuccessTimer); uploadSuccessTimer = null }
     try {
       uploadResult = await uploadLeaderboardData()
-      await Promise.all([loadAuthStatus(), loadLeaderboard()])
+      await loadAuthStatus()
+      uploadSuccessMsg = $t('leaderboard.uploadSuccess')
+      uploadSuccessTimer = setTimeout(() => { uploadSuccessMsg = '' }, 3000)
     } catch (e) {
       authError = e instanceof Error ? e.message : 'Upload failed'
     } finally {
@@ -191,7 +154,7 @@
     try {
       await saveConfig({
         leaderboardAutoUpload: enabled,
-        leaderboardUploadInterval: Number(interval) || 86400000,
+        leaderboardUploadInterval: Number(interval) || defaultAutoUploadInterval,
       })
       autoUploadEnabled = enabled
       autoUploadInterval = interval
@@ -207,12 +170,15 @@
     if (config?.siteUrl) siteUrl = config.siteUrl
     if (config) {
       autoUploadEnabled = config.leaderboardAutoUpload === true
-      autoUploadInterval = String(config.leaderboardUploadInterval || 86400000)
+      autoUploadInterval = String(config.leaderboardUploadInterval || defaultAutoUploadInterval)
     }
-    await Promise.all([loadLeaderboard(), loadAuthStatus()])
+    await loadAuthStatus()
   })
 
-  onDestroy(clearAuthPoll)
+  onDestroy(() => {
+    clearAuthPoll()
+    if (uploadSuccessTimer) { clearTimeout(uploadSuccessTimer); uploadSuccessTimer = null }
+  })
 </script>
 
 <svelte:head>
@@ -229,84 +195,50 @@
   </a>
 </div>
 
-<div class="period-tabs" aria-label={$t('leaderboard.period')}>
-  {#each periods as period}
-    <button class="period-tab" class:active={activePeriod === period} on:click={() => switchPeriod(period)}>
-      {$t(`leaderboard.periods.${period}`)}
-    </button>
-  {/each}
-</div>
-
-{#if leaders.length > 0}
-  <div class="leaders">
-    {#each leaders as entry}
-      <div class="leader">
-        <span class="leader-rank">#{entry.rank}</span>
-        {#if entry.avatar_url}
-          <img src={entry.avatar_url} alt="" class="leader-avatar" />
-        {:else}
-          <span class="leader-avatar placeholder">{avatarText(entry.display_name)}</span>
-        {/if}
-        <span class="leader-name">{entry.display_name}</span>
-        <span class="leader-tokens mono">{formatTokens(Number(entry.total_tokens))}</span>
-      </div>
-    {/each}
-  </div>
-{/if}
-
-<section class="card leaderboard-card">
-  <div class="table-meta">
-    <span>{$t(`leaderboard.periods.${activePeriod}`)}</span>
-    {#if data?.period_start}
-      <span>{$t('leaderboard.periodStart')}: {formatDate(data.period_start)}</span>
-    {/if}
-    <span>{$t('leaderboard.showing')} {rows.length}</span>
-  </div>
-
-  {#if error}
-    <div class="state-msg error">{error}</div>
-  {:else if loading}
+<section class="card status-card">
+  {#if authLoading}
     <div class="state-msg">{$t('common.loading')}</div>
-  {:else if rows.length === 0}
-    <div class="state-msg">{$t('leaderboard.noEntries')}</div>
   {:else}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>{$t('leaderboard.user')}</th>
-            <th class="num">Tokens</th>
-            <th class="num updated">{$t('leaderboard.updated')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each rows as entry}
-            <tr class:top={entry.rank <= 3}>
-              <td class="mono muted-rank">#{entry.rank}</td>
-              <td>
-                <span class="user-cell">
-                  {#if entry.avatar_url}
-                    <img src={entry.avatar_url} alt="" class="avatar" />
-                  {:else}
-                    <span class="avatar placeholder">{avatarText(entry.display_name)}</span>
-                  {/if}
-                  <span class="user-name">{entry.display_name}</span>
-                </span>
-              </td>
-              <td class="mono num" title={formatFullTokens(entry.total_tokens)}>{formatTokens(Number(entry.total_tokens))}</td>
-              <td class="num updated">{formatDate(entry.updated_at)}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+    <div class="status-grid">
+      <div class="status-item">
+        <span>{$t('leaderboard.account')}</span>
+        {#if authStatus.loggedIn}
+          <div class="account-line">
+            {#if authStatus.user?.avatar_url}
+              <img class="account-avatar" src={authStatus.user.avatar_url} alt="" width="28" height="28" />
+            {:else}
+              <span class="account-avatar fallback">{accountInitial}</span>
+            {/if}
+            <span class="account-copy">
+              <strong>{accountName || $t('leaderboard.loggedIn')}</strong>
+              {#if authStatus.user?.username && authStatus.user.username !== accountName}
+                <small>@{authStatus.user.username}</small>
+              {/if}
+            </span>
+          </div>
+        {:else}
+          <strong>{$t('leaderboard.notLoggedIn')}</strong>
+        {/if}
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.device')}</span>
+        <strong title={authStatus.deviceId || ''}>{authStatus.loggedIn ? readableDeviceName : '-'}</strong>
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.authorizedAt')}</span>
+        <strong>{authStatus.loggedIn ? formatDate(authStatus.obtainedAt) : '-'}</strong>
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.uploadStatus')}</span>
+        <strong>{formatUploadStatus(recentUpload)}</strong>
+        <small>{latestUploadTime ? formatDate(latestUploadTime) : $t('leaderboard.noUploadTime')}</small>
+      </div>
+      <div class="status-item">
+        <span>{$t('leaderboard.nextUpload')}</span>
+        <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
+        <small>{autoUploadEnabled ? $t(selectedIntervalLabel) : $t('leaderboard.enableAutoUploadHint')}</small>
+      </div>
     </div>
-
-    {#if data.next_cursor}
-      <button class="load-more" on:click={loadMore} disabled={loadingMore}>
-        {loadingMore ? $t('leaderboard.loadingMore') : $t('leaderboard.loadMore')}
-      </button>
-    {/if}
   {/if}
 </section>
 
@@ -329,15 +261,19 @@
     </div>
   </div>
 
+  {#if uploadSuccessMsg}
+    <div class="upload-toast">{uploadSuccessMsg}</div>
+  {/if}
+
   {#if !authLoading}
     <div class="auth-panel" class:logged-in={authStatus.loggedIn}>
       <span class="status-dot"></span>
       <div>
         <div class="auth-title">
-          {authStatus.loggedIn ? $t('leaderboard.loggedIn') : $t('leaderboard.notLoggedIn')}
+          {authStatus.loggedIn ? (accountName || $t('leaderboard.loggedIn')) : $t('leaderboard.notLoggedIn')}
         </div>
         {#if authStatus.loggedIn}
-          <div class="auth-meta mono">{authStatus.deviceId}</div>
+          <div class="auth-meta">{readableDeviceName}</div>
         {:else}
           <div class="auth-meta">{$t('leaderboard.webLoginHint')}</div>
         {/if}
@@ -373,19 +309,22 @@
     </label>
   </div>
 
+  <div class="auto-upload-meta">
+    <div>
+      <span>{$t('leaderboard.nextUpload')}</span>
+      <strong>{autoUploadEnabled ? (nextUploadTime ? formatDate(nextUploadTime) : $t('leaderboard.afterFirstUpload')) : $t('leaderboard.autoUploadOff')}</strong>
+    </div>
+    <div>
+      <span>{$t('leaderboard.uploadLimits')}</span>
+      <strong>{$t('leaderboard.uploadLimitsSummary')}</strong>
+    </div>
+  </div>
+
   {#if recentUpload}
     <div class="upload-status">
       <span>{$t('leaderboard.lastUpload')}</span>
-      <strong>{recentUpload.period_type} · {recentUpload.status}</strong>
-      <span>{formatFullTokens(recentUpload.total_tokens)} tokens</span>
-    </div>
-  {/if}
-
-  {#if uploadSummary}
-    <div class="upload-status result">
-      <span>{$t('leaderboard.uploadResult')}</span>
-      <strong>{uploadSummary.accepted} / {uploadSummary.flagged} / {uploadSummary.rejected}</strong>
-      <span>{$t('leaderboard.uploadResultHint')}</span>
+      <strong>{formatUploadStatus(recentUpload)}</strong>
+      <span>{formatFullTokens(recentUpload.total_tokens)} tokens · {formatDate(recentUpload.created_at)}</span>
     </div>
   {/if}
 
@@ -431,162 +370,90 @@
     background: var(--raised);
   }
 
-  .period-tabs {
-    display: flex;
-    gap: 0.25rem;
-    width: fit-content;
-    max-width: 100%;
+  .status-card {
     margin-bottom: 1rem;
-    padding: 0.25rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: var(--surface);
-    overflow-x: auto;
+    padding: 1rem 1.25rem;
   }
 
-  .period-tab {
-    min-height: 30px;
-    padding: 0 0.75rem;
-    border: 0;
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .status-item {
+    min-width: 0;
+    padding: 0.75rem;
     border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-    font-weight: 650;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  .period-tab:hover {
-    color: var(--text);
     background: var(--raised);
   }
 
-  .period-tab.active {
-    color: var(--accent);
-    background: var(--accent-dim);
+  .status-item span {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
   }
 
-  /* ── Leaders podium ──────────────────────────────────────────────────── */
-  .leaders {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+  .status-item strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .leader {
-    display: grid;
-    grid-template-columns: auto 32px minmax(0, 1fr) auto;
+  .status-item small {
+    display: block;
+    min-width: 0;
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    overflow: hidden;
+    line-height: 1.35;
+  }
+
+  .account-line {
+    display: flex;
     align-items: center;
     gap: 0.625rem;
-    min-height: 56px;
-    padding: 0.75rem;
-    border-radius: 8px;
-    background: var(--surface);
+    min-width: 0;
   }
 
-  .leader-rank,
-  .leader-tokens {
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-  }
-
-  .leader-avatar,
-  .avatar {
+  .account-avatar {
     width: 28px;
     height: 28px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
   }
 
-  .leader-avatar {
-    width: 32px;
-    height: 32px;
-  }
-
-  .placeholder {
+  .account-avatar.fallback {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--raised);
     color: var(--accent);
     font-size: 0.75rem;
-    font-weight: 750;
+    font-weight: 800;
   }
 
-  .leader-name,
-  .user-name {
+  .account-copy {
     min-width: 0;
+    display: grid;
+    gap: 0.125rem;
+  }
+
+  .account-copy small {
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 0.75rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 650;
-  }
-
-  /* ── Leaderboard table ───────────────────────────────────────────────── */
-  .leaderboard-card {
-    padding: 0;
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-  }
-
-  .table-meta {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-subtle);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-  }
-
-  .table-scroll {
-    overflow-x: auto;
-  }
-
-  th,
-  td {
-    white-space: nowrap;
-  }
-
-  .num {
-    text-align: right;
-  }
-
-  .muted-rank {
-    color: var(--text-muted);
-    font-weight: 650;
-  }
-
-  tr.top {
-    background: color-mix(in oklab, var(--accent) 6%, transparent);
-  }
-
-  .user-cell {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.625rem;
-    min-width: 0;
-  }
-
-  .load-more {
-    display: block;
-    margin: 1rem auto;
-    min-height: 32px;
-    padding: 0 1rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 650;
-    cursor: pointer;
-  }
-
-  .load-more:hover {
-    color: var(--text);
-    background: var(--raised);
   }
 
   /* ── Local panel (auth + upload) ─────────────────────────────────────── */
@@ -662,6 +529,37 @@
     gap: 1rem;
     padding: 0.625rem 0 0;
     border-top: 1px solid var(--border-subtle);
+  }
+
+  .auto-upload-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .auto-upload-meta div {
+    min-width: 0;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background: var(--raised);
+  }
+
+  .auto-upload-meta span {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 650;
+  }
+
+  .auto-upload-meta strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    line-height: 1.45;
   }
 
   .toggle-row {
@@ -776,6 +674,16 @@
     color: var(--text);
   }
 
+  .upload-toast {
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: var(--green-dim);
+    color: var(--green);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    animation: fadeIn 0.15s ease;
+  }
+
   .verify-box a {
     width: fit-content;
     color: var(--accent);
@@ -843,7 +751,7 @@
       align-items: flex-start;
     }
 
-    .leaders {
+    .status-grid {
       grid-template-columns: 1fr;
     }
 
@@ -869,13 +777,14 @@
       align-items: flex-start;
     }
 
+    .auto-upload-meta {
+      grid-template-columns: 1fr;
+    }
+
     .interval-control {
       justify-content: space-between;
       width: 100%;
     }
 
-    .updated {
-      display: none;
-    }
   }
 </style>

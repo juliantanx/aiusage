@@ -1,18 +1,17 @@
 import { redirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { fetchGitHubProfile, findOrCreateOAuthUser, bindOAuthIdentity } from '$lib/server/oauth/providers.js'
-import { createSession, getSessionUser } from '$lib/server/auth/session.js'
+import { createSession, getSessionUser, setSessionCookie } from '$lib/server/auth/session.js'
+import { consumeOAuthState } from '$lib/server/oauth/state-store.js'
 import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
-  const savedState = cookies.get('oauth_state')
 
-  if (!code || !state || state !== savedState) {
+  if (!code || !state || !consumeOAuthState(state)) {
     return new Response('Invalid OAuth state', { status: 400 })
   }
-  cookies.delete('oauth_state', { path: '/' })
 
   const clientId = env.GITHUB_CLIENT_ID
   const clientSecret = env.GITHUB_CLIENT_SECRET
@@ -35,20 +34,18 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   if (existingSid) {
     const existingUser = await getSessionUser(existingSid)
     if (existingUser) {
-      const result = await bindOAuthIdentity(existingUser.id, profile)
-      throw redirect(302, result.error ? '/settings?error=bind_failed' : '/settings?bound=github')
+      const result = await bindOAuthIdentity(existingUser.id, profile, tokenData.access_token)
+      if (result.error) {
+        console.error('[GitHub bind] bind failed:', result.error, 'userId:', existingUser.id, 'githubId:', profile.providerUserId, 'email:', profile.email)
+        throw redirect(302, `/settings?error=${encodeURIComponent(result.error)}`)
+      }
+      throw redirect(302, '/settings?bound=github')
     }
   }
 
-  const user = await findOrCreateOAuthUser(profile)
+  const user = await findOrCreateOAuthUser(profile, tokenData.access_token)
   const sid = await createSession(user.id)
-  cookies.set('ai_session', sid, {
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 604800
-  })
+  await setSessionCookie(cookies, sid)
 
   throw redirect(302, '/leaderboard')
 }

@@ -3,14 +3,14 @@
   import { onDestroy, onMount } from 'svelte'
   import { lang, toggleLang, t } from '$lib/i18n.js'
   import { userPref, cycleTheme, initTheme } from '$lib/theme.js'
-  import { triggerSync, fetchSyncStatus, fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
+  import { fetchConfig, fetchAuthStatus, login } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
   import { getAuthShellState } from '$lib/auth-shell.js'
   import {
     House, LayoutDashboard, Coins, DollarSign, Box,
     MessageSquare, FolderKanban, Wrench,
     Gauge, Tag, Trophy, Settings, HelpCircle,
-    RefreshCw, ArrowUpDown, Sun, Moon, MonitorCog,
+    Sun, Moon, MonitorCog,
     Languages, PanelLeftClose, PanelLeftOpen, ExternalLink
   } from 'lucide-svelte'
 
@@ -57,10 +57,6 @@
 
   const themeIcons = { system: MonitorCog, dark: Moon, light: Sun }
 
-  let syncStatus = null
-  let syncing = false
-  let syncResult = ''
-  let syncPollTimer = null
   let authLoading = true
   let authEnabled = false
   let authenticated = false
@@ -100,67 +96,12 @@
       authenticated = true
       password = ''
       unlockOpen = false
-      loadSyncStatus()
       fetchConfig().then(applyConfig).catch(() => {})
     } catch (err) {
-      authError = err instanceof Error ? err.message : 'Login failed'
+      authError = err instanceof Error ? err.message : $t('auth.loginFailed')
     } finally {
       authSubmitting = false
     }
-  }
-
-  async function loadSyncStatus() {
-    try {
-      const data = await fetchSyncStatus()
-      syncStatus = data.status
-      syncing = Boolean(syncStatus?.isRunning)
-      updateSyncPolling()
-    } catch {
-      syncStatus = null
-      syncing = false
-      updateSyncPolling()
-    }
-  }
-
-  async function handleSync() {
-    syncResult = ''
-    try {
-      const result = await triggerSync()
-      syncStatus = result.status
-      syncing = Boolean(result.status?.isRunning)
-      syncResult = result.alreadyRunning ? $t('sync.inProgress') : $t('sync.started')
-      updateSyncPolling()
-    } catch {
-      syncResult = $t('sync.failed')
-      syncing = false
-      updateSyncPolling()
-    }
-    setTimeout(() => {
-      if (!syncing) syncResult = ''
-    }, 3000)
-  }
-
-  function updateSyncPolling() {
-    if (syncPollTimer) {
-      clearInterval(syncPollTimer)
-      syncPollTimer = null
-    }
-    if (!syncing) return
-    syncPollTimer = setInterval(async () => {
-      await loadSyncStatus()
-      if (!syncStatus?.isRunning) {
-        syncResult = syncStatus?.lastSyncStatus === 'ok'
-          ? $t('sync.complete')
-          : (syncStatus?.lastSyncError || $t('sync.failed'))
-        setTimeout(() => { syncResult = '' }, 5000)
-      }
-    }, 2000)
-  }
-
-  function formatSyncTime(ts) {
-    if (!ts) return $t('sync.never')
-    const d = new Date(ts)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
   function toggleSidebar() {
@@ -195,7 +136,6 @@
   onMount(() => {
     initTheme()
     loadAuthStatus()
-    loadSyncStatus()
     // Initialize currency stores from config
     fetchConfig().then(applyConfig).catch(() => {})
     if (typeof window !== 'undefined') {
@@ -203,9 +143,7 @@
     }
   })
 
-  onDestroy(() => {
-    if (syncPollTimer) clearInterval(syncPollTimer)
-  })
+  onDestroy(() => {})
 
   $: $page, mobileOpen = false
 </script>
@@ -228,37 +166,37 @@
         </svg>
         <span class="brand-name">AIUsage</span>
       </a>
-      <h1>Dashboard locked</h1>
-      <p>Enter the dashboard password to view this page.</p>
+      <h1>{$t('auth.locked')}</h1>
+      <p>{$t('auth.lockedHint')}</p>
       <form on:submit|preventDefault={handleLogin}>
         <!-- svelte-ignore a11y-autofocus -->
         <input
           type="password"
           bind:value={password}
-          placeholder="Password"
+          placeholder={$t('auth.password')}
           autocomplete="current-password"
           autofocus
         />
         <button type="submit" disabled={authSubmitting || !password}>
-          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+          {authSubmitting ? $t('auth.unlocking') : $t('auth.unlock')}
         </button>
       </form>
       {#if authError}
         <div class="auth-error">{authError}</div>
       {/if}
-      <a class="auth-home" href="/">Back to public home</a>
+      <a class="auth-home" href="/">{$t('auth.backHome')}</a>
     </section>
   </main>
 {:else if shellState === 'loading'}
   <main class="auth-page">
     <section class="auth-card">
-      <div class="auth-loading">Checking access...</div>
+      <div class="auth-loading">{$t('auth.checking')}</div>
     </section>
   </main>
 {:else if shouldShowPublicHome}
   <div class="public-shell">
     <header class="public-header">
-      <button class="public-unlock" type="button" on:click={openUnlock} aria-label="Unlock dashboard">
+      <button class="public-unlock" type="button" on:click={openUnlock} aria-label={$t('auth.unlockDashboard')}>
         <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <rect width="64" height="64" rx="14" fill="currentColor"/>
           <rect x="10" y="38" width="12" height="16" rx="3" fill="white"/>
@@ -294,19 +232,19 @@
         </svg>
         <span class="brand-name">AIUsage</span>
       </div>
-      <h1 id="unlock-title">Unlock dashboard</h1>
-      <p>Enter the dashboard password to show navigation and protected pages.</p>
+      <h1 id="unlock-title">{$t('auth.unlockDashboard')}</h1>
+      <p>{$t('auth.unlockHint')}</p>
       <form on:submit|preventDefault={handleLogin}>
         <!-- svelte-ignore a11y-autofocus -->
         <input
           type="password"
           bind:value={password}
-          placeholder="Password"
+          placeholder={$t('auth.password')}
           autocomplete="current-password"
           autofocus
         />
         <button type="submit" disabled={authSubmitting || !password}>
-          {authSubmitting ? 'Unlocking...' : 'Unlock'}
+          {authSubmitting ? $t('auth.unlocking') : $t('auth.unlock')}
         </button>
       </form>
       {#if authError}
@@ -356,22 +294,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button
-          class="ctrl-btn sync-btn"
-          on:click={handleSync}
-          disabled={syncing}
-          title={syncStatus
-            ? `${$t('sync.lastSync')}: ${formatSyncTime(syncStatus.lastSyncAt)}`
-            : $t('sync.notConfigured')}
-        >
-          <span class="ctrl-icon" class:spinning={syncing}>{#if syncing}<RefreshCw size={14} strokeWidth={1.75} />{:else}<ArrowUpDown size={14} strokeWidth={1.75} />{/if}</span>
-          {#if !collapsed}
-            <span class="ctrl-label" class:ok={syncResult === $t('sync.complete')} class:err={syncResult === $t('sync.failed')}>
-              {syncResult || $t('sync.trigger')}
-            </span>
-          {/if}
-        </button>
-
         <button class="ctrl-btn" on:click={cycleTheme} title={$t(`theme.${$userPref}`)}>
           <span class="ctrl-icon"><svelte:component this={themeIcons[$userPref]} size={14} strokeWidth={1.75} /></span>
           {#if !collapsed}
@@ -454,7 +376,12 @@
     color: var(--text);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     transition: background 0.2s ease, color 0.2s ease;
+  }
+  :global(:root[data-theme="dark"] body) {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
   }
 
   /* ── Light theme (default) ────────────────────────────────────────────── */
@@ -503,43 +430,43 @@
 
   /* ── Dark theme ───────────────────────────────────────────────────────── */
   :global(:root[data-theme="dark"]) {
-    --bg:               oklch(0.15 0.01 175);
-    --surface:          oklch(0.18 0.012 175);
-    --raised:           oklch(0.22 0.014 175);
-    --hover:            oklch(0.26 0.016 175);
-    --sidebar-bg:       oklch(0.14 0.01 175);
-    --border-subtle:    oklch(0.25 0.014 175);
-    --border-medium:    oklch(0.32 0.016 175);
-    --text:             oklch(0.9 0.008 175);
-    --text-secondary:   oklch(0.65 0.015 175);
-    --text-muted:       oklch(0.45 0.014 175);
-    --accent:           oklch(0.7 0.12 175);
-    --accent-dim:       oklch(0.7 0.12 175 / 0.12);
-    --accent-hover:     oklch(0.75 0.11 175);
-    --green:            oklch(0.72 0.16 155);
-    --green-dim:        oklch(0.72 0.16 155 / 0.12);
-    --blue:             oklch(0.68 0.14 250);
-    --blue-dim:         oklch(0.68 0.14 250 / 0.12);
-    --purple:           oklch(0.7 0.14 300);
-    --purple-dim:       oklch(0.7 0.14 300 / 0.12);
-    --rose:             oklch(0.68 0.18 25);
-    --rose-dim:         oklch(0.68 0.18 25 / 0.12);
-    --badge-override-bg: oklch(0.7 0.12 175 / 0.15);
-    --badge-override-fg: oklch(0.7 0.12 175);
-    --badge-matched-bg:  oklch(0.72 0.16 155 / 0.15);
-    --badge-matched-fg:  oklch(0.72 0.16 155);
-    --badge-noprice-bg:  oklch(0.68 0.18 25 / 0.12);
-    --badge-noprice-fg:  oklch(0.68 0.18 25);
-    --shadow-sm:        0 1px 2px oklch(0 0 0 / 0.2);
-    --shadow-md:        0 1px 3px oklch(0 0 0 / 0.3), 0 4px 12px oklch(0 0 0 / 0.15);
-    --shadow-lg:        0 4px 8px oklch(0 0 0 / 0.3), 0 12px 32px oklch(0 0 0 / 0.2);
-    --overlay:          oklch(0 0 0 / 0.5);
-    --chart-input:      oklch(0.72 0.13 175);
-    --chart-output:     oklch(0.68 0.14 250);
-    --chart-cache-read: oklch(0.75 0.09 65);
-    --chart-cache-write: oklch(0.72 0.11 310);
-    --chart-thinking:   oklch(0.7 0.17 20);
-    --chart-total:      oklch(0.7 0.12 175);
+    --bg:               oklch(0.13 0.008 175);
+    --surface:          oklch(0.19 0.01 175);
+    --raised:           oklch(0.25 0.012 175);
+    --hover:            oklch(0.28 0.014 175);
+    --sidebar-bg:       oklch(0.11 0.006 175);
+    --border-subtle:    oklch(0.30 0.012 175);
+    --border-medium:    oklch(0.38 0.014 175);
+    --text:             oklch(0.95 0.005 175);
+    --text-secondary:   oklch(0.78 0.01 175);
+    --text-muted:       oklch(0.64 0.008 175);
+    --accent:           oklch(0.72 0.12 175);
+    --accent-dim:       oklch(0.72 0.12 175 / 0.15);
+    --accent-hover:     oklch(0.78 0.11 175);
+    --green:            oklch(0.74 0.16 155);
+    --green-dim:        oklch(0.74 0.16 155 / 0.15);
+    --blue:             oklch(0.72 0.14 250);
+    --blue-dim:         oklch(0.72 0.14 250 / 0.15);
+    --purple:           oklch(0.73 0.14 300);
+    --purple-dim:       oklch(0.73 0.14 300 / 0.15);
+    --rose:             oklch(0.72 0.18 25);
+    --rose-dim:         oklch(0.72 0.18 25 / 0.15);
+    --badge-override-bg: oklch(0.72 0.12 175 / 0.18);
+    --badge-override-fg: oklch(0.72 0.12 175);
+    --badge-matched-bg:  oklch(0.74 0.16 155 / 0.18);
+    --badge-matched-fg:  oklch(0.74 0.16 155);
+    --badge-noprice-bg:  oklch(0.72 0.18 25 / 0.15);
+    --badge-noprice-fg:  oklch(0.72 0.18 25);
+    --shadow-sm:        0 1px 2px oklch(0 0 0 / 0.3);
+    --shadow-md:        0 1px 3px oklch(0 0 0 / 0.4), 0 4px 12px oklch(0 0 0 / 0.2);
+    --shadow-lg:        0 4px 8px oklch(0 0 0 / 0.4), 0 12px 32px oklch(0 0 0 / 0.25);
+    --overlay:          oklch(0 0 0 / 0.55);
+    --chart-input:      oklch(0.74 0.13 175);
+    --chart-output:     oklch(0.72 0.14 250);
+    --chart-cache-read: oklch(0.78 0.09 65);
+    --chart-cache-write: oklch(0.74 0.11 310);
+    --chart-thinking:   oklch(0.73 0.17 20);
+    --chart-total:      oklch(0.72 0.12 175);
   }
 
   /* ── App shell ────────────────────────────────────────────────────────── */
@@ -945,18 +872,6 @@
     letter-spacing: 0.02em;
     flex: 1;
   }
-  .ctrl-label.ok { color: var(--green); }
-  .ctrl-label.err { color: var(--rose); }
-
-  .spinning {
-    animation: spin 0.9s linear infinite;
-    display: inline-block;
-  }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-  }
-
   .collapse-btn { margin-top: 0.125rem; }
 
   /* ── Main area ────────────────────────────────────────────────────────── */
@@ -1212,6 +1127,4 @@
   @media (min-width: 801px) {
     .mobile-backdrop { display: none !important; }
   }
-
-  .sync-btn:hover { color: var(--accent); }
 </style>

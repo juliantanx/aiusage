@@ -90,11 +90,15 @@ export async function cloudPush(
   const data = await readJsonOrNull(response)
 
   if (!response.ok) {
-    throw new CloudSyncError(
-      (data?.error as string) || `Push failed (HTTP ${response.status})`,
-      (data?.error_code as string) || 'server_error',
-      data?.retry_after as number | undefined
-    )
+    const errObj = data?.error
+    // Handle nested error object from star-gating: { error: { code, message, repo, url } }
+    const errMsg = typeof errObj === 'object' && errObj !== null
+      ? (errObj as Record<string, unknown>).message as string || `Push failed (HTTP ${response.status})`
+      : (errObj as string) || `Push failed (HTTP ${response.status})`
+    const errCode = typeof errObj === 'object' && errObj !== null
+      ? (errObj as Record<string, unknown>).code as string || 'server_error'
+      : (data?.error_code as string) || 'server_error'
+    throw new CloudSyncError(errMsg, errCode, data?.retry_after as number | undefined)
   }
 
   if (!data) throw new CloudSyncError('Invalid response from server', 'invalid_response')
@@ -129,10 +133,14 @@ export async function cloudPull(
   const data = await readJsonOrNull(response)
 
   if (!response.ok) {
-    throw new CloudSyncError(
-      (data?.error as string) || `Pull failed (HTTP ${response.status})`,
-      (data?.error_code as string) || 'server_error'
-    )
+    const errObj = data?.error
+    const errMsg = typeof errObj === 'object' && errObj !== null
+      ? (errObj as Record<string, unknown>).message as string || `Pull failed (HTTP ${response.status})`
+      : (errObj as string) || `Pull failed (HTTP ${response.status})`
+    const errCode = typeof errObj === 'object' && errObj !== null
+      ? (errObj as Record<string, unknown>).code as string || 'server_error'
+      : (data?.error_code as string) || 'server_error'
+    throw new CloudSyncError(errMsg, errCode)
   }
 
   if (!data) throw new CloudSyncError('Invalid response from server', 'invalid_response')

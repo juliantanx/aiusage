@@ -2,12 +2,18 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { requireUser } from '$lib/server/auth/session.js'
-
-const USERNAME_COOLDOWN_DAYS = 30
+import { invalidateLeaderboardCache } from '$lib/server/leaderboard/query.js'
+import { getConfigValue, CFG } from '$lib/server/config.js'
 
 export const PUT: RequestHandler = async (event) => {
   const user = await requireUser(event)
   const body = await event.request.json() as Record<string, unknown>
+
+  const usernameCooldownDays = await getConfigValue(CFG.USERNAME_COOLDOWN_DAYS)
+  const usernameMinLength = await getConfigValue(CFG.USERNAME_MIN_LENGTH)
+  const usernameMaxLength = await getConfigValue(CFG.USERNAME_MAX_LENGTH)
+  const displayNameMinLength = await getConfigValue(CFG.DISPLAY_NAME_MIN_LENGTH)
+  const displayNameMaxLength = await getConfigValue(CFG.DISPLAY_NAME_MAX_LENGTH)
 
   const updates: Record<string, string> = {}
   let usernameChanged = false
@@ -15,7 +21,7 @@ export const PUT: RequestHandler = async (event) => {
   // username
   if (body.username !== undefined) {
     const username = String(body.username).trim()
-    if (username.length < 3 || username.length > 32) {
+    if (username.length < usernameMinLength || username.length > usernameMaxLength) {
       return json({ error: 'username_length', error_key: 'username_length' }, { status: 400 })
     }
     if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
@@ -26,7 +32,7 @@ export const PUT: RequestHandler = async (event) => {
       const userRow = await sql`SELECT username_changed_at FROM users WHERE id = ${user.id}`
       const lastChanged = (userRow[0] as { username_changed_at: string | null })?.username_changed_at
       if (lastChanged) {
-        const cooldownEnd = new Date(new Date(lastChanged).getTime() + USERNAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000)
+        const cooldownEnd = new Date(new Date(lastChanged).getTime() + usernameCooldownDays * 24 * 60 * 60 * 1000)
         if (cooldownEnd > new Date()) {
           return json({
             error: 'username_cooldown',
@@ -59,7 +65,7 @@ export const PUT: RequestHandler = async (event) => {
   // display_name
   if (body.display_name !== undefined) {
     const displayName = String(body.display_name).trim()
-    if (displayName.length < 1 || displayName.length > 64) {
+    if (displayName.length < displayNameMinLength || displayName.length > displayNameMaxLength) {
       return json({ error: 'display_name_length', error_key: 'display_name_length' }, { status: 400 })
     }
     updates.display_name = displayName
@@ -96,10 +102,13 @@ export const PUT: RequestHandler = async (event) => {
   if (leaderboardAnonymous !== undefined) {
     await sql`UPDATE users SET leaderboard_anonymous = ${leaderboardAnonymous}, updated_at = NOW() WHERE id = ${user.id}`
   }
+  if (hasLeaderboardUpdates) {
+    invalidateLeaderboardCache()
+  }
 
   // Reserve old username for 30 days
   if (usernameChanged) {
-    const reservedUntil = new Date(Date.now() + USERNAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000)
+    const reservedUntil = new Date(Date.now() + usernameCooldownDays * 24 * 60 * 60 * 1000)
     await sql`
       INSERT INTO reserved_usernames (username, user_id, reserved_until)
       VALUES (${user.username}, ${user.id}, ${reservedUntil})
