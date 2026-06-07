@@ -3,6 +3,7 @@
   import { t } from '$lib/i18n.js'
   import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, importKelivoBackup, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
+  import { splitSettingsSources } from '$lib/settings-sources.js'
 
   let loading = true
   let loadError = null
@@ -25,8 +26,10 @@
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
 
-  $: activeTools = detectedTools.filter(t => t.status !== 'not_found')
-  $: notFoundTools = detectedTools.filter(t => t.status === 'not_found')
+  $: sourceGroups = splitSettingsSources(detectedTools)
+  $: manualImportTools = sourceGroups.manualImportTools
+  $: activeTools = sourceGroups.activeDetectedTools
+  $: notFoundTools = sourceGroups.notFoundDetectedTools
 
   // Sync form — credentialRef is derived automatically, never user-editable
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: 'auto' }
@@ -620,63 +623,89 @@
           <span class="platform-badge">{PLATFORM_LABEL[currentPlatform] ?? currentPlatform}</span>
         {/if}
       </div>
-      <div class="field-hint" style="margin-bottom: 0.5rem">{$t('settings.detectedToolsHint')}</div>
-      <input class="file-input" type="file" accept=".zip,.json,application/zip,application/json" bind:this={kelivoFileInput} on:change={handleKelivoFileChange} />
-      <div class="detected-tools-list">
-        {#each activeTools as tool}
-          <div class="detected-tool">
-            <div class="detected-tool-header">
-              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'}></span>
-              <span class="detected-tool-name">{tool.label}</span>
-              <span class="detected-tool-status">
-                {#if tool.sourceKey === 'kelivo'}
-                  {kelivoStatus}
-                {:else if tool.status === 'found'}
-                  {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
-                {:else}
-                  {$t('settings.toolEmpty')}
-                {/if}
-              </span>
-            </div>
-            {#if tool.paths?.length}
-              {#each tool.paths as path}
-                <div class="detected-tool-path">{path}</div>
-              {/each}
-            {:else if tool.path}
-              <div class="detected-tool-path">{tool.path}</div>
-            {/if}
-            {#if tool.sourceKey === 'kelivo'}
-              <div class="source-actions">
-                <button type="button" class="btn-ghost import-btn" on:click={triggerKelivoImport} disabled={kelivoImporting}>
-                  {kelivoImporting ? '...' : $t('settings.importBackup')}
-                </button>
-                {#if kelivoImportedCount !== null}
-                  <span class="source-result">{$t('settings.imported')} {kelivoImportedCount} {$t('settings.records')}</span>
-                {/if}
-              </div>
-              {#if kelivoImportError}<p class="section-error compact">{kelivoImportError}</p>{/if}
-            {/if}
-          </div>
-        {/each}
-        {#if notFoundTools.length}
-          <button class="not-found-toggle" on:click={() => showNotFound = !showNotFound}>
-            <span class="not-found-chevron" class:open={showNotFound}>&#9654;</span>
-            {$t('settings.toolNotFound')} ({notFoundTools.length})
-          </button>
-          {#if showNotFound}
-            {#each notFoundTools as tool}
-              <div class="detected-tool not-found">
+
+      {#if manualImportTools.length}
+        <div class="source-group">
+          <div class="source-subtitle">{$t('settings.manualImports')}</div>
+          <div class="field-hint">{$t('settings.manualImportsHint')}</div>
+          <input class="file-input" type="file" accept=".zip,.json,application/zip,application/json" bind:this={kelivoFileInput} on:change={handleKelivoFileChange} />
+          <div class="detected-tools-list">
+            {#each manualImportTools as tool}
+              <div class="detected-tool">
                 <div class="detected-tool-header">
-                  <span class="status-dot gray"></span>
+                  <span class="status-dot" class:green={tool.status === 'found'} class:gray={tool.status === 'not_found'}></span>
                   <span class="detected-tool-name">{tool.label}</span>
+                  <span class="detected-tool-status">
+                    {#if tool.sourceKey === 'kelivo'}
+                      {kelivoStatus}
+                    {:else}
+                      {$t('settings.notConfigured')}
+                    {/if}
+                  </span>
                 </div>
-                {#if tool.path}
-                  <div class="detected-tool-path">{tool.path}</div>
+                {#if tool.sourceKey === 'kelivo'}
+                  <div class="source-actions">
+                    <button type="button" class="btn-ghost import-btn" on:click={triggerKelivoImport} disabled={kelivoImporting}>
+                      {kelivoImporting ? '...' : $t('settings.importBackup')}
+                    </button>
+                    {#if kelivoImportedCount !== null}
+                      <span class="source-result">{$t('settings.imported')} {kelivoImportedCount} {$t('settings.records')}</span>
+                    {/if}
+                  </div>
+                  {#if kelivoImportError}<p class="section-error compact">{kelivoImportError}</p>{/if}
                 {/if}
               </div>
             {/each}
+          </div>
+        </div>
+      {/if}
+
+      <div class="source-group">
+        <div class="source-subtitle">{$t('settings.detectedTools')}</div>
+        <div class="field-hint">{$t('settings.detectedToolsHint')}</div>
+        <div class="detected-tools-list">
+          {#each activeTools as tool}
+            <div class="detected-tool">
+              <div class="detected-tool-header">
+                <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'}></span>
+                <span class="detected-tool-name">{tool.label}</span>
+                <span class="detected-tool-status">
+                  {#if tool.status === 'found'}
+                    {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
+                  {:else}
+                    {$t('settings.toolEmpty')}
+                  {/if}
+                </span>
+              </div>
+              {#if tool.paths?.length}
+                {#each tool.paths as path}
+                  <div class="detected-tool-path">{path}</div>
+                {/each}
+              {:else if tool.path}
+                <div class="detected-tool-path">{tool.path}</div>
+              {/if}
+            </div>
+          {/each}
+          {#if notFoundTools.length}
+            <button class="not-found-toggle" on:click={() => showNotFound = !showNotFound}>
+              <span class="not-found-chevron" class:open={showNotFound}>&#9654;</span>
+              {$t('settings.toolNotFound')} ({notFoundTools.length})
+            </button>
+            {#if showNotFound}
+              {#each notFoundTools as tool}
+                <div class="detected-tool not-found">
+                  <div class="detected-tool-header">
+                    <span class="status-dot gray"></span>
+                    <span class="detected-tool-name">{tool.label}</span>
+                  </div>
+                  {#if tool.path}
+                    <div class="detected-tool-path">{tool.path}</div>
+                  {/if}
+                </div>
+              {/each}
+            {/if}
           {/if}
-        {/if}
+        </div>
       </div>
     </div>
 
@@ -988,6 +1017,25 @@
     background: var(--accent-dim);
     color: var(--accent);
     letter-spacing: 0.04em;
+  }
+
+  .source-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .source-group + .source-group {
+    margin-top: 1rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .source-subtitle {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
   }
 
   .fields {
