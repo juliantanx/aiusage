@@ -297,7 +297,7 @@
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
         <span class="meta-tag">MIT</span>
-        <span class="meta-tag">v1.4.0</span>
+        <span class="meta-tag">v1.5.0</span>
       </div>
     </header>
 

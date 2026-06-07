@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-06-07
+
+### Added
+- **Windows dashboard launcher** ([#23](https://github.com/juliantanx/aiusage/pull/23) by @joyshan1986) — adds a dedicated Windows launcher so the dashboard can be opened without a shell wrapper.
+- **Token leaderboard, cloud sync, and web enhancements** ([#24](https://github.com/juliantanx/aiusage/pull/24)) — introduces the token leaderboard, expands the cloud-sync workflow, and updates the web dashboard around the new sync and leaderboard flows.
+- **Interactive `aiusage menu` command** ([#25](https://github.com/juliantanx/aiusage/pull/25)) — adds a terminal menu for common CLI actions from one place.
+- **Password-protected dashboard unlock flow** ([#27](https://github.com/juliantanx/aiusage/pull/27) by @Fiveo9) — adds local dashboard password protection and unlock flow.
+- **Session detail improvements and leaderboard features** ([#28](https://github.com/juliantanx/aiusage/pull/28)) — expands the session detail page and leaderboard workflow with more context and admin-side usability improvements.
+- **Password reset flow and Resend email provider** — adds forgot-password and reset-password support, plus admin enhancements for account recovery and moderation.
+- **Widget currency-aware cost display and UI refresh** — the widget now reflects the selected currency and ships a redesigned i18n/settings/chart experience.
+
+### Fixed
+- **Cloud Sync verification and sync reliability** — gates Cloud Sync behind GitHub star verification, preserves sync config correctly, fixes R2 path-style handling, and repairs uploaded-record counts.
+- **OAuth and auth flow hardening** — replaces cookie-based OAuth state with in-memory storage, fixes explicit `Set-Cookie` handling, derives secure cookies from `SITE_URL`, and uses SvelteKit redirects for GitHub OAuth start.
+- **Dashboard and leaderboard polish** — auto-parses logs on `serve` startup, replaces upload result summaries with success toasts, improves the leaderboard podium and sort filters, and tightens admin badge and role-toggle layout.
+- **Web UI cleanup** — improves dark-theme contrast, suppresses the dialog overlay a11y warning, and trims layout friction in the filter selectors.
+
+### Changed
+- **Docs and release content refreshed** — updates dashboard docs/screenshots, the project overview and security policy, demo GIF hosting, and the site/version metadata to `1.5.0`.
+
+---
+
 ## [1.4.0] - 2026-06-03
 
 ### Added
@@ -262,6 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.0]: https://github.com/juliantanx/aiusage/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/juliantanx/aiusage/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/juliantanx/aiusage/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/juliantanx/aiusage/compare/v1.3.2...v1.3.3

@@ -82,7 +82,7 @@ function computeHash(snap: UploadSnapshot): string {
 function makeValidPayload(snapOverrides: Partial<UploadSnapshot> = {}) {
   return {
     schema_version: 1,
-    client_version: '1.4.0',
+    client_version: '1.5.0',
     client_platform: 'macos',
     snapshots: [makeSnapshot(snapOverrides)]
   }
