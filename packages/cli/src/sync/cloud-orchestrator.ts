@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { SyncRecord, SyncTombstone } from '@aiusage/core'
-import { getUnsyncedRecords } from '../db/records.js'
+import { getUnsyncedRecords, markRecordsSynced } from '../db/records.js'
 import { insertSyncedRecord, mergeSyncedRecordsIntoRecords } from '../db/synced-records.js'
 import { mapStatsRecordToSyncRecord } from './mapper.js'
 import { cloudPush, cloudPull, CloudSyncError } from './cloud.js'
@@ -8,6 +8,7 @@ import type { SyncProgress } from './runtime.js'
 
 export interface CloudSyncOptions {
   deviceInstanceId: string
+  target?: string
   onProgress?: (progress: SyncProgress) => void
 }
 
@@ -53,14 +54,10 @@ export class CloudSyncOrchestrator {
       const uploadedCount = await this.push(syncGeneration)
 
       // Step 5: Mark local records as synced
-      const unsynced = getUnsyncedRecords(this.db)
+      const target = this.options.target ?? 'cloud'
+      const unsynced = getUnsyncedRecords(this.db, target)
       if (unsynced.length > 0) {
-        const syncedAt = Date.now()
-        const updateStmt = this.db.prepare('UPDATE records SET synced_at = ? WHERE id = ?')
-        const tx = this.db.transaction((ids: string[]) => {
-          for (const id of ids) updateStmt.run(syncedAt, id)
-        })
-        tx(unsynced.map(r => r.id))
+        markRecordsSynced(this.db, unsynced.map(r => r.id), Date.now(), target)
       }
 
       this.options.onProgress?.({
@@ -108,7 +105,7 @@ export class CloudSyncOrchestrator {
   }
 
   private async push(syncGeneration: number): Promise<number> {
-    const unsynced = getUnsyncedRecords(this.db)
+    const unsynced = getUnsyncedRecords(this.db, this.options.target ?? 'cloud')
     if (unsynced.length === 0) {
       return 0
     }

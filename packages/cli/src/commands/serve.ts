@@ -10,6 +10,7 @@ import { uploadLeaderboardData } from './leaderboard-upload.js'
 import { getState } from '../init.js'
 import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
+import { getSyncTarget } from '../sync/target.js'
 import { RuntimeSettingsController } from '../runtime/settings-controller.js'
 import { setPriceOverride, fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
 import type Database from 'better-sqlite3'
@@ -68,6 +69,7 @@ export function serve(options: ServeOptions): void {
       await runSync(options.db, runtimeOptions)
     },
     getPersistedState: () => getState(AIUSAGE_DIR),
+    getCurrentTarget: () => getSyncTarget(loadConfig()?.sync),
   })
 
   const runtimeSettings = new RuntimeSettingsController({

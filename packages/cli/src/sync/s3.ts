@@ -20,7 +20,7 @@ export class S3SyncBackend {
     this.prefix = config.prefix.replace(/^\/+/, '').replace(/\/?$/, '/')
     this.client = new S3Client({
       region: config.region ?? 'auto',
-      ...(config.endpoint ? { endpoint: config.endpoint } : {}),
+      ...(config.endpoint ? { endpoint: config.endpoint, forcePathStyle: true } : {}),
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,

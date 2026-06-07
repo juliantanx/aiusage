@@ -4,8 +4,11 @@ import { hostname, platform } from 'node:os'
 import { randomBytes } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
-import { loadConfig, saveConfig, loadCredential } from '../config.js'
+import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SyncConfig } from '../config.js'
+import { setSyncConsent } from '../init.js'
+import { generateConsentFingerprint } from '../sync/consent.js'
+import { getSyncTarget } from '../sync/target.js'
 import { extractProject, extractProjectFromCwd } from './project-extraction.js'
 import { discoverTools } from '../discovery.js'
 import type { SyncStartResult, SyncStatusSnapshot } from '../sync/runtime.js'
@@ -1518,9 +1521,18 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                   json(res, { error: { code: 'INVALID_BACKEND', message: 'sync.backend must be cloud, github, or s3' } }, 400)
                   return
                 }
-                const newSync: SyncConfig = { backend: backendVal as 'github' | 's3' | 'cloud' }
+                // Merge with existing sync config to preserve fields from other backends
+                const newSync: SyncConfig = { ...existing.sync, backend: backendVal as 'github' | 's3' | 'cloud' }
                 for (const f of ['repo', 'bucket', 'prefix', 'endpoint', 'region', 'credentialRef'] as const) {
-                  if (syncUpdate[f]) (newSync as any)[f] = String(syncUpdate[f])
+                  if (syncUpdate[f] != null && syncUpdate[f] !== '') (newSync as any)[f] = String(syncUpdate[f])
+                }
+                if (newSync.backend === 'github' && !newSync.repo) {
+                  json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.repo is required for GitHub sync' } }, 400)
+                  return
+                }
+                if (newSync.backend === 's3' && !newSync.bucket) {
+                  json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.bucket is required for S3 sync' } }, 400)
+                  return
                 }
                 existing.sync = newSync
               }
@@ -1539,6 +1551,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             }
 
             saveConfig(existing)
+            const consentConfig = buildConsentConfig(existing)
+            const syncTarget = getSyncTarget(existing.sync)
+            if (consentConfig && syncTarget) {
+              setSyncConsent(AIUSAGE_DIR, syncTarget, {
+                syncConsentAt: Date.now(),
+                syncConsentTarget: generateConsentFingerprint(consentConfig),
+              })
+            }
             options?.onConfigUpdated?.()
             json(res, { ok: true })
           } catch {

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
-import { getState, setState } from '../init.js'
+import { getState, setSyncTargetState } from '../init.js'
 import { SyncOrchestrator, type SyncBackend, type SyncResult } from '../sync/index.js'
 import { CloudSyncOrchestrator, type CloudSyncResult } from '../sync/cloud-orchestrator.js'
 import { verifyConsent } from '../sync/consent.js'
@@ -9,6 +9,7 @@ import { S3SyncBackend } from '../sync/s3.js'
 import { loadConfig, buildConsentConfig, loadCredential, AIUSAGE_DIR } from '../config.js'
 import { hasCredentials } from '../leaderboard/credentials.js'
 import type { SyncProgress } from '../sync/runtime.js'
+import { getSyncTarget } from '../sync/target.js'
 
 function createBackend(config: import('../config.js').Config): SyncBackend | null {
   const sync = config.sync
@@ -61,6 +62,10 @@ export async function runSync(
   }
 
   const state = getState(AIUSAGE_DIR)
+  const target = getSyncTarget(config.sync)
+  if (!target) {
+    return failedResult('Invalid sync configuration.')
+  }
 
   // Cloud sync doesn't use consent system — it uses device auth (HMAC)
   if (config.sync.backend === 'cloud') {
@@ -69,7 +74,8 @@ export async function runSync(
     }
 
     const orchestrator = new CloudSyncOrchestrator(db, {
-      deviceInstanceId: state.deviceInstanceId,
+      deviceInstanceId: state!.deviceInstanceId,
+      target,
       onProgress: options?.onProgress,
     })
 
@@ -77,11 +83,10 @@ export async function runSync(
     const result = await orchestrator.sync()
 
     const now = Date.now()
-    setState(AIUSAGE_DIR, {
+    setSyncTargetState(AIUSAGE_DIR, target, {
       lastSyncAt: now,
       lastSyncStatus: result.status === 'ok' ? 'ok' : 'failed',
       lastSyncError: result.error,
-      lastSyncTarget: 'cloud',
       lastSyncUploaded: result.uploadedCount,
       lastSyncPulled: result.pulledCount,
       lastSyncDurationMs: now - startedAt,
@@ -91,8 +96,12 @@ export async function runSync(
   }
 
   // GitHub/S3 sync uses consent system
-  if (!state?.syncConsentAt || !state?.syncConsentTarget) {
-    setState(AIUSAGE_DIR, { lastSyncStatus: 'blocked_pending_consent' })
+  const consent = state?.syncConsents?.[target]
+    ?? (state?.lastSyncTarget === target && state.syncConsentAt && state.syncConsentTarget
+      ? { syncConsentAt: state.syncConsentAt, syncConsentTarget: state.syncConsentTarget }
+      : null)
+  if (!consent?.syncConsentAt || !consent?.syncConsentTarget) {
+    setSyncTargetState(AIUSAGE_DIR, target, { lastSyncStatus: 'blocked_pending_consent' })
     return blockedResult('Sync consent not provided. Run "aiusage init" to approve.')
   }
 
@@ -101,8 +110,8 @@ export async function runSync(
     return failedResult('Invalid sync configuration.')
   }
 
-  if (!verifyConsent(state.syncConsentTarget, consentConfig)) {
-    setState(AIUSAGE_DIR, { lastSyncStatus: 'blocked_pending_consent' })
+  if (!verifyConsent(consent.syncConsentTarget, consentConfig)) {
+    setSyncTargetState(AIUSAGE_DIR, target, { lastSyncStatus: 'blocked_pending_consent' })
     return blockedResult('Sync configuration has changed since last approval. Run "aiusage init" to re-approve.')
   }
 
@@ -112,7 +121,8 @@ export async function runSync(
   }
 
   const orchestrator = new SyncOrchestrator(db, backend, {
-    deviceInstanceId: state.deviceInstanceId,
+    deviceInstanceId: state!.deviceInstanceId,
+    target,
     consentVerified: true,
     onProgress: options?.onProgress,
   })
@@ -121,11 +131,10 @@ export async function runSync(
   const result = await orchestrator.sync()
 
   const now = Date.now()
-  setState(AIUSAGE_DIR, {
+  setSyncTargetState(AIUSAGE_DIR, target, {
     lastSyncAt: now,
     lastSyncStatus: result.status === 'ok' ? 'ok' : result.status,
     lastSyncError: result.error,
-    lastSyncTarget: `${config.sync.backend}:${config.sync.repo ?? config.sync.bucket}`,
     lastSyncUploaded: result.uploadedCount,
     lastSyncPulled: result.pulledCount,
     lastSyncDurationMs: now - startedAt,

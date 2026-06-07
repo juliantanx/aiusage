@@ -7,6 +7,7 @@ import { initializeDatabase } from '../../src/db/index.js'
 vi.mock('../../src/init.js', () => ({
   getState: vi.fn(),
   setState: vi.fn(),
+  setSyncTargetState: vi.fn(),
 }))
 
 // Mock the config loading

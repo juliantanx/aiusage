@@ -50,17 +50,20 @@ export interface SyncStartResult {
 interface SyncRuntimeOptions {
   runSync: (options: { onProgress?: (progress: SyncProgress) => void }) => Promise<void>
   getPersistedState: () => State | null
+  getCurrentTarget?: () => string | null
 }
 
 export class SyncRuntimeController {
   private readonly runSyncFn: SyncRuntimeOptions['runSync']
   private readonly getPersistedState: SyncRuntimeOptions['getPersistedState']
+  private readonly getCurrentTarget?: SyncRuntimeOptions['getCurrentTarget']
   private current: SyncRuntimeStatus = { isRunning: false }
   private _nextSyncAt?: number
 
   constructor(options: SyncRuntimeOptions) {
     this.runSyncFn = options.runSync
     this.getPersistedState = options.getPersistedState
+    this.getCurrentTarget = options.getCurrentTarget
   }
 
   start(): SyncStartResult {
@@ -95,15 +98,24 @@ export class SyncRuntimeController {
 
   getStatus(): SyncStatusSnapshot {
     const persisted = this.getPersistedState()
+    const target = this.getCurrentTarget?.() ?? persisted?.lastSyncTarget
+    const targetStatus = target ? persisted?.syncTargets?.[target] : undefined
+    const legacyStatus = !target || persisted?.lastSyncTarget === target
+      ? {
+          lastSyncAt: persisted?.lastSyncAt,
+          lastSyncStatus: persisted?.lastSyncStatus,
+          lastSyncError: persisted?.lastSyncError,
+          lastSyncTarget: persisted?.lastSyncTarget,
+          lastSyncUploaded: persisted?.lastSyncUploaded,
+          lastSyncPulled: persisted?.lastSyncPulled,
+          lastSyncDurationMs: persisted?.lastSyncDurationMs,
+        }
+      : {}
+    const status = targetStatus ?? legacyStatus
     return {
       ...this.current,
-      lastSyncAt: persisted?.lastSyncAt,
-      lastSyncStatus: persisted?.lastSyncStatus,
-      lastSyncError: persisted?.lastSyncError,
-      lastSyncTarget: persisted?.lastSyncTarget,
-      lastSyncUploaded: persisted?.lastSyncUploaded,
-      lastSyncPulled: persisted?.lastSyncPulled,
-      lastSyncDurationMs: persisted?.lastSyncDurationMs,
+      ...status,
+      lastSyncTarget: status.lastSyncTarget ?? target ?? undefined,
       nextSyncAt: this._nextSyncAt,
     }
   }

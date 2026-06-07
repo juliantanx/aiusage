@@ -1,8 +1,9 @@
 import { platform } from 'node:os'
 import { generateConsentFingerprint } from '../sync/consent.js'
-import { setState, getState } from '../init.js'
+import { setSyncConsent } from '../init.js'
 import { loadConfig, saveConfig, buildConsentConfig, AIUSAGE_DIR, type Config } from '../config.js'
 import { hasCredentials } from '../leaderboard/credentials.js'
+import { getSyncTarget } from '../sync/target.js'
 
 export interface InitOptions {
   backend?: 'github' | 's3' | 'cloud' | 'skip'
@@ -86,7 +87,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
     const fingerprint = generateConsentFingerprint(consentConfig)
 
     saveConfig(config)
-    setState(AIUSAGE_DIR, {
+    setSyncConsent(AIUSAGE_DIR, getSyncTarget(config.sync)!, {
       syncConsentAt: Date.now(),
       syncConsentTarget: fingerprint,
     })
@@ -137,7 +138,7 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
     const fingerprint = generateConsentFingerprint(consentConfig)
 
     saveConfig(config)
-    setState(AIUSAGE_DIR, {
+    setSyncConsent(AIUSAGE_DIR, getSyncTarget(config.sync)!, {
       syncConsentAt: Date.now(),
       syncConsentTarget: fingerprint,
     })

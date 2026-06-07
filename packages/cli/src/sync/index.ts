@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { SyncRecord } from '@aiusage/core'
-import { getUnsyncedRecords } from '../db/records.js'
+import { getUnsyncedRecords, markRecordsSynced } from '../db/records.js'
 import { insertSyncedRecord, mergeSyncedRecordsIntoRecords } from '../db/synced-records.js'
 import { mapStatsRecordToSyncRecord } from './mapper.js'
 import type { SyncProgress } from './runtime.js'
@@ -17,6 +17,7 @@ export interface SyncBackend {
 
 export interface SyncOptions {
   deviceInstanceId: string
+  target: string
   consentVerified: boolean
   onProgress?: (progress: SyncProgress) => void
 }
@@ -173,7 +174,7 @@ export class SyncOrchestrator {
   }
 
   private async upload(): Promise<number> {
-    const unsynced = getUnsyncedRecords(this.db)
+    const unsynced = getUnsyncedRecords(this.db, this.options.target)
     if (unsynced.length === 0) return 0
 
     // Group records by day per device.
@@ -218,11 +219,7 @@ export class SyncOrchestrator {
 
     // Mark local records as synced
     const syncedAt = Date.now()
-    const updateStmt = this.db.prepare('UPDATE records SET synced_at = ? WHERE id = ?')
-    const tx = this.db.transaction((ids: string[]) => {
-      for (const id of ids) updateStmt.run(syncedAt, id)
-    })
-    tx(unsynced.map(r => r.id))
+    markRecordsSynced(this.db, unsynced.map(r => r.id), syncedAt, this.options.target)
 
     return totalUploaded
   }

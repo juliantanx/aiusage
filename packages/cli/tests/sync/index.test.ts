@@ -22,6 +22,7 @@ describe('SyncOrchestrator', () => {
   it('skips sync when consent is not verified', async () => {
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'device-123',
+      target: 'github:user/repo',
       consentVerified: false,
     })
 
@@ -55,6 +56,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'device-123',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 
@@ -74,6 +76,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'di1',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 
@@ -102,6 +105,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'di1',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 
@@ -139,6 +143,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'di1',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 
@@ -184,6 +189,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'di1',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 
@@ -227,6 +233,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'device-123',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 
@@ -271,6 +278,7 @@ describe('SyncOrchestrator', () => {
 
     const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
       deviceInstanceId: 'di1',
+      target: 'github:user/repo',
       consentVerified: true,
     })
 

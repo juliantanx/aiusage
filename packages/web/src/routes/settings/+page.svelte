@@ -24,7 +24,7 @@
   $: notFoundTools = detectedTools.filter(t => t.status === 'not_found')
 
   // Sync form — credentialRef is derived automatically, never user-editable
-  let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: '' }
+  let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: 'auto' }
   let cloudLoggedIn = false
   let autoSyncEnabled = false
   let syncIntervalMinutes = '30'
@@ -34,7 +34,19 @@
   let syncRunning = false
   let syncPollTimer = null
 
+  $: currentSyncTarget = syncData.backend === 'cloud'
+    ? 'cloud'
+    : syncData.backend === 'github' && syncData.repo
+      ? `github:${syncData.repo}`
+      : syncData.backend === 's3' && syncData.bucket
+        ? `s3:${syncData.bucket}`
+        : ''
+  $: displayedSyncStatus = !syncStatusData?.lastSyncTarget || !currentSyncTarget || syncStatusData.lastSyncTarget === currentSyncTarget
+    ? syncStatusData
+    : null
+
   // GitHub credential state
+  let credentialKeys = []
   let ghToken = ''
   let ghTokenVisible = false
   let ghTokenLoading = false
@@ -70,11 +82,49 @@
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
   let syncSaving = false;    let syncError = '';    let syncSaved = false
+  let savedSyncSnapshot = ''
+  $: syncDirty = JSON.stringify({
+    backend: syncData.backend || '',
+    repo: syncData.repo.trim(),
+    bucket: syncData.bucket.trim(),
+    prefix: syncData.prefix.trim(),
+    endpoint: syncData.endpoint.trim(),
+    region: syncData.region.trim(),
+    autoSyncEnabled,
+    syncIntervalMinutes: autoSyncEnabled ? String(syncIntervalMinutes) : '',
+    ghTokenPending: Boolean(ghToken),
+    s3AkidPending: Boolean(s3AkidValue),
+    s3SakPending: Boolean(s3SakValue),
+  }) !== savedSyncSnapshot
 
   // Credential key derivation — must match sync.ts createBackend()
   function ghKey(repo)    { return `github/${repo}/token` }
   function s3AkidKey(bucket) { return `s3/${bucket}/accessKeyId` }
   function s3SakKey(bucket)  { return `s3/${bucket}/secretAccessKey` }
+  function hasCredentialKey(key) { return credentialKeys.includes(key) }
+  function inferGithubRepoFromKeys(keys) {
+    const key = keys.find(k => /^github\/[^/]+\/[^/]+\/token$/.test(k))
+    return key ? key.replace(/^github\//, '').replace(/\/token$/, '') : ''
+  }
+  function inferS3BucketFromKeys(keys) {
+    const key = keys.find(k => /^s3\/[^/]+\/accessKeyId$/.test(k))
+    return key ? key.replace(/^s3\//, '').replace(/\/accessKeyId$/, '') : ''
+  }
+  function syncSnapshot() {
+    return JSON.stringify({
+      backend: syncData.backend || '',
+      repo: syncData.repo.trim(),
+      bucket: syncData.bucket.trim(),
+      prefix: syncData.prefix.trim(),
+      endpoint: syncData.endpoint.trim(),
+      region: syncData.region.trim(),
+      autoSyncEnabled,
+      syncIntervalMinutes: autoSyncEnabled ? String(syncIntervalMinutes) : '',
+      ghTokenPending: Boolean(ghToken),
+      s3AkidPending: Boolean(s3AkidValue),
+      s3SakPending: Boolean(s3SakValue),
+    })
+  }
 
   function resetAllCredentialState() {
     ghToken = ''; ghTokenVisible = false; ghTokenLoading = false; ghTokenIsSet = false
@@ -83,7 +133,19 @@
   }
 
   function onBackendChange() {
-    resetAllCredentialState()
+    if (syncData.backend === 'github' && !syncData.repo) {
+      syncData.repo = inferGithubRepoFromKeys(credentialKeys)
+    }
+    if (syncData.backend === 's3' && !syncData.bucket) {
+      syncData.bucket = inferS3BucketFromKeys(credentialKeys)
+    }
+    ghToken = ''; ghTokenVisible = false; ghTokenLoading = false
+    s3AkidValue = ''; s3AkidVisible = false; s3AkidLoading = false
+    s3SakValue = ''; s3SakVisible = false; s3SakLoading = false
+    ghTokenIsSet = !!(syncData.repo && hasCredentialKey(ghKey(syncData.repo)))
+    s3AkidIsSet = !!(syncData.bucket && hasCredentialKey(s3AkidKey(syncData.bucket)))
+    s3SakIsSet = !!(syncData.bucket && hasCredentialKey(s3SakKey(syncData.bucket)))
+    if (syncData.backend === 's3' && !syncData.region) syncData.region = 'auto'
     prevBackend = syncData.backend
     prevRepo = syncData.repo
     prevBucket = syncData.bucket
@@ -118,13 +180,17 @@
       detectedTools = toolsResult.tools ?? []
       currentPlatform = cfg.platform ?? ''
       currentHostname = cfg.hostname ?? ''
+      const keys = cfg.credentialKeys ?? []
+      credentialKeys = keys
+      const inferredGithubRepo = inferGithubRepoFromKeys(keys)
+      const inferredS3Bucket = inferS3BucketFromKeys(keys)
       syncData = {
-        backend: cfg.sync?.backend ?? '',
-        repo: cfg.sync?.repo ?? '',
-        bucket: cfg.sync?.bucket ?? '',
+        backend: cfg.sync?.backend ?? (inferredGithubRepo ? 'github' : ''),
+        repo: cfg.sync?.repo ?? inferredGithubRepo,
+        bucket: cfg.sync?.bucket ?? inferredS3Bucket,
         prefix: cfg.sync?.prefix ?? '',
         endpoint: cfg.sync?.endpoint ?? '',
-        region: cfg.sync?.region ?? '',
+        region: cfg.sync?.backend === 's3' ? (cfg.sync?.region ?? 'auto') : (cfg.sync?.region ?? ''),
       }
       prevBackend = syncData.backend
       prevRepo = syncData.repo
@@ -137,12 +203,12 @@
         syncIntervalMinutes = String(Math.round(si / 60000))
       }
 
-      const keys = cfg.credentialKeys ?? []
       // Check both the structured key (new UI) and credentialRef (old init command)
       const oldRef = cfg.sync?.credentialRef ?? ''
       ghTokenIsSet = !!(syncData.repo && (keys.includes(ghKey(syncData.repo)) || (oldRef && keys.includes(oldRef))))
       s3AkidIsSet  = !!(syncData.bucket && keys.includes(s3AkidKey(syncData.bucket)))
       s3SakIsSet   = !!(syncData.bucket && keys.includes(s3SakKey(syncData.bucket)))
+      savedSyncSnapshot = syncSnapshot()
 
       effectiveDeviceName = cfg.device || currentHostname || 'hostname'
 
@@ -242,6 +308,22 @@
   async function saveSync() {
     syncSaving = true; syncError = ''
     try {
+      syncData.repo = syncData.repo.trim()
+      syncData.bucket = syncData.bucket.trim()
+      syncData.prefix = syncData.prefix.trim()
+      syncData.endpoint = syncData.endpoint.trim()
+      syncData.region = syncData.region.trim()
+
+      if (syncData.backend === 'github') {
+        if (!syncData.repo) throw new Error($t('settings.syncRepoRequired'))
+        if (!/^[^/\s]+\/[^/\s]+$/.test(syncData.repo)) throw new Error($t('settings.syncRepoInvalid'))
+        if (!ghToken && !ghTokenIsSet) throw new Error($t('settings.syncGithubTokenRequired'))
+      } else if (syncData.backend === 's3') {
+        if (!syncData.bucket) throw new Error($t('settings.syncBucketRequired'))
+        if (!s3AkidValue && !s3AkidIsSet) throw new Error($t('settings.syncS3AccessKeyRequired'))
+        if (!s3SakValue && !s3SakIsSet) throw new Error($t('settings.syncS3SecretKeyRequired'))
+      }
+
       // Build the sync config payload with auto-derived credentialRef
       let syncPayload = null
       if (syncData.backend === 'cloud') {
@@ -256,9 +338,9 @@
         syncPayload = {
           backend: 's3',
           bucket: syncData.bucket,
-          prefix: syncData.prefix || null,
-          endpoint: syncData.endpoint || null,
-          region: syncData.region || null,
+          prefix: syncData.prefix || '',
+          endpoint: syncData.endpoint || '',
+          region: syncData.region || 'auto',
           credentialRef: s3AkidKey(syncData.bucket),
         }
       }
@@ -284,21 +366,33 @@
 
       // Update isSet flags and clear entered values (don't expose creds in memory longer than needed)
       if (syncData.backend === 'github') {
-        if (ghToken) { ghTokenIsSet = true; ghToken = ''; ghTokenVisible = false }
+        if (ghToken) {
+          credentialKeys = Array.from(new Set([...credentialKeys, ghKey(syncData.repo)]))
+          ghTokenIsSet = true; ghToken = ''; ghTokenVisible = false
+        }
       } else if (syncData.backend === 's3') {
-        if (s3AkidValue) { s3AkidIsSet = true; s3AkidValue = ''; s3AkidVisible = false }
-        if (s3SakValue)  { s3SakIsSet  = true; s3SakValue  = ''; s3SakVisible  = false }
+        if (s3AkidValue) {
+          credentialKeys = Array.from(new Set([...credentialKeys, s3AkidKey(syncData.bucket)]))
+          s3AkidIsSet = true; s3AkidValue = ''; s3AkidVisible = false
+        }
+        if (s3SakValue) {
+          credentialKeys = Array.from(new Set([...credentialKeys, s3SakKey(syncData.bucket)]))
+          s3SakIsSet  = true; s3SakValue  = ''; s3SakVisible  = false
+        }
       }
 
       prevBackend = syncData.backend
       prevRepo    = syncData.repo
       prevBucket  = syncData.bucket
 
+      savedSyncSnapshot = syncSnapshot()
       syncSaved = true
       setTimeout(() => { syncSaved = false }, 2000)
       await loadSyncStatusData()
+      return true
     } catch (e) {
       syncError = e instanceof Error ? e.message : 'Save failed'
+      return false
     } finally {
       syncSaving = false
     }
@@ -324,7 +418,11 @@
   // Per-credential toggle helpers
   async function toggleGhToken() {
     syncError = ''
-    if (!syncData.repo) return
+    syncData.repo = syncData.repo.trim()
+    if (!syncData.repo) {
+      syncError = $t('settings.syncRepoRequired')
+      return
+    }
     if (ghTokenVisible) { ghTokenVisible = false; return }
     if (ghToken) { ghTokenVisible = true; return }
     ghTokenLoading = true
@@ -342,7 +440,11 @@
 
   async function toggleS3Akid() {
     syncError = ''
-    if (!syncData.bucket) return
+    syncData.bucket = syncData.bucket.trim()
+    if (!syncData.bucket) {
+      syncError = $t('settings.syncBucketRequired')
+      return
+    }
     if (s3AkidVisible) { s3AkidVisible = false; return }
     if (s3AkidValue) { s3AkidVisible = true; return }
     s3AkidLoading = true
@@ -360,7 +462,11 @@
 
   async function toggleS3Sak() {
     syncError = ''
-    if (!syncData.bucket) return
+    syncData.bucket = syncData.bucket.trim()
+    if (!syncData.bucket) {
+      syncError = $t('settings.syncBucketRequired')
+      return
+    }
     if (s3SakVisible) { s3SakVisible = false; return }
     if (s3SakValue) { s3SakVisible = true; return }
     s3SakLoading = true
@@ -520,7 +626,7 @@
     </div>
 
     <!-- Sync -->
-    <div class="card">
+    <div class="card sync-card">
       <div class="group-title">{$t('settings.sync')}</div>
       <div class="fields">
         <div class="field full">
@@ -564,22 +670,23 @@
             <input id="field-sync-repo" type="text" bind:value={syncData.repo} class="field-input mono"
               placeholder="owner/repo" on:input={onRepoChange} />
           </div>
-          {#if syncData.repo}
-            <div class="field full">
-              <label class="field-label" for="field-gh-token">GitHub Token</label>
-              <div class="field-hint">Stored as <code class="key-hint">{ghKey(syncData.repo)}</code></div>
-              <div class="credential-row">
-                <input id="field-gh-token" type={ghTokenVisible ? 'text' : 'password'}
-                  value={ghToken} on:input={e => ghToken = e.target.value}
-                  class="field-input mono" autocomplete="new-password"
-                  placeholder={ghTokenIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
-                <button type="button" class="btn-ghost" on:click={toggleGhToken}
-                  disabled={ghTokenLoading}>
-                  {#if ghTokenLoading}...{:else if ghTokenVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
-                </button>
-              </div>
+          <div class="field full">
+            <label class="field-label" for="field-gh-token">GitHub Token</label>
+            <div class="field-hint">
+              {$t('settings.credentialStoredAs')}
+              <code class="key-hint">{syncData.repo ? ghKey(syncData.repo) : 'github/owner/repo/token'}</code>
             </div>
-          {/if}
+            <div class="credential-row">
+              <input id="field-gh-token" type={ghTokenVisible ? 'text' : 'password'}
+                value={ghToken} on:input={e => ghToken = e.target.value}
+                class="field-input mono" autocomplete="new-password"
+                placeholder={ghTokenIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
+              <button type="button" class="btn-ghost" on:click={toggleGhToken}
+                disabled={ghTokenLoading || !syncData.repo}>
+                {#if ghTokenLoading}...{:else if ghTokenVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
+              </button>
+            </div>
+          </div>
         {/if}
 
         {#if syncData.backend === 's3'}
@@ -598,38 +705,42 @@
           </div>
           <div class="field">
             <label class="field-label" for="field-sync-region">{$t('settings.syncRegion')}</label>
-            <input id="field-sync-region" type="text" bind:value={syncData.region} class="field-input mono" placeholder="us-east-1" />
+            <input id="field-sync-region" type="text" bind:value={syncData.region} class="field-input mono" placeholder="auto" />
           </div>
-          {#if syncData.bucket}
-            <div class="field full">
-              <label class="field-label" for="field-s3-akid">Access Key ID</label>
-              <div class="field-hint">Stored as <code class="key-hint">{s3AkidKey(syncData.bucket)}</code></div>
-              <div class="credential-row">
-                <input id="field-s3-akid" type={s3AkidVisible ? 'text' : 'password'}
-                  value={s3AkidValue} on:input={e => s3AkidValue = e.target.value}
-                  class="field-input mono" autocomplete="new-password"
-                  placeholder={s3AkidIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
-                <button type="button" class="btn-ghost" on:click={toggleS3Akid}
-                  disabled={s3AkidLoading}>
-                  {#if s3AkidLoading}...{:else if s3AkidVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
-                </button>
-              </div>
+          <div class="field full">
+            <label class="field-label" for="field-s3-akid">Access Key ID</label>
+            <div class="field-hint">
+              {$t('settings.credentialStoredAs')}
+              <code class="key-hint">{syncData.bucket ? s3AkidKey(syncData.bucket) : 's3/my-bucket/accessKeyId'}</code>
             </div>
-            <div class="field full">
-              <label class="field-label" for="field-s3-sak">Secret Access Key</label>
-              <div class="field-hint">Stored as <code class="key-hint">{s3SakKey(syncData.bucket)}</code></div>
-              <div class="credential-row">
-                <input id="field-s3-sak" type={s3SakVisible ? 'text' : 'password'}
-                  value={s3SakValue} on:input={e => s3SakValue = e.target.value}
-                  class="field-input mono" autocomplete="new-password"
-                  placeholder={s3SakIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
-                <button type="button" class="btn-ghost" on:click={toggleS3Sak}
-                  disabled={s3SakLoading}>
-                  {#if s3SakLoading}...{:else if s3SakVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
-                </button>
-              </div>
+            <div class="credential-row">
+              <input id="field-s3-akid" type={s3AkidVisible ? 'text' : 'password'}
+                value={s3AkidValue} on:input={e => s3AkidValue = e.target.value}
+                class="field-input mono" autocomplete="new-password"
+                placeholder={s3AkidIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
+              <button type="button" class="btn-ghost" on:click={toggleS3Akid}
+                disabled={s3AkidLoading || !syncData.bucket}>
+                {#if s3AkidLoading}...{:else if s3AkidVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
+              </button>
             </div>
-          {/if}
+          </div>
+          <div class="field full">
+            <label class="field-label" for="field-s3-sak">Secret Access Key</label>
+            <div class="field-hint">
+              {$t('settings.credentialStoredAs')}
+              <code class="key-hint">{syncData.bucket ? s3SakKey(syncData.bucket) : 's3/my-bucket/secretAccessKey'}</code>
+            </div>
+            <div class="credential-row">
+              <input id="field-s3-sak" type={s3SakVisible ? 'text' : 'password'}
+                value={s3SakValue} on:input={e => s3SakValue = e.target.value}
+                class="field-input mono" autocomplete="new-password"
+                placeholder={s3SakIsSet ? $t('settings.credentialSet') : $t('settings.credentialNotSet')} />
+              <button type="button" class="btn-ghost" on:click={toggleS3Sak}
+                disabled={s3SakLoading || !syncData.bucket}>
+                {#if s3SakLoading}...{:else if s3SakVisible}{$t('settings.hideCredential')}{:else}{$t('settings.showCredential')}{/if}
+              </button>
+            </div>
+          </div>
         {/if}
         {#if syncData.backend}
           <div class="field full">
@@ -673,7 +784,7 @@
           <div class="sync-status-grid">
             <div class="sync-status-item">
               <span class="sync-status-label">{$t('settings.syncLastSync')}</span>
-              <span class="sync-status-value mono">{formatSyncTime(syncStatusData?.lastSyncAt)}</span>
+              <span class="sync-status-value mono">{formatSyncTime(displayedSyncStatus?.lastSyncAt)}</span>
             </div>
             {#if syncStatusData?.nextSyncAt}
               <div class="sync-status-item">
@@ -683,46 +794,49 @@
             {/if}
             <div class="sync-status-item">
               <span class="sync-status-label">{$t('settings.syncStatusLabel')}</span>
-              <span class="sync-status-value" class:ok={syncStatusData?.lastSyncStatus === 'ok'} class:err={syncStatusData?.lastSyncStatus === 'failed'}>
+              <span class="sync-status-value" class:ok={displayedSyncStatus?.lastSyncStatus === 'ok'} class:err={displayedSyncStatus?.lastSyncStatus === 'failed'}>
                 {#if syncRunning}
                   {syncStatusData?.phase ? $t(`sync.phase.${syncStatusData.phase}`) : $t('sync.syncing')}
-                {:else if syncStatusData?.lastSyncStatus === 'ok'}
+                {:else if displayedSyncStatus?.lastSyncStatus === 'ok'}
                   {$t('sync.complete')}
-                {:else if syncStatusData?.lastSyncStatus}
+                {:else if displayedSyncStatus?.lastSyncStatus}
                   {$t('sync.failed')}
                 {:else}
                   —
                 {/if}
               </span>
             </div>
-            {#if syncStatusData?.lastSyncPulled != null && syncStatusData?.lastSyncStatus === 'ok'}
+            {#if displayedSyncStatus?.lastSyncPulled != null && displayedSyncStatus?.lastSyncStatus === 'ok'}
               <div class="sync-status-item">
                 <span class="sync-status-label">{$t('settings.syncPulled')}</span>
-                <span class="sync-status-value mono">{syncStatusData.lastSyncPulled}</span>
+                <span class="sync-status-value mono">{displayedSyncStatus.lastSyncPulled}</span>
               </div>
               <div class="sync-status-item">
                 <span class="sync-status-label">{$t('settings.syncUploaded')}</span>
-                <span class="sync-status-value mono">{syncStatusData.lastSyncUploaded ?? 0}</span>
+                <span class="sync-status-value mono">{displayedSyncStatus.lastSyncUploaded ?? 0}</span>
               </div>
             {/if}
-            {#if syncStatusData?.lastSyncError && syncStatusData?.lastSyncStatus !== 'ok'}
+            {#if displayedSyncStatus?.lastSyncError && displayedSyncStatus?.lastSyncStatus !== 'ok'}
               <div class="sync-status-item full">
                 <span class="sync-status-label">{$t('settings.syncError')}</span>
-                <span class="sync-status-value err">{syncStatusData.lastSyncError}</span>
+                <span class="sync-status-value err">{displayedSyncStatus.lastSyncError}</span>
               </div>
             {/if}
-            {#if syncStatusData?.lastSyncDurationMs != null && syncStatusData?.lastSyncStatus === 'ok'}
+            {#if displayedSyncStatus?.lastSyncDurationMs != null && displayedSyncStatus?.lastSyncStatus === 'ok'}
               <div class="sync-status-item">
                 <span class="sync-status-label">{$t('settings.syncDuration')}</span>
-                <span class="sync-status-value mono">{(syncStatusData.lastSyncDurationMs / 1000).toFixed(1)}s</span>
+                <span class="sync-status-value mono">{(displayedSyncStatus.lastSyncDurationMs / 1000).toFixed(1)}s</span>
               </div>
             {/if}
-            {#if syncStatusData?.lastSyncPulled != null && syncStatusData?.lastSyncStatus === 'ok'}
+            {#if displayedSyncStatus?.lastSyncPulled != null && displayedSyncStatus?.lastSyncStatus === 'ok'}
               <div class="sync-status-hint">{$t('settings.syncCountHint')}</div>
             {/if}
           </div>
           <div class="sync-action">
-            <button class="btn-sync" on:click={handleSyncFromSettings} disabled={syncRunning}>
+            {#if syncDirty && !syncRunning}
+              <div class="sync-unsaved-warn">{$t('settings.syncUnsavedHint')}</div>
+            {/if}
+            <button class="btn-sync" on:click={handleSyncFromSettings} disabled={syncRunning || syncSaving || syncDirty}>
               {#if syncRunning}
                 {syncStatusData?.phase ? $t(`sync.phase.${syncStatusData.phase}`) : $t('sync.syncing')}
                 {#if syncStatusData?.pulledCount || syncStatusData?.uploadedCount}
@@ -732,7 +846,7 @@
                   </span>
                 {/if}
               {:else}
-                {$t('settings.syncNow')}
+                {syncSaving ? '...' : $t('settings.syncNow')}
               {/if}
             </button>
           </div>
@@ -756,6 +870,7 @@
     border-radius: 8px;
     padding: 1.25rem;
   }
+  .sync-card { order: -1; }
 
   .group-title-row {
     display: flex;
@@ -920,6 +1035,19 @@
   .sync-status-value.err { color: var(--rose); }
   .sync-action {
     margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+  .sync-unsaved-warn {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--amber, #f59e0b);
+    background: color-mix(in oklab, var(--amber, #f59e0b) 10%, transparent);
+    border: 1px solid color-mix(in oklab, var(--amber, #f59e0b) 25%, transparent);
+    border-radius: 6px;
+    padding: 0.375rem 0.625rem;
   }
   .btn-sync {
     font-family: var(--mono);

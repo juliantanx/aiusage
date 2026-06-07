@@ -78,7 +78,7 @@ export function buildConsentConfig(config: Config): ConsentConfig | null {
   const endpoint = backend === 'github'
     ? 'https://api.github.com'
     : sync.endpoint ?? 'https://s3.amazonaws.com'
-  const region = sync.region ?? 'global'
+  const region = backend === 'github' ? 'global' : (sync.region ?? 'auto')
 
   return {
     backend,
