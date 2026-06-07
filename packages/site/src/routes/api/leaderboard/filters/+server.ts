@@ -2,11 +2,9 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { getCurrentPeriodStart } from '$lib/server/leaderboard/query.js'
-import { getUserFromEvent } from '$lib/server/auth/session.js'
 
 export const GET: RequestHandler = async (event) => {
   try {
-    const user = await getUserFromEvent(event)
     const periodType = event.url.searchParams.get('period_type') || 'last_30_days'
     const metric = event.url.searchParams.get('metric') || 'tokens'
     const periodStart = event.url.searchParams.get('period_start') || getCurrentPeriodStart(periodType)
@@ -25,7 +23,6 @@ export const GET: RequestHandler = async (event) => {
           AND visibility = 'public'
         GROUP BY tool
         ORDER BY
-          SUM(CASE WHEN user_id = ${user?.id ?? null} THEN ${valueColumn} ELSE 0 END) DESC,
           SUM(${valueColumn}) DESC,
           tool ASC
       `,
@@ -38,7 +35,6 @@ export const GET: RequestHandler = async (event) => {
           AND visibility = 'public'
         GROUP BY model
         ORDER BY
-          SUM(CASE WHEN user_id = ${user?.id ?? null} THEN ${valueColumn} ELSE 0 END) DESC,
           SUM(${valueColumn}) DESC,
           model ASC
       `,
