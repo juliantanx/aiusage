@@ -11,3 +11,4 @@ aiusage-data/
 .svelte-kit/
 .env
 packages/site/.env
+packages/site/.env.production
