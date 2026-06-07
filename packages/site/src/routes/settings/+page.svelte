@@ -36,8 +36,10 @@
   let lbMsg = ''
   let lbError = ''
   let lbSaving = false
+  $: avatarMaxSize = $page.data.avatarMaxSize || 5 * 1024 * 1024
   $: identities = $page.data.identities || []
   $: hasGithub = identities.some(i => i.provider === 'github')
+  $: canUnlink = $page.data.profile?.has_password || identities.length > 1
 
   const bindErrors = {
     already_linked: { en: 'This GitHub account is already linked to another user.', zh: '该 GitHub 账号已绑定其他用户。' },
@@ -143,8 +145,9 @@
   async function handleAvatarSelect(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      profileError = zh ? '文件太大（最大 5MB）' : 'File too large (max 5MB)'
+    if (file.size > avatarMaxSize) {
+      const maxMB = Math.round(avatarMaxSize / 1024 / 1024)
+      profileError = zh ? `文件太大（最大 ${maxMB}MB）` : `File too large (max ${maxMB}MB)`
       return
     }
 
@@ -454,11 +457,13 @@
                     <span class="linked-provider">{identity.provider === 'github' ? 'GitHub' : identity.provider === 'linux_do' ? 'Linux.do' : identity.provider}</span>
                     <span class="linked-username">{identity.username || '—'}</span>
                     {#if identity.email}
-                      <span class="linked-email text-muted">{identity.email}</span>
+                      <span class="linked-email text-muted" title={identity.email}>{identity.email}</span>
                     {/if}
-                    <button type="button" class="btn-unbind" disabled={unbindingProvider === identity.provider} on:click={() => unbindIdentity(identity.provider)}>
-                      {unbindingProvider === identity.provider ? (zh ? '解绑中...' : 'Unlinking...') : (zh ? '解绑' : 'Unlink')}
-                    </button>
+                    {#if canUnlink}
+                      <button type="button" class="btn-unbind" disabled={unbindingProvider === identity.provider} on:click={() => unbindIdentity(identity.provider)}>
+                        {unbindingProvider === identity.provider ? (zh ? '解绑中...' : 'Unlinking...') : (zh ? '解绑' : 'Unlink')}
+                      </button>
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -616,8 +621,8 @@
   .linked-account-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem; border-radius: 6px; background: var(--bg); border: 1px solid var(--border-subtle); font-size: 0.875rem; }
   .linked-provider { font-weight: 600; min-width: 80px; }
   .linked-username { color: var(--text); }
-  .linked-email { font-size: 0.8125rem; }
-  .btn-unbind { margin-left: auto; padding: 0.25rem 0.625rem; border-radius: 4px; border: 1px solid var(--rose); color: var(--rose); background: transparent; font-size: 0.8125rem; cursor: pointer; }
+  .linked-email { font-size: 0.8125rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-unbind { margin-left: auto; padding: 0.25rem 0.625rem; border-radius: 4px; border: 1px solid var(--rose); color: var(--rose); background: transparent; font-size: 0.8125rem; cursor: pointer; flex-shrink: 0; }
   .btn-unbind:hover { background: oklch(0.55 0.22 25 / 0.08); }
   .btn-unbind:disabled { opacity: 0.5; cursor: not-allowed; }
   .text-muted { color: var(--text-muted); }

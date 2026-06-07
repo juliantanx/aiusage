@@ -7,7 +7,7 @@ export const GET: RequestHandler = async (event) => {
   try {
     const user = await getUserFromEvent(event)
 
-    const periodType = event.url.searchParams.get('period_type') || 'last_30_days'
+    const periodType = event.url.searchParams.get('period_type') || 'all_time'
     const metric = event.url.searchParams.get('metric') || 'tokens'
     const scope = event.url.searchParams.get('scope') || 'all'
     const tool = event.url.searchParams.get('tool')
@@ -19,7 +19,7 @@ export const GET: RequestHandler = async (event) => {
       periodStart = getCurrentPeriodStart(periodType)
     }
 
-    if (!['last_30_days', 'daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodType)) {
+    if (!['daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodType)) {
       return json({ error: 'Invalid period_type' }, { status: 400 })
     }
     if (!['tokens', 'cost'].includes(metric)) {
@@ -51,8 +51,8 @@ export const GET: RequestHandler = async (event) => {
       entries: [],
       next_cursor: null,
       current_user: null,
-      period_type: event.url.searchParams.get('period_type') || 'last_30_days',
-      period_start: event.url.searchParams.get('period_start') || getCurrentPeriodStart('last_30_days'),
+      period_type: event.url.searchParams.get('period_type') || 'all_time',
+      period_start: event.url.searchParams.get('period_start') || getCurrentPeriodStart('all_time'),
       metric: event.url.searchParams.get('metric') || 'tokens',
       scope: event.url.searchParams.get('scope') || 'all',
       tool: null,

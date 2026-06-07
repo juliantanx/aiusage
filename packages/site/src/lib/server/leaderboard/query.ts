@@ -56,10 +56,6 @@ export async function queryLeaderboard(options: {
   cursor: string | null
   currentUserId: string | null
 }): Promise<LeaderboardResponse> {
-  if (options.periodType === 'last_30_days') {
-    return queryRollingLeaderboard(options, 30)
-  }
-
   const pageSize = await getConfigValue(CFG.LEADERBOARD_PAGE_SIZE)
   const cacheTtlMs = await getConfigValue(CFG.LEADERBOARD_CACHE_TTL_MS)
   const orderExpr = options.metric === 'cost'
@@ -130,105 +126,6 @@ export async function queryLeaderboard(options: {
   }
 
   // Cache first-page results
-  if (!options.cursor) {
-    cache.set(key, { data: result, expiresAt: Date.now() + cacheTtlMs })
-  }
-
-  return result
-}
-
-async function queryRollingLeaderboard(options: {
-  periodType: string
-  periodStart: string
-  metric: RankingMetric
-  scope: RankingScope
-  tool: string | null
-  model: string | null
-  cursor: string | null
-  currentUserId: string | null
-}, days: number): Promise<LeaderboardResponse> {
-  const pageSize = await getConfigValue(CFG.LEADERBOARD_PAGE_SIZE)
-  const cacheTtlMs = await getConfigValue(CFG.LEADERBOARD_CACHE_TTL_MS)
-  const orderExpr = options.metric === 'cost'
-    ? sql`a.total_cost_usd DESC`
-    : sql`a.total_tokens DESC`
-  const cursorRank = options.cursor ? decodeCursor(options.cursor) : 0
-  const periodEnd = addUtcDays(options.periodStart, days)
-
-  const key = cacheKey(options)
-  if (!options.cursor) {
-    const cached = cache.get(key)
-    if (cached && cached.expiresAt > Date.now()) {
-      return {
-        ...cached.data,
-        current_user: await getRollingCurrentUserRanking(options, days),
-      }
-    }
-  }
-
-  const entries = await sql`
-    WITH aggregated AS (
-      SELECT
-        lm.user_id,
-        lm.scope_type,
-        lm.tool,
-        lm.model,
-        SUM(lm.total_tokens) AS total_tokens,
-        SUM(lm.total_cost_usd) AS total_cost_usd,
-        MAX(lm.updated_at) AS updated_at
-      FROM leaderboard_metrics lm
-      JOIN users u ON u.id = lm.user_id
-      WHERE lm.period_type = 'daily'::period_type
-        AND lm.period_start >= ${options.periodStart}
-        AND lm.period_start < ${periodEnd}
-        AND lm.scope_type = ${options.scope}
-        AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
-        AND (${options.model}::text IS NULL OR lm.model = ${options.model})
-        AND lm.visibility = 'public'
-        AND u.status = 'active'
-        AND u.leaderboard_visibility = 'public'
-      GROUP BY lm.user_id, lm.scope_type, lm.tool, lm.model
-    ),
-    ranked AS (
-      SELECT
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(a.user_id), 1, 8) ELSE a.user_id END AS user_id,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.username END AS username,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
-        a.scope_type,
-        a.tool,
-        a.model,
-        a.total_tokens::text,
-        a.total_cost_usd::text,
-        a.updated_at::text,
-        ROW_NUMBER() OVER (ORDER BY ${orderExpr}, a.updated_at ASC, a.user_id ASC) as rn
-      FROM aggregated a
-      JOIN users u ON u.id = a.user_id
-    )
-    SELECT *
-    FROM ranked
-    WHERE rn > ${cursorRank}
-    ORDER BY rn ASC
-    LIMIT ${pageSize + 1}
-  ` as Array<RankingEntry & { rn: string }>
-
-  const hasMore = entries.length > pageSize
-  const page = entries.slice(0, pageSize)
-  const nextCursor = hasMore && page.length > 0 ? encodeCursor(page[page.length - 1].rn) : null
-  const currentUser = await getRollingCurrentUserRanking(options, days)
-
-  const result: LeaderboardResponse = {
-    entries: page.map(row => toRankingEntry(row)),
-    next_cursor: nextCursor,
-    current_user: currentUser,
-    period_type: options.periodType,
-    period_start: options.periodStart,
-    metric: options.metric,
-    scope: options.scope,
-    tool: options.tool,
-    model: options.model,
-  }
-
   if (!options.cursor) {
     cache.set(key, { data: result, expiresAt: Date.now() + cacheTtlMs })
   }
@@ -335,78 +232,9 @@ async function getCurrentUserRanking(options: {
   }
 }
 
-async function getRollingCurrentUserRanking(options: {
-  periodType: string
-  periodStart: string
-  metric: RankingMetric
-  scope: RankingScope
-  tool: string | null
-  model: string | null
-  currentUserId: string | null
-}, days: number): Promise<RankingEntry | null> {
-  if (!options.currentUserId) return null
-
-  const periodEnd = addUtcDays(options.periodStart, days)
-  const rankedRows = await sql`
-    WITH aggregated AS (
-      SELECT
-        lm.user_id,
-        lm.scope_type,
-        lm.tool,
-        lm.model,
-        SUM(lm.total_tokens) AS total_tokens,
-        SUM(lm.total_cost_usd) AS total_cost_usd,
-        MAX(lm.updated_at) AS updated_at
-      FROM leaderboard_metrics lm
-      JOIN users u ON u.id = lm.user_id
-      WHERE lm.period_type = 'daily'::period_type
-        AND lm.period_start >= ${options.periodStart}
-        AND lm.period_start < ${periodEnd}
-        AND lm.scope_type = ${options.scope}
-        AND (${options.tool}::text IS NULL OR lm.tool = ${options.tool})
-        AND (${options.model}::text IS NULL OR lm.model = ${options.model})
-        AND lm.visibility = 'public'
-        AND u.status = 'active'
-        AND u.leaderboard_visibility = 'public'
-      GROUP BY lm.user_id, lm.scope_type, lm.tool, lm.model
-    ),
-    ranked AS (
-      SELECT
-        a.user_id AS raw_user_id,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN 'anon_' || substr(md5(a.user_id), 1, 8) ELSE a.user_id END AS user_id,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.username END AS username,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN '***' ELSE u.display_name END AS display_name,
-        CASE WHEN u.leaderboard_anonymous = TRUE THEN NULL ELSE u.avatar_url END AS avatar_url,
-        a.scope_type,
-        a.tool,
-        a.model,
-        a.total_tokens::text,
-        a.total_cost_usd::text,
-        a.updated_at::text,
-        ROW_NUMBER() OVER (
-          ORDER BY ${
-            options.metric === 'cost'
-              ? sql`a.total_cost_usd DESC`
-              : sql`a.total_tokens DESC`
-          }, a.updated_at ASC, a.user_id ASC
-        ) as rn
-      FROM aggregated a
-      JOIN users u ON u.id = a.user_id
-    )
-    SELECT *
-    FROM ranked
-    WHERE raw_user_id = ${options.currentUserId}
-    LIMIT 1
-  ` as Array<RankingEntry & { rn: string }>
-
-  return rankedRows[0] ? toRankingEntry(rankedRows[0]) : null
-}
-
 export function getCurrentPeriodStart(periodType: string): string {
   const now = new Date()
   switch (periodType) {
-    case 'last_30_days':
-      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 29)).toISOString()
     case 'daily':
       return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
     case 'weekly': {
@@ -423,12 +251,6 @@ export function getCurrentPeriodStart(periodType: string): string {
     default:
       return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
   }
-}
-
-function addUtcDays(iso: string, days: number): string {
-  const date = new Date(iso)
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString()
 }
 
 function encodeCursor(rank: string): string {

@@ -5,7 +5,8 @@ const config = {
   kit: {
     adapter: adapter({
       out: 'build'
-    })
+    }),
+    bodySizeLimit: '50m'
   }
 }
 

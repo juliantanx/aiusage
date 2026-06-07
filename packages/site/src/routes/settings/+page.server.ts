@@ -33,6 +33,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   const usernameCooldownDays = await getConfigValue(CFG.USERNAME_COOLDOWN_DAYS)
+  const avatarMaxSize = await getConfigValue(CFG.AVATAR_MAX_FILE_SIZE)
 
   // Load linked identities
   let identities: Array<{ provider: string; username: string | null; email: string | null; created_at: string }> = []
@@ -46,5 +47,5 @@ export const load: PageServerLoad = async ({ locals }) => {
     identities = rows as typeof identities
   } catch {}
 
-  return { profile: base, usernameCooldownDays, identities }
+  return { profile: base, usernameCooldownDays, identities, avatarMaxSize }
 }

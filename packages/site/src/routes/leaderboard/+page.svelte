@@ -5,12 +5,11 @@
   import { lang } from '$lib/lang'
 
   const periods = [
-    { key: 'last_30_days', zh: '近 30 天', en: 'Last 30 days' },
+    { key: 'all_time', zh: '累计', en: 'All time' },
     { key: 'daily', zh: '今日', en: 'Daily' },
     { key: 'weekly', zh: '本周', en: 'Weekly' },
     { key: 'monthly', zh: '本月', en: 'Monthly' },
-    { key: 'yearly', zh: '今年', en: 'Yearly' },
-    { key: 'all_time', zh: '累计', en: 'All time' }
+    { key: 'yearly', zh: '今年', en: 'Yearly' }
   ]
 
   const metrics = [
@@ -19,12 +18,12 @@
   ]
 
   const scopes = [
-    { key: 'all', zh: '总榜', en: 'Overall' },
+    { key: 'all', zh: '全部', en: 'All' },
     { key: 'tool', zh: '工具', en: 'Tool' },
     { key: 'model', zh: '模型', en: 'Model' }
   ]
 
-  let activePeriod = 'last_30_days'
+  let activePeriod = 'all_time'
   let activeMetric = 'tokens'
   let activeScope = 'all'
   let selectedTool = ''
@@ -58,8 +57,6 @@
     switch (periodType) {
       case 'daily':
         return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-      case 'last_30_days':
-        return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 29)).toISOString()
       case 'weekly': {
         const day = now.getUTCDay()
         const diff = day === 0 ? 6 : day - 1
@@ -82,9 +79,6 @@
       case 'daily':
         d.setUTCDate(d.getUTCDate() + direction)
         break
-      case 'last_30_days':
-        d.setUTCDate(d.getUTCDate() + direction * 30)
-        break
       case 'weekly':
         d.setUTCDate(d.getUTCDate() + direction * 7)
         break
@@ -105,12 +99,6 @@
     switch (periodType) {
       case 'daily':
         return d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
-      case 'last_30_days': {
-        const end = new Date(d)
-        end.setUTCDate(end.getUTCDate() + 29)
-        const fmt = { month: 'short', day: 'numeric', timeZone: 'UTC' }
-        return `${d.toLocaleDateString(locale, fmt)} - ${end.toLocaleDateString(locale, fmt)}`
-      }
       case 'weekly': {
         const end = new Date(d)
         end.setUTCDate(end.getUTCDate() + 6)
@@ -128,7 +116,7 @@
 
   function syncUrl() {
     const params = new URLSearchParams()
-    if (activePeriod !== 'last_30_days') params.set('period', activePeriod)
+    if (activePeriod !== 'all_time') params.set('period', activePeriod)
     if (activeMetric !== 'tokens') params.set('metric', activeMetric)
     if (activeScope !== 'all') params.set('scope', activeScope)
     if (activeScope === 'tool' && selectedTool) params.set('tool', selectedTool)
@@ -328,7 +316,7 @@
     const modelParam = params.get('model')
     const periodStartParam = params.get('period_start')
 
-    if (periodParam && ['last_30_days', 'daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
+    if (periodParam && ['daily', 'weekly', 'monthly', 'yearly', 'all_time'].includes(periodParam)) {
       activePeriod = periodParam
     }
     if (metricParam && ['tokens', 'cost'].includes(metricParam)) {
@@ -449,12 +437,8 @@
     {:else if loading}
       <div class="state">{zh ? '加载中...' : 'Loading...'}</div>
     {:else if rows.length === 0}
-      <div class="state empty-guide">
-        <p>{zh ? '暂无公开数据。' : 'No public entries yet.'}</p>
-        <p class="guide-text">{zh
-          ? '安装 CLI 并上传你的使用数据即可上榜：'
-          : 'Install the CLI and upload your usage to join:'}</p>
-        <code class="guide-cmd">npx @juliantanx/aiusage login && npx @juliantanx/aiusage upload</code>
+      <div class="state">
+        {zh ? '暂无数据' : 'No public entries yet.'}
       </div>
     {:else}
       <!-- Podium: Top 3 -->
@@ -610,17 +594,6 @@
         </div>
       {/if}
     {/if}
-
-    <div class="role-note">
-      <div>
-        <strong>CLI</strong>
-        <span>{zh ? '负责本地统计、登录授权和提交公开总量。' : 'handles local stats, authorization, and total-token submissions.'}</span>
-      </div>
-      <div>
-        <strong>{zh ? '站点' : 'Site'}</strong>
-        <span>{zh ? '负责公开浏览、账号资料、设备和审核状态。' : 'handles public browsing, profile, devices, and review status.'}</span>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -1090,9 +1063,6 @@
     font-size: 0.875rem;
   }
   .state.error { color: var(--rose); background: oklch(0.55 0.22 25 / 0.06); border-radius: 10px; }
-  .empty-guide { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
-  .guide-text { font-size: 0.8125rem; }
-  .guide-cmd { font-family: var(--mono); font-size: 0.8125rem; background: var(--raised); padding: 0.5rem 1rem; border-radius: 6px; color: var(--accent); user-select: all; }
 
   .load-more {
     display: block;
@@ -1111,22 +1081,6 @@
   .load-more:hover { color: var(--text); background: var(--raised); }
   .load-more:disabled { opacity: 0.6; cursor: not-allowed; }
 
-  .role-note {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    margin-top: 16px;
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-  }
-  .role-note div {
-    display: flex;
-    gap: 8px;
-    padding: 12px;
-    border-radius: 8px;
-    background: var(--raised);
-  }
-  .role-note strong { color: var(--text); }
   .retry-btn { margin-top: 0.5rem; padding: 0.375rem 1rem; border: 1px solid var(--border-medium); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 600; font-size: 0.8125rem; cursor: pointer; }
   .retry-btn:hover { background: var(--hover); }
 
@@ -1152,7 +1106,6 @@
     .me-user { grid-column: 1 / -1; }
     .me-stat { justify-items: start; }
     .me-stat.updated { display: none; }
-    .role-note { grid-template-columns: 1fr; }
 
     .podium {
       grid-template-columns: 1fr;

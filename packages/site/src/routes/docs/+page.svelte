@@ -1204,7 +1204,7 @@
       <ul>
         <li><strong>{zh ? '周期' : 'Period'}</strong> — daily, weekly, monthly, yearly, all_time</li>
         <li><strong>{zh ? '指标' : 'Metric'}</strong> — {zh ? 'Token 总量或费用' : 'Total tokens or cost'}</li>
-        <li><strong>{zh ? '范围' : 'Scope'}</strong> — all（总榜）、tool（按工具）、model（按模型）、tool_model（工具+模型）</li>
+        <li><strong>{zh ? '范围' : 'Scope'}</strong> — all（全部）、tool（按工具）、model（按模型）、tool_model（工具+模型）</li>
         <li><strong>{zh ? '工具筛选' : 'Tool filter'}</strong> — {zh ? '指定工具名（如 claude-code）' : 'Specific tool name (e.g. claude-code)'}</li>
         <li><strong>{zh ? '模型筛选' : 'Model filter'}</strong> — {zh ? '指定模型名（如 claude-sonnet-4-6）' : 'Specific model name (e.g. claude-sonnet-4-6)'}</li>
       </ul>
@@ -1423,7 +1423,7 @@
         rows={[
           ['<code>-p, --period &lt;period&gt;</code>', zh ? '查看周期：daily、weekly、monthly、yearly、all_time' : 'View period: daily, weekly, monthly, yearly, all_time'],
           ['<code>-m, --metric &lt;metric&gt;</code>', zh ? '排名指标：tokens（Token 总量）或 cost（费用）' : 'Ranking metric: tokens (total tokens) or cost'],
-          ['<code>-s, --scope &lt;scope&gt;</code>', zh ? '排名范围：all（总榜）、tool（按工具）、model（按模型）、tool_model（工具+模型）' : 'Ranking scope: all, tool, model, tool_model'],
+          ['<code>-s, --scope &lt;scope&gt;</code>', zh ? '排名范围：all（全部）、tool（按工具）、model（按模型）、tool_model（工具+模型）' : 'Ranking scope: all, tool, model, tool_model'],
           ['<code>--tool &lt;tool&gt;</code>', zh ? '按工具名筛选（如 claude-code）' : 'Filter by tool name (e.g. claude-code)'],
           ['<code>--model &lt;model&gt;</code>', zh ? '按模型名筛选（如 claude-sonnet-4-6）' : 'Filter by model name (e.g. claude-sonnet-4-6)'],
           ['<code>-l, --limit &lt;n&gt;</code>', zh ? '显示行数，最大 50' : 'Number of rows to show, max 50'],

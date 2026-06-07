@@ -29,7 +29,8 @@ export const POST: RequestHandler = async (event) => {
   }
 
   if (file.size > maxSize) {
-    return json({ error: 'File too large (max 5MB)' }, { status: 400 })
+    const maxMB = Math.round(maxSize / 1024 / 1024)
+    return json({ error: `File too large (max ${maxMB}MB)` }, { status: 400 })
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
