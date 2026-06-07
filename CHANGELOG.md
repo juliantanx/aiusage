@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-06-07
+
+### Added
+- **Auth error i18n** — login, register, forgot-password, and reset-password pages now return machine-readable error codes and display localized messages (EN/ZH).
+- **Branded HTML email templates** — verification and password reset emails use a responsive branded layout with logo, card design, and styled CTA button.
+- **Verify-email page** — dedicated verification result page with success/error UI replaces the previous server-only redirect; works on any device.
+- **Cross-device email verification** — after registration, the PC page polls for verification status and auto-redirects to sign-in once the email link is opened on another device.
+- **OAuth unlink safety** — prevents unlinking the last remaining auth method; re-links existing user by email when re-logging in via OAuth.
+- **Admin config display multiplier** — byte values now display as MB and millisecond values as seconds in the admin config panel.
+- **Leaderboard @username display** — shows `@username` below display name in leaderboard entries to distinguish users with identical display names.
+
+### Fixed
+- **Leaderboard cache invalidation** — `unbanUser` and `setUserRole` now properly invalidate the leaderboard cache.
+- **Cache-Control: no-store for API responses** — added `Cache-Control: no-store` to all `/api/` routes in hooks and directly on the leaderboard endpoint to prevent Cloudflare from caching dynamic API responses.
+- **Avatar upload body size limit** — removed invalid `bodySizeLimit` svelte.config.js option; adapter-node uses `BODY_SIZE_LIMIT` env var instead.
+
+### Changed
+- **OAuth re-linking on login** — when a user logs in via OAuth and an account with the same email already exists, the identity is linked to the existing account instead of failing with a duplicate key error.
+
+---
+
 ## [1.5.0] - 2026-06-07
 
 ### Added
