@@ -205,10 +205,12 @@ async function openDashboardAction(): Promise<void> {
   const port = getDashboardPort()
   const reachable = await isDashboardReachable(port)
   if (!reachable) {
+    // Show widget window so user can see install progress
+    showWindow()
+    notifyRenderer('install:status', { phase: 'installing' })
     const result = await launchDashboard()
     if (!result.success) {
       // CLI not found; attempt auto-install
-      notifyRenderer('install:status', { phase: 'installing' })
       const installResult = await installAiusageCli()
       if (!installResult.success) {
         notifyRenderer('install:status', { phase: 'failed', error: installResult.error })

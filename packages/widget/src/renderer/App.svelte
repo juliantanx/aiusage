@@ -50,6 +50,8 @@
   let showSettings = false
   let panelEl: HTMLDivElement
   let lastReportedHeight = 0
+  let installPhase: string | null = null
+  let installError: string | null = null
 
   function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -120,6 +122,13 @@
       data = d
       loading = false
     })
+    ;(window as any).widget.onInstallStatus((status: { phase: string; error?: string }) => {
+      installPhase = status.phase
+      installError = status.error ?? null
+      if (status.phase === 'done' || status.phase === 'failed') {
+        setTimeout(() => { installPhase = null; installError = null }, 3000)
+      }
+    })
 
     const resizeObserver = new ResizeObserver(() => reportWindowHeight())
     resizeObserver.observe(panelEl)
@@ -143,9 +152,26 @@
   $: toolSubStr = data?.topTool ? `${data.topTool.share}%` : ''
   $: sessionStr = data ? String(data.sessionCountToday) : '--'
   $: updatedStr = data ? formatSyncTime(data.lastUpdated) : ''
+  $: installMessage = installPhase === 'installing' ? i18n.installInstalling
+    : installPhase === 'launching' ? i18n.installLaunching
+    : installPhase === 'done' ? i18n.installDone
+    : installPhase === 'failed' ? i18n.installFailed
+    : i18n.installPreparing
 </script>
 
 <div class="panel" class:loading bind:this={panelEl}>
+  {#if installPhase}
+    <div class="install-overlay" class:failed={installPhase === 'failed'} class:done={installPhase === 'done'}>
+      <div class="install-content">
+        <div class="install-spinner" class:hidden={installPhase === 'done' || installPhase === 'failed'}></div>
+        <div class="install-title">{i18n.installTitle}</div>
+        <div class="install-message">{installMessage}</div>
+        {#if installError}
+          <div class="install-error">{installError}</div>
+        {/if}
+      </div>
+    </div>
+  {/if}
   <Header
     onRefresh={refresh}
     onClose={close}
@@ -278,6 +304,7 @@
     }
   }
   .panel {
+    position: relative;
     background: var(--bg);
     border-radius: 10px;
     border: 1px solid var(--border);
@@ -340,5 +367,55 @@
   }
   .details {
     padding: 4px 0;
+  }
+  .install-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: 10px;
+  }
+  .install-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+  }
+  .install-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .install-message {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .install-error {
+    font-size: 11px;
+    color: #e74c3c;
+    max-width: 280px;
+    word-break: break-word;
+  }
+  .install-overlay.done .install-message {
+    color: var(--accent);
+  }
+  .install-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .install-spinner.hidden {
+    display: none;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 </style>

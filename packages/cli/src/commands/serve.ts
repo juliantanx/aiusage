@@ -102,6 +102,11 @@ export function serve(options: ServeOptions): void {
     return join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'web', 'build')
   })()
 
+  if (!existsSync(webBuildDir)) {
+    console.error('Web dashboard not found. Reinstall the package: npm install -g @juliantanx/aiusage')
+    process.exit(1)
+  }
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
 
@@ -140,7 +145,7 @@ export function serve(options: ServeOptions): void {
 
     // No web build available
     res.writeHead(404, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Web dashboard not found. Reinstall the package: npm install -g aiusage' } }))
+    res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Web dashboard not found. Reinstall the package: npm install -g @juliantanx/aiusage' } }))
   })
 
   let currentPort = options.port

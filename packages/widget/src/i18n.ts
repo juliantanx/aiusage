@@ -31,6 +31,12 @@ export interface Translations {
   refresh: string
   quit: string
   close: string
+  installTitle: string
+  installPreparing: string
+  installInstalling: string
+  installLaunching: string
+  installDone: string
+  installFailed: string
 }
 
 const en: Translations = {
@@ -64,6 +70,12 @@ const en: Translations = {
   refresh: 'Refresh',
   quit: 'Quit',
   close: 'Close',
+  installTitle: 'Dashboard Setup',
+  installPreparing: 'Preparing...',
+  installInstalling: 'Installing @juliantanx/aiusage...',
+  installLaunching: 'Starting dashboard...',
+  installDone: 'Done! Opening...',
+  installFailed: 'Installation failed',
 }
 
 const zh: Translations = {
@@ -97,6 +109,12 @@ const zh: Translations = {
   refresh: '刷新',
   quit: '退出',
   close: '关闭',
+  installTitle: '仪表盘配置',
+  installPreparing: '准备中...',
+  installInstalling: '正在安装 @juliantanx/aiusage...',
+  installLaunching: '正在启动仪表盘...',
+  installDone: '完成！正在打开...',
+  installFailed: '安装失败',
 }
 
 const translations: Record<Locale, Translations> = { en, zh }
