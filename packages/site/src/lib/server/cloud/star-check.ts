@@ -69,23 +69,13 @@ export async function checkCloudSyncAccess(userId: string): Promise<StarCheckRes
     }
   }
 
-  // 3. Check cached star status
+  // 3. Check cached star status — only cache positive results
   const ttlHours = await getConfigValue(CFG.CLOUD_STAR_CACHE_TTL_HOURS)
-  if (user.github_star_checked_at) {
+  if (user.github_starred && user.github_star_checked_at) {
     const checkedAt = new Date(user.github_star_checked_at).getTime()
     const ttlMs = ttlHours * 60 * 60 * 1000
     if (Date.now() - checkedAt < ttlMs) {
-      // Cache still valid
-      if (user.github_starred) {
-        return { allowed: true }
-      }
-      return {
-        allowed: false,
-        error_code: 'STAR_REQUIRED',
-        message: 'Please star the repository to use Cloud Sync.',
-        repo: STAR_REPO,
-        url: `https://github.com/${STAR_REPO}`
-      }
+      return { allowed: true }
     }
   }
 
@@ -121,9 +111,12 @@ async function checkGitHubStarAPI(accessToken: string, repo: string): Promise<bo
       }
     })
     // 204 = starred, 404 = not starred
+    if (res.status !== 204 && res.status !== 404) {
+      console.error(`[star-check] GitHub API unexpected status: ${res.status}`)
+    }
     return res.status === 204
-  } catch {
-    // On API error, return false (deny by default)
+  } catch (err) {
+    console.error('[star-check] GitHub API error:', err)
     return false
   }
 }

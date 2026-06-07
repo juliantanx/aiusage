@@ -114,7 +114,7 @@ export async function bindOAuthIdentity(userId: string, profile: OAuthProfile, a
       }
       return {}
     }
-    return { error: 'This account is already linked to another user' }
+    return { error: 'already_linked' }
   }
 
   await sql`

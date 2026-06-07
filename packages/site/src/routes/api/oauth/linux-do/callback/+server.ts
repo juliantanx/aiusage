@@ -1,19 +1,18 @@
 import { redirect, isRedirect } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { fetchLinuxDoProfile, findOrCreateOAuthUser, bindOAuthIdentity } from '$lib/server/oauth/providers.js'
-import { createSession, getSessionCookie, getSessionUser, setSessionCookie } from '$lib/server/auth/session.js'
+import { createSession, getSessionUser, setSessionCookie } from '$lib/server/auth/session.js'
+import { consumeOAuthState } from '$lib/server/oauth/state-store.js'
 import { env } from '$env/dynamic/private'
 
 export const GET: RequestHandler = async ({ url, cookies }) => {
   try {
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
-    const savedState = cookies.get('oauth_state')
 
-    if (!code || !state || state !== savedState) {
+    if (!code || !state || !consumeOAuthState(state)) {
       return new Response('Invalid OAuth state', { status: 400 })
     }
-    cookies.delete('oauth_state', { path: '/' })
 
     const clientId = env.LINUX_DO_CLIENT_ID
     const clientSecret = env.LINUX_DO_CLIENT_SECRET
@@ -47,7 +46,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       const existingUser = await getSessionUser(existingSid)
       if (existingUser) {
         const result = await bindOAuthIdentity(existingUser.id, profile)
-        throw redirect(302, result.error ? '/settings?error=bind_failed' : '/settings?bound=linux_do')
+        if (result.error) {
+          throw redirect(302, `/settings?error=${encodeURIComponent(result.error)}`)
+        }
+        throw redirect(302, '/settings?bound=linux_do')
       }
     }
 

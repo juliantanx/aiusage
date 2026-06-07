@@ -652,9 +652,26 @@
 
         {#if syncData.backend === 'cloud'}
           <div class="field full">
-            <div class="cloud-star-prompt">
-              <span>{$t('settings.syncCloudStarPrompt')}</span>
-              <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="star-link">github.com/juliantanx/aiusage</a>
+            <div class="cloud-setup">
+              <div class="cloud-setup-title">{$t('settings.syncCloudSetup')}</div>
+              <div class="cloud-steps">
+                <div class="cloud-step">
+                  <span class="cloud-step-num">1</span>
+                  <div class="cloud-step-body">
+                    <span class="cloud-step-label">
+                      <a href="https://aiusage.jtanx.com/settings#accounts" target="_blank" rel="noopener noreferrer" class="cloud-step-link">{$t('settings.syncCloudStep1')}</a>
+                    </span>
+                  </div>
+                </div>
+                <div class="cloud-step">
+                  <span class="cloud-step-num">2</span>
+                  <div class="cloud-step-body">
+                    <span class="cloud-step-label">
+                      <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="cloud-step-link">{$t('settings.syncCloudStep2')}</a>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="cloud-status" class:logged-in={cloudLoggedIn}>
               {#if cloudLoggedIn}
@@ -824,11 +841,12 @@
               <div class="sync-status-item full">
                 <span class="sync-status-label">{$t('settings.syncError')}</span>
                 <span class="sync-status-value err">
-                  {#if displayedSyncStatus.lastSyncError.includes('star the repository') || displayedSyncStatus.lastSyncError.includes('Star')}
+                  {#if displayedSyncStatus.lastSyncError.includes('star') || displayedSyncStatus.lastSyncError.includes('Star') || displayedSyncStatus.lastSyncError.includes('STAR_REQUIRED')}
                     {$t('settings.syncStarRequired')}
-                    <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="star-link">GitHub</a>
-                  {:else if displayedSyncStatus.lastSyncError.includes('bind') || displayedSyncStatus.lastSyncError.includes('GitHub account')}
+                    <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="cloud-step-link">{$t('settings.syncCloudStep2')}</a>
+                  {:else if displayedSyncStatus.lastSyncError.includes('bind') || displayedSyncStatus.lastSyncError.includes('GitHub') || displayedSyncStatus.lastSyncError.includes('GITHUB_BINDING')}
                     {$t('settings.syncGithubBindingRequired')}
+                    <a href="https://aiusage.jtanx.com/settings#accounts" target="_blank" rel="noopener noreferrer" class="cloud-step-link">{$t('settings.syncCloudStep1')}</a>
                   {:else}
                     {displayedSyncStatus.lastSyncError}
                   {/if}
@@ -1176,21 +1194,65 @@
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
   .state-msg.error { color: var(--rose); }
 
-  .cloud-star-prompt {
+  .cloud-setup {
+    background: var(--raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .cloud-setup-title {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 550;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 0.625rem;
+  }
+  .cloud-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .cloud-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+  }
+  .cloud-step-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-medium);
     display: flex;
     align-items: center;
-    gap: 0.375rem;
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
-    padding: 0.375rem 0;
-    flex-wrap: wrap;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-top: 0.0625rem;
   }
-  .star-link {
+  .cloud-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .cloud-step-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .cloud-step-link {
+    font-family: var(--mono);
+    font-size: 0.75rem;
     color: var(--accent);
     text-decoration: none;
     font-weight: 600;
   }
-  .star-link:hover {
+  .cloud-step-link:hover {
     text-decoration: underline;
   }
   .cloud-status {

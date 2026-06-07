@@ -1,6 +1,15 @@
 <script>
   import { page } from '$app/stores'
   import { lang } from '$lib/lang'
+  import { onMount } from 'svelte'
+
+  let showBound = $page.url.searchParams.get('bound')
+  let showError = $page.url.searchParams.get('error')
+  onMount(() => {
+    if (showBound || showError) {
+      setTimeout(() => { showBound = null; showError = null; history.replaceState(null, '', '/settings') }, 3000)
+    }
+  })
 
   $: zh = $lang === 'zh'
   const initialProfile = $page.data.profile
@@ -30,7 +39,17 @@
   $: identities = $page.data.identities || []
   $: hasGithub = identities.some(i => i.provider === 'github')
 
-  let activeSection = 'profile'
+  const bindErrors = {
+    already_linked: { en: 'This GitHub account is already linked to another user.', zh: '该 GitHub 账号已绑定其他用户。' },
+    bind_failed: { en: 'Failed to link account.', zh: '绑定失败。' },
+  }
+  function bindErrorText(code) {
+    if (!code) return ''
+    const entry = bindErrors[code]
+    return entry ? (zh ? entry.zh : entry.en) : code
+  }
+
+  let activeSection = typeof window !== 'undefined' && window.location.hash.slice(1) || 'profile'
 
   $: COOLDOWN_DAYS = $page.data.usernameCooldownDays ?? 30
 
@@ -60,6 +79,23 @@
   function getCsrfToken() {
     const match = document.cookie.match(/csrf_token=([^;]+)/)
     return match ? match[1] : ''
+  }
+
+  let unbindingProvider = ''
+  async function unbindIdentity(provider) {
+    if (!confirm(zh ? `确定要解绑 ${provider === 'github' ? 'GitHub' : 'Linux.do'} 账号吗？` : `Unlink ${provider === 'github' ? 'GitHub' : 'Linux.do'} account?`)) return
+    unbindingProvider = provider
+    try {
+      const res = await fetch(`/api/me/identities/${provider}`, {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': getCsrfToken() }
+      })
+      if (res.ok) {
+        identities = identities.filter(i => i.provider !== provider)
+      }
+    } finally {
+      unbindingProvider = ''
+    }
   }
 
   $: usernameCanChange = (() => {
@@ -265,8 +301,12 @@
       <p>{zh ? '管理账号资料、安全和排行榜展示方式。' : 'Manage account profile, security, and leaderboard display.'}</p>
     </div>
 
-    {#if $page.url.searchParams.get('bound')}
-      <div class="success-msg">{zh ? '已成功关联' : 'Successfully linked'} {$page.url.searchParams.get('bound')} {zh ? '账号' : 'account'}!</div>
+    {#if showBound}
+      <div class="success-msg">{zh ? '已成功关联' : 'Successfully linked'} {showBound} {zh ? '账号' : 'account'}!</div>
+    {/if}
+
+    {#if showError}
+      <div class="error-msg">{bindErrorText(showError)}</div>
     {/if}
 
     <div class="settings-shell">
@@ -276,7 +316,7 @@
             type="button"
             class:active={activeSection === item.id}
             aria-current={activeSection === item.id ? 'page' : undefined}
-            on:click={() => activeSection = item.id}
+            on:click={() => { activeSection = item.id; history.replaceState(null, '', '#' + item.id) }}
           >
             <span>{item.title}</span>
             <small>{item.desc}</small>
@@ -404,6 +444,9 @@
                     {#if identity.email}
                       <span class="linked-email text-muted">{identity.email}</span>
                     {/if}
+                    <button type="button" class="btn-unbind" disabled={unbindingProvider === identity.provider} on:click={() => unbindIdentity(identity.provider)}>
+                      {unbindingProvider === identity.provider ? (zh ? '解绑中...' : 'Unlinking...') : (zh ? '解绑' : 'Unlink')}
+                    </button>
                   </div>
                 {/each}
               </div>
@@ -559,6 +602,9 @@
   .linked-provider { font-weight: 600; min-width: 80px; }
   .linked-username { color: var(--text); }
   .linked-email { font-size: 0.8125rem; }
+  .btn-unbind { margin-left: auto; padding: 0.25rem 0.625rem; border-radius: 4px; border: 1px solid var(--rose); color: var(--rose); background: transparent; font-size: 0.8125rem; cursor: pointer; }
+  .btn-unbind:hover { background: oklch(0.55 0.22 25 / 0.08); }
+  .btn-unbind:disabled { opacity: 0.5; cursor: not-allowed; }
   .text-muted { color: var(--text-muted); }
 
   @media (max-width: 760px) {
