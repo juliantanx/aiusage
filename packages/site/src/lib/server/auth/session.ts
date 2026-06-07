@@ -45,10 +45,12 @@ export async function destroySession(sid: string): Promise<void> {
 
 export async function setSessionCookie(cookies: RequestEvent['cookies'], sid: string): Promise<void> {
   const durationMs = await getSessionDurationMs()
+  const { env } = await import('$env/dynamic/private')
+  const siteUrl = env.SITE_URL || 'http://localhost:5173'
   cookies.set(SESSION_COOKIE, sid, {
     path: '/',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: siteUrl.startsWith('https://'),
     sameSite: 'lax',
     maxAge: durationMs / 1000
   })

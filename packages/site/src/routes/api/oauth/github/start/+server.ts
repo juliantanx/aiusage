@@ -10,15 +10,16 @@ export const GET: RequestHandler = async ({ cookies }) => {
 
   const stateMaxAge = await getConfigValue(CFG.OAUTH_STATE_MAX_AGE_SECONDS)
   const state = nanoid(32)
+  const siteUrl = env.SITE_URL || 'http://localhost:5173'
+  const isSecure = siteUrl.startsWith('https://')
+
   cookies.set('oauth_state', state, {
     path: '/',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     maxAge: stateMaxAge
   })
-
-  const siteUrl = env.SITE_URL || 'http://localhost:5173'
   const redirectUri = `${siteUrl}/api/oauth/github/callback`
   const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email&state=${state}`
 
