@@ -20,6 +20,8 @@
   let authPollTimer = null
   let uploadBusy = false
   let uploadResult = null
+  let uploadSuccessMsg = ''
+  let uploadSuccessTimer = null
   let autoUploadEnabled = false
   let autoUploadInterval = '604800000'
   let autoUploadSaving = false
@@ -40,13 +42,6 @@
     ? new Date(new Date(latestUploadTime).getTime() + Number(autoUploadInterval || defaultAutoUploadInterval))
     : null
   $: selectedIntervalLabel = autoUploadIntervals.find(option => option.value === autoUploadInterval)?.labelKey || 'leaderboard.autoUploadIntervals.weekly'
-  $: uploadSummary = uploadResult?.response?.snapshots
-    ? {
-        accepted: uploadResult.response.snapshots.filter(s => s.status === 'accepted').length,
-        flagged: uploadResult.response.snapshots.filter(s => s.status === 'flagged').length,
-        rejected: uploadResult.response.snapshots.filter(s => s.status === 'rejected').length,
-      }
-    : null
 
   function formatFullTokens(value) {
     const n = Number(value)
@@ -139,9 +134,13 @@
     uploadBusy = true
     authError = ''
     uploadResult = null
+    uploadSuccessMsg = ''
+    if (uploadSuccessTimer) { clearTimeout(uploadSuccessTimer); uploadSuccessTimer = null }
     try {
       uploadResult = await uploadLeaderboardData()
       await loadAuthStatus()
+      uploadSuccessMsg = $t('leaderboard.uploadSuccess')
+      uploadSuccessTimer = setTimeout(() => { uploadSuccessMsg = '' }, 3000)
     } catch (e) {
       authError = e instanceof Error ? e.message : 'Upload failed'
     } finally {
@@ -176,7 +175,10 @@
     await loadAuthStatus()
   })
 
-  onDestroy(clearAuthPoll)
+  onDestroy(() => {
+    clearAuthPoll()
+    if (uploadSuccessTimer) { clearTimeout(uploadSuccessTimer); uploadSuccessTimer = null }
+  })
 </script>
 
 <svelte:head>
@@ -259,6 +261,10 @@
     </div>
   </div>
 
+  {#if uploadSuccessMsg}
+    <div class="upload-toast">{uploadSuccessMsg}</div>
+  {/if}
+
   {#if !authLoading}
     <div class="auth-panel" class:logged-in={authStatus.loggedIn}>
       <span class="status-dot"></span>
@@ -319,14 +325,6 @@
       <span>{$t('leaderboard.lastUpload')}</span>
       <strong>{formatUploadStatus(recentUpload)}</strong>
       <span>{formatFullTokens(recentUpload.total_tokens)} tokens · {formatDate(recentUpload.created_at)}</span>
-    </div>
-  {/if}
-
-  {#if uploadSummary}
-    <div class="upload-status result">
-      <span>{$t('leaderboard.uploadResult')}</span>
-      <strong>{uploadSummary.accepted} / {uploadSummary.flagged} / {uploadSummary.rejected}</strong>
-      <span>{$t('leaderboard.uploadResultHint')}</span>
     </div>
   {/if}
 
@@ -674,6 +672,16 @@
   .upload-status strong,
   .verify-box strong {
     color: var(--text);
+  }
+
+  .upload-toast {
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: var(--green-dim);
+    color: var(--green);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    animation: fadeIn 0.15s ease;
   }
 
   .verify-box a {
