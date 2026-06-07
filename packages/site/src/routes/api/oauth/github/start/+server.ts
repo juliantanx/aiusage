@@ -22,12 +22,5 @@ export const GET: RequestHandler = async ({ cookies }) => {
   const redirectUri = `${siteUrl}/api/oauth/github/callback`
   const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email&state=${state}`
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: url,
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-      Pragma: 'no-cache'
-    }
-  })
+  throw redirect(302, url)
 }
