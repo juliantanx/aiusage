@@ -1239,13 +1239,26 @@
     </section>
 
     <section id="lb-upload">
-      <h3>{zh ? '上传流程' : 'Upload Flow'}</h3>
+      <h3>{zh ? '上传数据' : 'Upload Data'}</h3>
+      <p>{zh
+        ? '推荐在本地仪表盘完成上传。启动仪表盘后访问 /leaderboard，登录 AIUsage 账号并授权当前设备，即可点击“上传数据”提交聚合用量；也可以在同一页面开启自动上传。'
+        : 'The recommended flow is to upload from the local dashboard. Start the dashboard, visit /leaderboard, sign in to AIUsage, authorize this device, then click Upload data to submit aggregate usage. You can also enable auto upload on the same page.'
+      }</p>
       <ul>
-        <li><code>aiusage login</code> — {zh ? '授权当前 CLI 设备' : 'Authorize this CLI device'}</li>
-        <li><code>aiusage upload</code> — {zh ? '上传聚合快照（HMAC 签名）' : 'Upload aggregate snapshots (HMAC signed)'}</li>
-        <li><code>aiusage upload-status</code> — {zh ? '查看上传状态和审核结果' : 'View upload status and review results'}</li>
-        <li>{zh ? '站点管理：' : 'Site management: '}<a href="/uploads">/uploads</a> — {zh ? '查看上传历史、管理授权设备' : 'View upload history and manage authorized devices'}</li>
+        <li><strong>{zh ? '界面上传' : 'Web upload'}</strong> — {zh ? '启动本地仪表盘后访问 ' : 'Start the local dashboard and visit '}<code>/leaderboard</code>{zh ? '，完成登录后点击“上传数据”' : ', then sign in and click Upload data'}</li>
+        <li><strong>{zh ? '自动上传' : 'Auto upload'}</strong> — {zh ? '开启自动上传开关后，本地服务会按设定频率定时解析并上传聚合总量' : 'Enable the auto-upload toggle to let the local service periodically parse and upload aggregate totals'}</li>
+        <li><strong>{zh ? '上传状态' : 'Upload status'}</strong> — {zh ? '页面内可查看最近一次上传的周期、状态和 Token 总量' : 'View the latest upload period, status, and token total on the page'}</li>
+        <li><strong>{zh ? '站点管理' : 'Site management'}</strong> — <a href="/uploads">/uploads</a> {zh ? '用于查看上传历史和管理授权设备' : 'shows upload history and authorized devices'}</li>
       </ul>
+      <p>{zh
+        ? '如需在自动化脚本、远程主机或纯终端环境中上传，可以使用 CLI 完成同等流程：先授权设备，再提交聚合快照，最后查看上传与审核状态。'
+        : 'For automation scripts, remote hosts, or terminal-only environments, use the CLI equivalent: authorize the device, submit aggregate snapshots, then inspect upload and review status.'
+      }</p>
+      <CodeBlock lang="Terminal" copyText={'aiusage login\naiusage upload\naiusage upload-status'}>
+aiusage login
+aiusage upload
+aiusage upload-status
+      </CodeBlock>
       <p>{zh
         ? '上传内容仅包含排名周期内的聚合 Token 总量和必要元数据，不包含 prompt、completion、源码、文件路径或本地费用估算。'
         : 'Uploads contain only aggregate token totals for ranking periods plus required metadata. They do not include prompts, completions, source code, file paths, or local cost estimates.'
@@ -1257,18 +1270,21 @@
     </section>
 
     <section id="lb-dashboard">
-      <h3>{zh ? '仪表盘排行榜' : 'Dashboard Leaderboard'}</h3>
+      <h3>{zh ? '本地上传面板' : 'Local Upload Panel'}</h3>
       <p>{zh
-        ? '本地仪表盘的排行榜页面（/leaderboard）提供完整的排行榜浏览和数据上传功能，无需切换到 CLI。'
-        : 'The local dashboard leaderboard page (/leaderboard) provides full leaderboard browsing and data upload capabilities without switching to the CLI.'
+        ? '本地仪表盘的 /leaderboard 页面主要用于登录授权、上传聚合用量和配置自动上传。公开排行榜的浏览入口仍在官网。'
+        : 'The local dashboard /leaderboard page is mainly for sign-in, device authorization, aggregate uploads, and auto-upload configuration. Public leaderboard browsing remains on the official site.'
       }</p>
       <ul>
-        <li><strong>{zh ? '周期切换' : 'Period Tabs'}</strong> — {zh ? '在 daily、weekly、monthly、yearly、all_time 之间切换' : 'Switch between daily, weekly, monthly, yearly, and all_time'}</li>
-        <li><strong>{zh ? '设备授权' : 'Device Authorization'}</strong> — {zh ? '直接在页面内完成设备授权，无需使用 CLI' : 'Authorize your device directly from the page without using the CLI'}</li>
-        <li><strong>{zh ? '手动上传' : 'Manual Upload'}</strong> — {zh ? '点击上传按钮立即上传聚合数据' : 'Click the upload button to immediately upload aggregate data'}</li>
-        <li><strong>{zh ? '自动上传' : 'Auto Upload'}</strong> — {zh ? '启用自动上传开关后，系统会按设定间隔（12 小时 / 每天 / 每周）自动上传数据' : 'Enable the auto-upload toggle to automatically upload data at a set interval (12 hours / daily / weekly)'}</li>
-        <li><strong>{zh ? '上传状态' : 'Upload Status'}</strong> — {zh ? '页面内显示最近一次上传的周期、状态和 Token 总量，以及 accepted / flagged / rejected 计数' : 'View the most recent upload period, status, and token total, plus accepted / flagged / rejected counts'}</li>
+        <li><strong>{zh ? '账号与设备' : 'Account and device'}</strong> — {zh ? '显示当前登录账号、授权设备和授权时间' : 'Shows the signed-in account, authorized device, and authorization time'}</li>
+        <li><strong>{zh ? '手动上传' : 'Manual upload'}</strong> — {zh ? '点击“上传数据”立即提交当前本地可见的聚合用量' : 'Click Upload data to submit aggregate usage visible to this local device'}</li>
+        <li><strong>{zh ? '自动上传' : 'Auto upload'}</strong> — {zh ? '开启后按每天、每周或每月频率自动上传，每个频率周期最多执行一次' : 'Run automatic uploads daily, weekly, or monthly, at most once per selected interval'}</li>
+        <li><strong>{zh ? '最近上传' : 'Latest upload'}</strong> — {zh ? '显示最近一次上传的周期、审核状态、Token 总量和上传时间' : 'Shows the latest upload period, review status, token total, and upload time'}</li>
       </ul>
+      <figure class="doc-shot">
+        <img src="/screenshots/leaderboard-upload-light.png" alt={zh ? 'AIUsage 本地仪表盘排行榜上传界面截图' : 'AIUsage local dashboard leaderboard upload screenshot'} loading="lazy" />
+        <figcaption>{zh ? '本地上传面板支持一键上传、自动上传频率设置和最近上传状态查看。' : 'The local upload panel supports one-click upload, auto-upload frequency settings, and recent upload status.'}</figcaption>
+      </figure>
     </section>
 
     <section id="lb-anonymous">
