@@ -37,13 +37,24 @@ export const POST: RequestHandler = async (event) => {
     return json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP, GIF' }, { status: 400 })
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer())
+  let buffer: Buffer
+  try {
+    buffer = Buffer.from(await file.arrayBuffer())
+  } catch {
+    return json({ error: 'Failed to read uploaded file' }, { status: 400 })
+  }
 
   // Resize and compress to WebP
-  const processed = await sharp(buffer)
-    .resize(avatarSize, avatarSize, { fit: 'cover', position: 'centre' })
-    .webp({ quality: avatarQuality })
-    .toBuffer()
+  let processed: Buffer
+  try {
+    processed = await sharp(buffer)
+      .resize(avatarSize, avatarSize, { fit: 'cover', position: 'centre' })
+      .webp({ quality: avatarQuality })
+      .toBuffer()
+  } catch (err) {
+    console.error('Avatar image processing failed:', err)
+    return json({ error: 'Failed to process image. The file may be corrupted or in an unsupported format.' }, { status: 400 })
+  }
 
   // Delete old avatar from R2 if exists
   const oldRows = await sql`SELECT avatar_url FROM users WHERE id = ${user.id}`
@@ -57,10 +68,21 @@ export const POST: RequestHandler = async (event) => {
 
   // Upload new avatar
   const key = `avatars/${user.id}/${nanoid(8)}.webp`
-  const avatarUrl = await uploadFile(key, processed, 'image/webp')
+  let avatarUrl: string
+  try {
+    avatarUrl = await uploadFile(key, processed, 'image/webp')
+  } catch (err) {
+    console.error('Avatar R2 upload failed:', err)
+    return json({ error: 'Failed to store avatar. Please try again later.' }, { status: 500 })
+  }
 
   // Update user record
-  await sql`UPDATE users SET avatar_url = ${avatarUrl}, updated_at = NOW() WHERE id = ${user.id}`
+  try {
+    await sql`UPDATE users SET avatar_url = ${avatarUrl}, updated_at = NOW() WHERE id = ${user.id}`
+  } catch (err) {
+    console.error('Avatar DB update failed:', err)
+    return json({ error: 'Failed to save avatar reference. Please try again.' }, { status: 500 })
+  }
 
   return json({ avatar_url: avatarUrl })
 }

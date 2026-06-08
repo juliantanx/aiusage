@@ -163,20 +163,30 @@
         headers: { 'x-csrf-token': getCsrfToken() },
         body: formData
       })
-      const data = await res.json()
       if (res.ok) {
+        const data = await res.json()
         avatarPreviewSrc = data.avatar_url
         me = { ...me, avatar_url: data.avatar_url }
         profileMsg = zh ? '头像已更新' : 'Avatar updated'
       } else {
         avatarPreviewSrc = me?.avatar_url || ''
-        profileError = data.error || (zh ? '上传失败' : 'Failed to upload avatar')
+        let errorMsg = ''
+        try {
+          const data = await res.json()
+          errorMsg = data.error || ''
+        } catch {
+          // Response wasn't JSON (e.g. nginx/proxy error page)
+          if (res.status === 413) {
+            errorMsg = zh ? '文件过大，服务器拒绝了该请求' : 'File too large — rejected by server'
+          } else {
+            errorMsg = zh ? `上传失败 (HTTP ${res.status})` : `Upload failed (HTTP ${res.status})`
+          }
+        }
+        profileError = errorMsg || (zh ? '上传失败' : 'Failed to upload avatar')
       }
-    } catch (e) {
+    } catch {
       avatarPreviewSrc = me?.avatar_url || ''
-      profileError = e instanceof SyntaxError
-        ? (zh ? '文件过大' : 'File too large')
-        : getError('network_error')
+      profileError = getError('network_error')
     } finally {
       avatarUploading = false
       if (fileInput) fileInput.value = ''
@@ -373,7 +383,7 @@
                     {zh ? '移除' : 'Remove'}
                   </button>
                 {/if}
-                <span class="avatar-hint">{zh ? 'JPEG、PNG、WebP 或 GIF，最大 5MB。' : 'JPEG, PNG, WebP, or GIF. Max 5MB.'}</span>
+                <span class="avatar-hint">{zh ? `JPEG、PNG、WebP 或 GIF，最大 ${Math.round(avatarMaxSize / 1024 / 1024)}MB。` : `JPEG, PNG, WebP, or GIF. Max ${Math.round(avatarMaxSize / 1024 / 1024)}MB.`}</span>
               </div>
             </div>
 
