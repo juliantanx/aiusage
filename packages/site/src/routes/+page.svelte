@@ -160,8 +160,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 是一个本地优先的 AI 工具用量分析平台，支持追踪 Claude Code、Codex、Copilot、Cursor、Kelivo 等 23 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
-            : 'AIUsage is a local-first AI usage analytics platform that tracks token consumption, costs, and usage patterns across 23 AI tools including Claude Code, Codex, Copilot, Cursor, and Kelivo. Data stays on your machine — no third-party servers.'
+            ? 'AIUsage 是一个本地优先的 AI 工具用量分析平台，支持追踪 Claude Code、Codex、Copilot、Cursor、Kelivo 等 20+ 种 AI 工具的 Token 用量、费用和使用模式。数据存储在本地，不经过任何第三方服务器。'
+            : 'AIUsage is a local-first AI usage analytics platform that tracks token consumption, costs, and usage patterns across 20+ AI tools including Claude Code, Codex, Copilot, Cursor, and Kelivo. Data stays on your machine — no third-party servers.'
         }
       },
       {
@@ -170,8 +170,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 支持 23 种 AI 工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid。'
-            : 'AIUsage supports 23 AI tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
+            ? 'AIUsage 支持 20+ 种 AI 工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid。'
+            : 'AIUsage supports 20+ AI tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
         }
       },
       {
@@ -222,8 +222,8 @@
       </h1>
       <p class="hero-sub">
         {zh
-          ? 'AIUsage 追踪 Claude Code、Codex、Copilot、Cursor、Kelivo 等 23 种 AI 工具的 Token 用量和费用。数据存储在本地，不经过任何第三方服务器。'
-          : 'AIUsage tracks token consumption and costs across 23 AI tools. Data stays on your machine — no third-party servers.'}
+          ? 'AIUsage 追踪 Claude Code、Codex、Copilot、Cursor、Kelivo 等 20+ 种 AI 工具的 Token 用量和费用。数据存储在本地，不经过任何第三方服务器。'
+          : 'AIUsage tracks token consumption and costs across 20+ AI tools. Data stays on your machine — no third-party servers.'}
       </p>
       <div class="hero-install">
         <div class="code-block">
@@ -284,7 +284,7 @@
 <!-- ═══════ TOOLS STRIP ═══════ -->
 <section class="tools-section">
   <div class="section-inner">
-    <p class="tools-label">{zh ? '支持 23 种 AI 工具' : 'Supports 23 AI tools'}</p>
+    <p class="tools-label">{zh ? '支持 20+ 种 AI 工具' : 'Supports 20+ AI tools'}</p>
     <div class="tools-strip">
       {#each tools as tool}
         <div class="tool-chip">

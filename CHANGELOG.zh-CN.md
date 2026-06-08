@@ -54,7 +54,7 @@
 - **GitHub Copilot 用量追踪与配额支持** ([#19](https://github.com/juliantanx/aiusage/pull/19)) — CopilotParser 解析 OTEL JSONL 文件（Copilot CLI 和 VS Code Copilot Chat），通过 GitHub OAuth 查询 Copilot 配额 API，自动发现 `~/.copilot/otel/*.jsonl` 和 `$COPILOT_OTEL_FILE_EXPORTER_PATH`
 - **KiloCode 解析器** ([#20](https://github.com/juliantanx/aiusage/pull/20)，@zhaolu83949426-hub 贡献) — 解析 KiloCode VS Code 扩展的 SQLite 数据库 (`kilo.db`)，支持输入/输出/缓存/思考 token 和费用计算
 - **按模型 token 分解与堆叠柱状图** ([#21](https://github.com/juliantanx/aiusage/pull/21)) — API 暴露每个模型的 inputTokens、outputTokens、cacheReadTokens、cacheWriteTokens、thinkingTokens、totalCost；统一排名列表与堆叠组合柱状图
-- **自动检测工具，从 8 个扩展到 22 个** ([#22](https://github.com/juliantanx/aiusage/pull/22)) — 自动检测已安装的 AI 工具，替代手动配置源路径；设置页面只读的"已检测工具"面板；`GET /api/detected-tools` 接口
+- **自动检测工具，从 8 个扩展到 20+ 个** ([#22](https://github.com/juliantanx/aiusage/pull/22)) — 自动检测已安装的 AI 工具，替代手动配置源路径；设置页面只读的"已检测工具"面板；`GET /api/detected-tools` 接口
 - **USD/CNY 货币切换** ([#17](https://github.com/juliantanx/aiusage/pull/17)) — 定价页面分段切换器，在 USD 和 CNY 显示之间切换并自动汇率转换
 - **扩展模型定价表** — 新增 OpenRouter、Google 及更多 Claude/OpenAI 模型变体；新增 `inputText` 定价字段，用于文本输入单独计价的模型
 

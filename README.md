@@ -21,7 +21,7 @@
   English | <a href="https://github.com/juliantanx/aiusage/blob/main/README_zh.md">中文</a>
 </p>
 
-Track tokens, cost, sessions, models, projects, tool calls, and quota pressure across **23 AI coding tools** in one local dashboard. Local use needs no account, sends no telemetry, and does not require cloud sync.
+Track tokens, cost, sessions, models, projects, tool calls, and quota pressure across **20+ AI coding tools** in one local dashboard. Local use needs no account, sends no telemetry, and does not require cloud sync.
 
 <p align="center">
   <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@b179e5a37c92e7040a07b84a7b2048821d120aed/packages/site/static/screenshots/aiusage-demo.gif" alt="AIUsage dashboard demo" width="92%" />
