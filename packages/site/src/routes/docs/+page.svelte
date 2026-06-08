@@ -108,7 +108,6 @@
         { id: 'cli-summary', en: 'summary', zh: 'summary' },
         { id: 'cli-export', en: 'export', zh: 'export' },
         { id: 'cli-clean', en: 'clean', zh: 'clean' },
-        { id: 'cli-reset', en: 'reset', zh: 'reset' },
         { id: 'cli-leaderboard', en: 'leaderboard', zh: 'leaderboard' },
         { id: 'cli-other', en: 'Other Commands', zh: '其他命令' },
       ]
@@ -895,8 +894,8 @@
       </Callout>
       <Callout type="warn">
         {zh
-          ? 'aiusage 会持久化已解析的记录和解析水位线，但不会备份各 AI 工具的原始日志。执行 reset 或 clean 删除 aiusage 数据后，历史用量只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，总 token 可能会变少。'
-          : 'aiusage persists parsed records and parse watermarks, but it does not back up raw logs from each AI tool. After reset or clean deletes aiusage data, history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease.'
+          ? 'aiusage 会持久化已解析的记录和解析水位线，但不会备份各 AI 工具的原始日志。执行 clean 删除 aiusage 数据后，历史用量只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，总 token 可能会变少。'
+          : 'aiusage persists parsed records and parse watermarks, but it does not back up raw logs from each AI tool. After clean deletes aiusage data, history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease.'
         }
       </Callout>
     </section>
@@ -1157,7 +1156,7 @@
   Dashboard: RUNNING  http://localhost:3847
 
   [1] Dashboard      (serve/stop/restart/open)
-  [2] Data           (parse/summary/export/clean/reset/recalc)
+  [2] Data           (parse/summary/export/clean/recalc)
   [3] Sync           (init/sync)
   [4] Leaderboard    (view/login/upload/status/logout)
   [5] System         (status/widget/pm2/update)
@@ -1170,7 +1169,7 @@
         headers={zh ? ['分组', '包含命令', '说明'] : ['Group', 'Commands', 'Description']}
         rows={[
           ['Dashboard', 'serve, stop, restart, open', zh ? '仪表盘服务管理与浏览器打开' : 'Dashboard server management and browser launch'],
-          ['Data', 'parse, summary, export, clean, reset, recalc', zh ? '数据解析、查看、导出与清理' : 'Parse, view, export, and clean data'],
+          ['Data', 'parse, summary, export, clean, recalc', zh ? '数据解析、查看、导出与清理' : 'Parse, view, export, and clean data'],
           ['Sync', 'init, sync', zh ? '配置与执行多设备同步' : 'Configure and run multi-device sync'],
           ['Leaderboard', 'leaderboard, login, upload, upload-status, logout', zh ? '排行榜查看与数据上传' : 'View leaderboard and upload data'],
           ['System', 'status, widget, pm2-setup, pm2-start, update', zh ? '系统信息、小组件、后台服务与更新' : 'System info, widget, background services, and updates'],
@@ -1397,8 +1396,8 @@ aiusage upload-status
         <h2>{zh ? 'CLI 命令参考' : 'CLI Reference'}</h2>
       </div>
       <p>{zh
-        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、reset、recalc、init、sync、widget、leaderboard、login、upload、upload-status、logout、menu、pm2-setup 和 pm2-start。'
-        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, reset, recalc, init, sync, widget, leaderboard, login, upload, upload-status, logout, menu, pm2-setup, and pm2-start.'
+        ? '所有 CLI 命令均通过 aiusage <command> 调用；不带子命令时会输出 summary。当前内置的主要命令包括 summary、status、parse、serve、export、clean、recalc、init、sync、widget、leaderboard、login、upload、upload-status、logout、menu、pm2-setup 和 pm2-start。'
+        : 'All CLI commands are invoked as aiusage <command>; running aiusage without a subcommand prints the summary. Main built-ins currently include summary, status, parse, serve, export, clean, recalc, init, sync, widget, leaderboard, login, upload, upload-status, logout, menu, pm2-setup, and pm2-start.'
       }</p>
     </section>
 
@@ -1455,31 +1454,27 @@ aiusage upload-status
     </section>
 
     <section id="cli-clean">
-      <h3><code>clean</code> — {zh ? '清理旧数据' : 'Clean Old Data'}</h3>
+      <h3><code>clean</code> — {zh ? '清理数据' : 'Clean Data'}</h3>
+      <p>{zh
+        ? '清理本地数据。配合 --all 可清空全部数据（等价于原 reset）。如果配置了云同步（AIUsage Cloud、GitHub、S3），默认会将删除传播到所有远端后端，并在执行前列出受影响的后端供确认。'
+        : 'Clean local data. Use --all to wipe everything (equivalent to the former reset command). If cloud sync is configured (AIUsage Cloud, GitHub, S3), deletions are propagated to all remote backends by default, with affected backends listed for confirmation before execution.'
+      }</p>
       <DocsTable
         headers={zh ? ['选项', '说明', '默认'] : ['Option', 'Description', 'Default']}
         rows={[
           ['<code>--before &lt;dur&gt;</code>', zh ? '删除此时间之前的数据（如 30d、180d）' : 'Delete data older than this (e.g. 30d, 180d)', '<code>180d</code>'],
-          ['<code>--remote</code>', zh ? '同时清理远端同步数据' : 'Also clean remote synced data', '-'],
-          ['<code>--all-devices</code>', zh ? '配合 --remote 清理所有设备' : 'Clean all devices together with --remote', '-'],
-          ['<code>--yes</code>', zh ? '跳过确认' : 'Skip confirmation', '-'],
-          ['<code>--approve-delete</code>', zh ? '批准删除权限升级' : 'Approve delete permission upgrade', '-'],
+          ['<code>--all</code>', zh ? '清空全部数据（所有记录、工具调用、同步数据、水位线）' : 'Wipe all data (all records, tool calls, synced data, watermark)', '-'],
+          ['<code>--local-only</code>', zh ? '只清本地，不同步到云端' : 'Local only, do not propagate to remote backends', '-'],
+          ['<code>--target &lt;backend&gt;</code>', zh ? '指定云后端 (github/s3/cloud)，默认全部' : 'Target specific backend (github/s3/cloud), defaults to all', '-'],
+          ['<code>--yes</code>', zh ? '跳过本地确认（涉及远端删除时仍需二次确认）' : 'Skip local confirmation (remote deletion still requires confirmation)', '-'],
         ]}
       />
-    </section>
-
-    <section id="cli-reset">
-      <h3><code>reset</code> — {zh ? '重置所有数据' : 'Reset All Data'}</h3>
-      <p>{zh
-        ? '删除所有已解析的记录、工具调用、同步数据和水位线。原始日志文件不受影响，但历史只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，reset 后总 token 可能会变少。'
-        : 'Delete all parsed records, tool calls, synced data, and the parse watermark. Source log files are not affected, but history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease after reset.'
-      }</p>
-      <DocsTable
-        headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
-        rows={[
-          ['<code>--yes</code>', zh ? '跳过确认提示（必须指定才会执行）' : 'Skip confirmation prompt (required to execute)'],
-        ]}
-      />
+      <Callout type="warn">
+        {zh
+          ? '如果配置了云同步，clean 会将删除传播到所有远端后端。执行前会列出受影响的后端（如 AIUsage Cloud、GitHub、S3），需要输入 confirm 确认。使用 --local-only 可跳过远端传播。'
+          : 'If cloud sync is configured, clean propagates deletions to all remote backends. Affected backends (e.g. AIUsage Cloud, GitHub, S3) are listed before execution and require typing confirm. Use --local-only to skip remote propagation.'
+        }
+      </Callout>
     </section>
 
     <section id="cli-leaderboard">

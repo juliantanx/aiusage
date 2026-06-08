@@ -9,6 +9,10 @@ export interface SyncBackend {
   readFile(path: string): Promise<string | null>
   writeFile(path: string, content: string): Promise<void>
   listFiles(): Promise<string[]>
+  /** Optional: delete a single file from the backend */
+  deleteFile?(path: string): Promise<void>
+  /** Optional: delete all data files. Returns the number of files deleted. */
+  deleteAllData?(): Promise<number>
   /** Optional: called before sync to fetch latest remote state (e.g. git pull) */
   prepare?(): Promise<void>
   /** Optional: called after all writes to push changes (e.g. git commit + push) */

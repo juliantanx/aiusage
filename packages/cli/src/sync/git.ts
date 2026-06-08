@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, readdir, stat, unlink, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const exec = promisify(execFile)
@@ -99,6 +99,25 @@ export class GitSyncBackend {
       return await this.walkDir(this.dataDir, '')
     } catch {
       return []
+    }
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    const fullPath = join(this.dataDir, path)
+    try {
+      await unlink(fullPath)
+    } catch {
+      // file may not exist
+    }
+  }
+
+  async deleteAllData(): Promise<number> {
+    try {
+      const files = await this.listFiles()
+      await rm(this.dataDir, { recursive: true, force: true })
+      return files.length
+    } catch {
+      return 0
     }
   }
 

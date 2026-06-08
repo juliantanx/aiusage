@@ -159,14 +159,28 @@ export async function cloudClear(): Promise<{ syncGeneration: number }> {
   const creds = loadCredentials()
   if (!creds) throw new CloudSyncError('Not logged in.', 'not_logged_in')
 
+  const SYNC_CLEAR_PATH = '/api/cli/sync/clear'
   const body = '{}'
-  const headers = buildHeaders('POST', '/api/me/cloud-sync/clear', body)
-  // Cloud clear uses session auth, not HMAC. We need to use a different approach.
-  // For now, throw an error indicating this needs to be done via the web UI.
-  throw new CloudSyncError(
-    'Cloud data clear must be done via the web UI at /uploads',
-    'use_web_ui'
-  )
+  const headers = buildHeaders('POST', SYNC_CLEAR_PATH, body)
+  const response = await fetch(`${serverUrl}${SYNC_CLEAR_PATH}`, { method: 'POST', headers, body })
+  const data = await readJsonOrNull(response)
+
+  if (!response.ok) {
+    const errObj = data?.error
+    const errMsg = typeof errObj === 'object' && errObj !== null
+      ? (errObj as Record<string, unknown>).message as string || `Clear failed (HTTP ${response.status})`
+      : (errObj as string) || `Clear failed (HTTP ${response.status})`
+    const errCode = typeof errObj === 'object' && errObj !== null
+      ? (errObj as Record<string, unknown>).code as string || 'server_error'
+      : (data?.error_code as string) || 'server_error'
+    throw new CloudSyncError(errMsg, errCode)
+  }
+
+  if (!data) throw new CloudSyncError('Invalid response from server', 'invalid_response')
+
+  return {
+    syncGeneration: (data.sync_generation as number) || 1,
+  }
 }
 
 function getClientVersion(): string {

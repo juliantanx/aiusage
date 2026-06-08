@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { S3Client, GetObjectCommand, PutObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 
 export interface S3Config {
   bucket: string
@@ -104,5 +104,35 @@ export class S3SyncBackend {
       }
       throw error
     }
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    const key = this.getObjectKey(path)
+    const command = new DeleteObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    })
+    await this.client.send(command)
+  }
+
+  async deleteAllData(): Promise<number> {
+    const files = await this.listFiles()
+    if (files.length === 0) return 0
+
+    // Delete in batches of 1000 (S3 limit)
+    const BATCH_SIZE = 1000
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE)
+      const command = new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: {
+          Objects: batch.map(f => ({ Key: this.getObjectKey(f) })),
+          Quiet: true,
+        },
+      })
+      await this.client.send(command)
+    }
+
+    return files.length
   }
 }

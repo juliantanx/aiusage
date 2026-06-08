@@ -218,11 +218,10 @@ async function dataSubmenu(rl: Interface): Promise<void> {
   [2] Summary
   [3] Export
   [4] Clean
-  [5] Reset
-  [6] Recalc
+  [5] Recalc
   [0] Back
 `)
-    const choice = await prompt(rl, '  Select [0-6]: ')
+    const choice = await prompt(rl, '  Select [0-5]: ')
     switch (choice) {
       case '1': {
         const progress = await prompt(rl, '  Show progress? [Y/N]: ')
@@ -258,28 +257,28 @@ async function dataSubmenu(rl: Interface): Promise<void> {
         break
       }
       case '4': {
-        const dur = await prompt(rl, '  Duration to keep (default 180d): ')
-        const before = dur || '180d'
+        const mode = await prompt(rl, '  1=Old data (180d)  2=Old data (custom)  3=All (=reset): ')
         console.log('')
-        runCommand(['clean', '--before', before, '--yes'])
-        await prompt(rl, '\n  Press Enter to continue...')
-        break
-      }
-      case '5': {
-        const confirm = await prompt(
-          rl,
-          '  WARNING: This will delete ALL parsed data. Type "yes" to confirm: ',
-        )
-        if (confirm.toLowerCase() === 'yes') {
-          console.log('')
-          runCommand(['reset', '--yes'])
+        if (mode === '3') {
+          const confirm = await prompt(
+            rl,
+            '  WARNING: This will delete ALL parsed data. Type "confirm" to proceed: ',
+          )
+          if (confirm.toLowerCase() === 'confirm') {
+            runCommand(['clean', '--all', '--yes'])
+          } else {
+            console.log('  Cancelled.')
+          }
+        } else if (mode === '2') {
+          const dur = await prompt(rl, '  Duration to keep (e.g. 30d, 90d): ')
+          runCommand(['clean', '--before', dur || '180d', '--yes'])
         } else {
-          console.log('\n  Cancelled.')
+          runCommand(['clean', '--before', '180d', '--yes'])
         }
         await prompt(rl, '\n  Press Enter to continue...')
         break
       }
-      case '6': {
+      case '5': {
         console.log('')
         runCommand(['recalc'])
         await prompt(rl, '\n  Press Enter to continue...')
@@ -504,7 +503,7 @@ export async function runMenu(): Promise<void> {
 ${dashboardStatusLine()}
 
   [1] Dashboard      (serve/stop/restart/open)
-  [2] Data           (parse/summary/export/clean/reset/recalc)
+  [2] Data           (parse/summary/export/clean/recalc)
   [3] Sync           (init/sync)
   [4] Leaderboard    (view/login/upload/status/logout)
   [5] System         (status/widget/pm2/update)

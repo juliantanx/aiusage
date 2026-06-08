@@ -7,8 +7,7 @@ import { runSync } from './commands/sync.js'
 import { generateSummary } from './commands/summary.js'
 import { generateStatus } from './commands/status.js'
 import { exportData } from './commands/export.js'
-import { cleanOldData } from './commands/clean.js'
-import { runReset } from './commands/reset.js'
+import { cleanOldData, cleanAll, getRemoteBackends, propagateClean } from './commands/clean.js'
 import { recalcPricing } from './commands/recalc.js'
 import { runParse } from './commands/parse.js'
 import { ProgressReporter, SyncProgressReporter } from './progress.js'
@@ -184,44 +183,130 @@ program
 // clean command
 program
   .command('clean')
-  .description('Clean old data')
-  .option('--before <duration>', 'Duration (e.g., 30d)', '180d')
-  .option('--remote', 'Also clean remote data')
-  .option('--all-devices', 'Clean all devices (with --remote)')
-  .option('--yes', 'Skip confirmation')
-  .option('--approve-delete', 'Approve delete permission upgrade')
-  .action((options) => {
-    const daysMatch = options.before.match(/^(\d+)d$/)
-    if (!daysMatch) {
-      console.error('Invalid duration format. Use e.g. 30d, 180d.')
-      process.exit(1)
-    }
-    const days = parseInt(daysMatch[1], 10)
-    const db = createDatabase(DB_PATH)
-    const result = cleanOldData(db, days)
-    console.log(`Deleted ${result.deletedCount} records, ${result.deletedSyncedCount} synced records, ${result.deletedOrphanToolCalls} orphan tool calls.`)
-    db.close()
-  })
+  .description('Clean data (old records or all data)')
+  .option('--before <duration>', 'Delete data older than this (e.g., 30d, 180d)', '180d')
+  .option('--all', 'Wipe all data (equivalent to former reset: all records, tool calls, watermark)')
+  .option('--local-only', 'Only clean local data, do not propagate to remote backends')
+  .option('--target <backend>', 'Target specific remote backend (github/s3/cloud)')
+  .option('--yes', 'Skip local confirmation (remote deletion still requires confirmation)')
+  .action(async (options) => {
+    const isAll = !!options.all
+    const localOnly = !!options.localOnly
+    let days = 0
 
-// reset command
-program
-  .command('reset')
-  .description('Delete all parsed data and watermark, then re-parse from scratch')
-  .option('--yes', 'Skip confirmation')
-  .action((options) => {
-    if (!options.yes) {
-      console.error('This will delete ALL parsed records, tool calls, synced data, and the parse watermark.')
-      console.error('Source log files (~/.claude, ~/.codex, etc.) will NOT be affected.')
-      console.error('Use --yes to confirm.')
+    if (isAll && options.before !== '180d') {
+      console.error('Cannot use --all and --before together. Use one or the other.')
       process.exit(1)
     }
+
+    if (!isAll) {
+      const daysMatch = options.before.match(/^(\d+)d$/)
+      if (!daysMatch) {
+        console.error('Invalid duration format. Use e.g. 30d, 180d.')
+        process.exit(1)
+      }
+      days = parseInt(daysMatch[1], 10)
+    }
+
+    const remoteBackends = localOnly ? [] : getRemoteBackends()
+
+    // Print warning
+    if (isAll) {
+      console.log('\x1b[33m⚠ WARNING: This will delete ALL parsed data, tool calls, synced records,\x1b[0m')
+      console.log('\x1b[33m  and the parse watermark. Next parse will re-import from scratch.\x1b[0m')
+    } else {
+      console.log(`This will delete local records older than ${days} days.`)
+    }
+
+    if (localOnly) {
+      console.log('\x1b[36m  (--local-only: remote data will NOT be affected)\x1b[0m')
+    }
+
+    // Show affected remote backends
+    if (remoteBackends.length > 0) {
+      console.log('\nCloud sync is configured. The following remote backends will also be affected:')
+      for (const rb of remoteBackends) {
+        console.log(`  - ${rb.label}`)
+      }
+    }
+
+    // Confirmation
+    const ask = async (question: string): Promise<string> => {
+      if (!process.stdin.isTTY) {
+        console.error('Non-interactive mode detected. Use --local-only to skip remote propagation, or run interactively.')
+        process.exit(1)
+      }
+      const { createInterface } = await import('node:readline')
+      const rl = createInterface({ input: process.stdin, output: process.stdout })
+      return new Promise<string>((resolve) => {
+        rl.question(question, (answer) => {
+          rl.close()
+          resolve(answer.trim())
+        })
+      })
+    }
+
+    if (!options.yes) {
+      if (remoteBackends.length > 0) {
+        const answer = await ask(`\n? Confirm deletion on local + ${remoteBackends.length} remote backend(s)? [y/N] `)
+        if (answer.toLowerCase() !== 'y') {
+          console.log('Cancelled.')
+          process.exit(0)
+        }
+      } else {
+        const answer = await ask('\n? Confirm? [y/N] ')
+        if (answer.toLowerCase() !== 'y') {
+          console.log('Cancelled.')
+          process.exit(0)
+        }
+      }
+    } else if (remoteBackends.length > 0) {
+      // --yes but remote backends require explicit confirmation
+      const answer = await ask('\n? Type "confirm" to proceed with remote deletion: ')
+      if (answer !== 'confirm') {
+        console.log('Cancelled.')
+        process.exit(0)
+      }
+    }
+
+    // Execute local clean
     const db = createDatabase(DB_PATH)
-    const result = runReset(db)
-    console.log(`Deleted ${result.deletedRecords} records, ${result.deletedToolCalls} tool calls, ${result.deletedSyncedRecords} synced records.`)
-    if (result.watermarkRemoved) {
-      console.log('Watermark removed — next parse will re-import all data from scratch.')
+    if (isAll) {
+      console.log('\nDeleting all local data...')
+      const result = cleanAll(db)
+      console.log(`  Local: deleted ${result.deletedRecords} records, ${result.deletedToolCalls} tool calls, ${result.deletedSyncedRecords} synced records`)
+      if (result.watermarkRemoved) {
+        console.log('  Watermark removed')
+      }
+    } else {
+      console.log(`\nCleaning local records older than ${days} days...`)
+      const result = cleanOldData(db, days)
+      console.log(`  Local: deleted ${result.deletedCount} records, ${result.deletedSyncedCount} synced records, ${result.deletedOrphanToolCalls} orphan tool calls`)
     }
     db.close()
+
+    // Propagate to remote backends
+    if (remoteBackends.length > 0) {
+      console.log('\nSyncing deletion to remote backends...')
+      try {
+        const propagation = await propagateClean({
+          all: isAll,
+          beforeDays: isAll ? undefined : days,
+          target: options.target,
+        })
+        for (const r of propagation.backends) {
+          if (r.status === 'ok') {
+            console.log(`  ${r.backend.label}: ${r.detail}`)
+          } else {
+            console.log(`  ${r.backend.label}: skipped — ${r.detail}`)
+          }
+        }
+      } catch (err) {
+        console.error(`  Propagation failed: ${err instanceof Error ? err.message : err}`)
+      }
+    }
+
+    console.log('\nDone.')
   })
 
 // recalc command
