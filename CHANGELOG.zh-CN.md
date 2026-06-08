@@ -5,6 +5,27 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [1.5.2] - 2026-06-08
+
+### 新增
+- **Kelivo 手动备份导入** ([#29](https://github.com/juliantanx/aiusage/pull/29)，@Fiveo9 贡献) — 将 Kelivo 加入手动导入来源，支持解析导出的 `chats.json` 与 `.zip` 备份，新增 `POST /api/import/kelivo`，并在设置页展示导入状态和结果。
+- **排行榜加入指南** — 在文档和仪表盘中补充加入公开排行榜的引导。
+- **高分辨率布局支持** — 在大屏上加宽站点内容，同时保持文档导航和设置页布局对齐。
+
+### 修复
+- **头像上传错误与限制展示** — 提供更清晰的上传失败提示，并在设置页动态显示当前头像大小限制。
+- **仪表盘启动通知** — 仪表盘首次成功打开时也会发送 `install:done` 通知。
+- **文档锚点导航** — 修复站点头部下的锚点滚动，并补充 Kelivo 手动导入文档。
+- **首页 URL、SEO 与响应头** — 刷新首页元数据、规范 URL 和响应头。
+
+### 变更
+- **`aiusage clean` 重置流程** — 将 reset 行为合并到 `clean`，并通过 Git、S3 和 Cloud Sync 传播云同步清理；同步更新交互式菜单和测试。
+- **排行榜周期与设置页清理** — 移除滚动排行榜周期，简化相关查询/UI 代码，并保持设置页展示行为一致。
+- **支持工具数量文案** — 将 README、文档、首页和发布记录中的固定 `23 种工具` 文案调整为 `20+ 种工具`。
+- **README 清理** — 精简 license 前的过时章节，并移除废弃 docs 资源。
+
+---
+
 ## [1.5.1] - 2026-06-07
 
 ### 新增
@@ -305,6 +326,8 @@
 
 ---
 
+[1.5.2]: https://github.com/juliantanx/aiusage/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/juliantanx/aiusage/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/juliantanx/aiusage/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/juliantanx/aiusage/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/juliantanx/aiusage/compare/v1.3.3...v1.3.4

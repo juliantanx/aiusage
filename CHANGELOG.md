@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-06-08
+
+### Added
+- **Kelivo manual backup import** ([#29](https://github.com/juliantanx/aiusage/pull/29) by @Fiveo9) — adds Kelivo as a manual-import source, parses exported `chats.json` and `.zip` backups, exposes `POST /api/import/kelivo`, and shows import status/results in Settings.
+- **Leaderboard join guide** — adds documentation and UI guidance for joining the public leaderboard from the dashboard.
+- **High-resolution layout support** — widens site content on large displays while keeping docs navigation and settings layouts aligned.
+
+### Fixed
+- **Avatar upload errors and limits** — surfaces clearer upload failures and shows the active avatar size limit dynamically in Settings.
+- **Dashboard launch notification** — sends the `install:done` notification when the dashboard opens successfully on the first attempt.
+- **Docs anchor navigation** — fixes anchor scrolling with the site header and adds Kelivo manual-import documentation.
+- **Homepage URLs, SEO, and headers** — refreshes homepage metadata, canonical URLs, and response headers.
+
+### Changed
+- **`aiusage clean` reset workflow** — folds reset behavior into `clean`, propagates cloud-sync clearing through Git, S3, and Cloud Sync, and updates the interactive menu/tests around the new flow.
+- **Leaderboard period and settings cleanup** — removes the rolling leaderboard period, simplifies related query/UI code, and keeps settings display behavior consistent.
+- **Supported tools wording** — changes fixed `23 tools` copy to `20+ tools` across README, docs, homepage, and release notes.
+- **README cleanup** — trims outdated sections before the license and removes obsolete docs assets.
+
+---
+
 ## [1.5.1] - 2026-06-07
 
 ### Added
@@ -305,6 +326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.2]: https://github.com/juliantanx/aiusage/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/juliantanx/aiusage/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/juliantanx/aiusage/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/juliantanx/aiusage/compare/v1.3.4...v1.4.0
 [1.3.4]: https://github.com/juliantanx/aiusage/compare/v1.3.3...v1.3.4
