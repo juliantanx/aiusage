@@ -209,6 +209,9 @@ async function openDashboardAction(): Promise<void> {
     showWindow()
     notifyRenderer('install:status', { phase: 'installing' })
     const result = await launchDashboard()
+    if (result.success) {
+      notifyRenderer('install:status', { phase: 'done' })
+    }
     if (!result.success) {
       // CLI not found; attempt auto-install
       const installResult = await installAiusageCli()
