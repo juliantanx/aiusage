@@ -104,6 +104,14 @@
       : 'Token Usage Tracking,Cost Estimation,Model Usage Ranking,Tool Call Analytics,Project-Level Stats,Quota Monitoring,Multi-Device Sync,Data Export'
   })}</script>`}
 
+  <!-- WebSite: tells search engines the canonical site name (important for subdomains) -->
+  {@html `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'AIUsage',
+    url: 'https://aiusage.jtanx.com/'
+  })}</script>`}
+
   <!-- Organization: gives Google an explicit site entity + logo signal -->
   {@html `<script type="application/ld+json">${JSON.stringify({
     '@context': 'https://schema.org',

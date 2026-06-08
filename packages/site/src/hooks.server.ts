@@ -43,6 +43,12 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Security headers
   const response = await resolve(event)
 
+  // Fix: SvelteKit adapter-node may not set content-type for .ico files.
+  // With X-Content-Type-Options: nosniff, browsers/crawlers need the header to detect the favicon.
+  if (event.url.pathname === '/favicon.ico' && !response.headers.get('content-type')) {
+    response.headers.set('content-type', 'image/x-icon')
+  }
+
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'DENY')
