@@ -60,6 +60,7 @@ function defaultFileData(): FileWatermarkData {
     'qoder': {},
     'cursor': {},
     'kilocode': {},
+    'kelivo': {},
     'copilot': {},
     'gemini': {},
     'kimi': {},

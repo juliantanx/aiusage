@@ -319,8 +319,8 @@
       </div>
       <h1 class="hero-title">{zh ? '文档' : 'Documentation'}</h1>
       <p class="hero-sub">{zh
-        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid 共 22 种 AI 工具的 Token 和费用追踪。'
-        : 'AIUsage is a local-first usage analytics platform for AI coding tools — tracking tokens, costs, sessions and more across 22 tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
+        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid 共 23 种 AI 工具的 Token 和费用追踪。'
+        : 'AIUsage is a local-first usage analytics platform for AI tools — tracking tokens, costs, sessions and more across 23 tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
       }</p>
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
@@ -853,6 +853,7 @@
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
         <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（需配置 OTEL 环境变量）' : '(requires OTEL env vars)'}</li>
         <li><strong>KiloCode</strong> — {zh ? 'IDE 扩展目录' : 'IDE extension directory'} + {zh ? '平台相关的' : 'platform-specific'} SQLite DB</li>
+        <li><strong>Kelivo</strong> — {zh ? 'Kelivo 备份导出的' : 'Kelivo backup export'} <code>chats.json</code> / <code>.zip</code></li>
         <li><strong>Gemini CLI</strong> — <code>~/.gemini/tmp</code></li>
         <li><strong>Kimi Code</strong> — <code>~/.kimi-code/sessions</code></li>
         <li><strong>CodeBuddy</strong> — <code>~/.codebuddy/projects</code></li>

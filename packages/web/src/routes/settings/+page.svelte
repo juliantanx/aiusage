@@ -1,8 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, importKelivoBackup, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
+  import { splitSettingsSources } from '$lib/settings-sources.js'
 
   let loading = true
   let loadError = null
@@ -17,11 +18,18 @@
   let showNotFound = false
   let currentPlatform = ''
   let currentHostname = ''
+  let kelivoFileInput
+  let kelivoImporting = false
+  let kelivoImportError = ''
+  let kelivoImportedCount = null
+  let kelivoAddedCount = null
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
 
-  $: activeTools = detectedTools.filter(t => t.status !== 'not_found')
-  $: notFoundTools = detectedTools.filter(t => t.status === 'not_found')
+  $: sourceGroups = splitSettingsSources(detectedTools)
+  $: manualImportTools = sourceGroups.manualImportTools
+  $: activeTools = sourceGroups.activeDetectedTools
+  $: notFoundTools = sourceGroups.notFoundDetectedTools
 
   // Sync form — credentialRef is derived automatically, never user-editable
   let syncData = { backend: '', repo: '', bucket: '', prefix: '', endpoint: '', region: 'auto' }
@@ -78,6 +86,13 @@
   $: rateLastUpdated = cachedRateFetchedAt
     ? new Date(cachedRateFetchedAt).toLocaleString()
     : null
+  $: kelivoTool = detectedTools.find(tool => tool.sourceKey === 'kelivo')
+  $: kelivoLastImportedAt = typeof kelivoTool?.lastImportedAt === 'number'
+    ? new Date(kelivoTool.lastImportedAt)
+    : null
+  $: kelivoStatus = kelivoLastImportedAt
+    ? `${$t('settings.lastImported')} ${kelivoLastImportedAt.toLocaleString()}`
+    : $t('settings.neverImported')
 
   // Per-section save state
   let generalSaving = false; let generalError = ''; let generalSaved = false
@@ -415,6 +430,49 @@
     }
   }
 
+  function triggerKelivoImport() {
+    kelivoImportError = ''
+    kelivoFileInput?.click()
+  }
+
+  function mergeKelivoImportMetadata(tools, result) {
+    if (typeof result?.lastImportedAt !== 'number') return tools
+    return tools.map((tool) => tool.sourceKey === 'kelivo'
+      ? { ...tool, lastImportedAt: result.lastImportedAt }
+      : tool)
+  }
+
+  async function handleKelivoFileChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.name !== 'chats.json' && !file.name.toLowerCase().endsWith('.zip')) {
+      kelivoImportError = $t('settings.kelivoInvalidFile')
+      return
+    }
+
+    kelivoImporting = true
+    kelivoImportError = ''
+    kelivoImportedCount = null
+    kelivoAddedCount = null
+    try {
+      const result = await importKelivoBackup(file)
+      kelivoImportedCount = result.imported ?? 0
+      kelivoAddedCount = result.added ?? null
+      let nextTools = detectedTools
+      try {
+        const toolsResult = await fetchDetectedTools()
+        nextTools = toolsResult.tools ?? detectedTools
+      } catch {}
+      detectedTools = mergeKelivoImportMetadata(nextTools, result)
+      notifySettingsUpdated({ importedTool: 'kelivo' })
+    } catch (e) {
+      kelivoImportError = e instanceof Error ? e.message : $t('settings.kelivoImportFailed')
+    } finally {
+      kelivoImporting = false
+    }
+  }
+
   // Per-credential toggle helpers
   async function toggleGhToken() {
     syncError = ''
@@ -571,57 +629,102 @@
       </div>
     </div>
 
-    <!-- Detected Tools -->
+    <!-- Data Sources -->
     <div class="card">
       <div class="group-title-row">
-        <span class="group-title">{$t('settings.detectedTools')}</span>
+        <span class="group-title">{$t('settings.dataSources')}</span>
         {#if currentPlatform}
           <span class="platform-badge">{PLATFORM_LABEL[currentPlatform] ?? currentPlatform}</span>
         {/if}
       </div>
-      <div class="field-hint" style="margin-bottom: 0.5rem">{$t('settings.detectedToolsHint')}</div>
-      <div class="detected-tools-list">
-        {#each activeTools as tool}
-          <div class="detected-tool">
-            <div class="detected-tool-header">
-              <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'}></span>
-              <span class="detected-tool-name">{tool.label}</span>
-              <span class="detected-tool-status">
-                {#if tool.status === 'found'}
-                  {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
-                {:else}
-                  {$t('settings.toolEmpty')}
-                {/if}
-              </span>
-            </div>
-            {#if tool.paths?.length}
-              {#each tool.paths as path}
-                <div class="detected-tool-path">{path}</div>
-              {/each}
-            {:else if tool.path}
-              <div class="detected-tool-path">{tool.path}</div>
-            {/if}
-          </div>
-        {/each}
-        {#if notFoundTools.length}
-          <button class="not-found-toggle" on:click={() => showNotFound = !showNotFound}>
-            <span class="not-found-chevron" class:open={showNotFound}>&#9654;</span>
-            {$t('settings.toolNotFound')} ({notFoundTools.length})
-          </button>
-          {#if showNotFound}
-            {#each notFoundTools as tool}
-              <div class="detected-tool not-found">
+
+      {#if manualImportTools.length}
+        <div class="source-group">
+          <div class="source-subtitle">{$t('settings.manualImports')}</div>
+          <div class="field-hint">{$t('settings.manualImportsHint')}</div>
+          <input class="file-input" type="file" accept=".zip,.json,application/zip,application/json" bind:this={kelivoFileInput} on:change={handleKelivoFileChange} />
+          <div class="detected-tools-list">
+            {#each manualImportTools as tool}
+              <div class="detected-tool">
                 <div class="detected-tool-header">
-                  <span class="status-dot gray"></span>
+                  <span class="status-dot" class:green={tool.status === 'found'} class:gray={tool.status === 'not_found'}></span>
                   <span class="detected-tool-name">{tool.label}</span>
+                  <span class="detected-tool-status">
+                    {#if tool.sourceKey === 'kelivo'}
+                      {kelivoStatus}
+                    {:else}
+                      {$t('settings.notConfigured')}
+                    {/if}
+                  </span>
                 </div>
-                {#if tool.path}
-                  <div class="detected-tool-path">{tool.path}</div>
+                {#if tool.sourceKey === 'kelivo'}
+                  <div class="source-actions">
+                    <button type="button" class="btn-ghost import-btn" on:click={triggerKelivoImport} disabled={kelivoImporting}>
+                      {kelivoImporting ? '...' : $t('settings.importBackup')}
+                    </button>
+                    {#if kelivoImportedCount !== null}
+                      <span class="source-result">
+                        {$t('settings.imported')} {kelivoImportedCount} {$t('settings.records')}
+                        {#if kelivoAddedCount !== null}
+                          · {$t('settings.added')} {kelivoAddedCount} {$t('settings.records')}
+                        {/if}
+                      </span>
+                    {/if}
+                  </div>
+                  {#if kelivoImportError}<p class="section-error compact">{kelivoImportError}</p>{/if}
                 {/if}
               </div>
             {/each}
+          </div>
+        </div>
+      {/if}
+
+      <div class="source-group">
+        <div class="source-subtitle">{$t('settings.detectedTools')}</div>
+        <div class="field-hint">{$t('settings.detectedToolsHint')}</div>
+        <div class="detected-tools-list">
+          {#each activeTools as tool}
+            <div class="detected-tool">
+              <div class="detected-tool-header">
+                <span class="status-dot" class:green={tool.status === 'found'} class:yellow={tool.status === 'empty'}></span>
+                <span class="detected-tool-name">{tool.label}</span>
+                <span class="detected-tool-status">
+                  {#if tool.status === 'found'}
+                    {$t('settings.toolFound')} · {tool.fileCount} {$t('settings.toolFiles')}
+                  {:else}
+                    {$t('settings.toolEmpty')}
+                  {/if}
+                </span>
+              </div>
+              {#if tool.paths?.length}
+                {#each tool.paths as path}
+                  <div class="detected-tool-path">{path}</div>
+                {/each}
+              {:else if tool.path}
+                <div class="detected-tool-path">{tool.path}</div>
+              {/if}
+            </div>
+          {/each}
+          {#if notFoundTools.length}
+            <button class="not-found-toggle" on:click={() => showNotFound = !showNotFound}>
+              <span class="not-found-chevron" class:open={showNotFound}>&#9654;</span>
+              {$t('settings.toolNotFound')} ({notFoundTools.length})
+            </button>
+            {#if showNotFound}
+              {#each notFoundTools as tool}
+                <div class="detected-tool not-found">
+                  <div class="detected-tool-header">
+                    <span class="status-dot gray"></span>
+                    <span class="detected-tool-name">{tool.label}</span>
+                  </div>
+                  {#if tool.path}
+                    <div class="detected-tool-path">{tool.path}</div>
+                  {/if}
+                </div>
+              {/each}
+            {/if}
           {/if}
-        {/if}
+        </div>
       </div>
     </div>
 
@@ -935,6 +1038,25 @@
     letter-spacing: 0.04em;
   }
 
+  .source-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .source-group + .source-group {
+    margin-top: 1rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .source-subtitle {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
   .fields {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -992,6 +1114,7 @@
     font-size: 0.8rem;
     color: var(--rose);
   }
+  .section-error.compact { margin: 0.5rem 0 0 1.25rem; }
 
   .section-footer {
     display: flex;
@@ -1403,9 +1526,43 @@
     word-break: break-all;
   }
 
+  .file-input { display: none; }
+
+  .source-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    margin-left: 1.25rem;
+  }
+
+  .import-btn {
+    padding-left: 0;
+  }
+
+  .source-result {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--green);
+  }
+
   @media (max-width: 640px) {
     .fields {
       grid-template-columns: 1fr;
+    }
+    .detected-tool-header,
+    .source-actions {
+      align-items: flex-start;
+    }
+    .detected-tool-status {
+      margin-left: 0;
+    }
+    .detected-tool-header {
+      flex-wrap: wrap;
+    }
+    .source-actions {
+      flex-direction: column;
+      gap: 0.25rem;
     }
   }
 </style>

@@ -172,6 +172,17 @@ export async function fetchDetectedTools() {
   return apiFetch('/api/detected-tools')
 }
 
+export async function importKelivoBackup(file) {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch('/api/import/kelivo', { method: 'POST', body: form })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.error?.message || `HTTP ${response.status}`)
+  }
+  return data
+}
+
 export async function fetchQuotas() {
   return apiFetch('/api/quotas')
 }

@@ -1,7 +1,8 @@
 import http from 'node:http'
 import path from 'node:path'
-import { hostname, platform } from 'node:os'
+import { hostname, platform, tmpdir } from 'node:os'
 import { randomBytes } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
 import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../config.js'
@@ -26,8 +27,48 @@ import { startDeviceAuth, completeDeviceAuth, fetchLeaderboardStatus } from '../
 import { clearCredentials, hasCredentials, loadCredentials, saveCredentials } from '../leaderboard/credentials.js'
 import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
+import { runParseKelivo } from '../commands/parse-kelivo.js'
+import { insertRecord } from '../db/records.js'
+import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
+
+function getManualImportMetadata(db: Database.Database): Record<string, { lastImportedAt: number }> {
+  const rows = db.prepare(`
+    SELECT tool, MAX(ingested_at) AS lastImportedAt
+    FROM records
+    WHERE tool IN ('kelivo')
+    GROUP BY tool
+  `).all() as Array<{ tool: string; lastImportedAt: number | null }>
+
+  const metadata: Record<string, { lastImportedAt: number }> = {}
+  for (const row of rows) {
+    if (typeof row.lastImportedAt === 'number') {
+      metadata[row.tool] = { lastImportedAt: row.lastImportedAt }
+    }
+  }
+  return metadata
+}
+
+function attachManualImportMetadata(tools: DetectedTool[], db: Database.Database): DetectedTool[] {
+  const metadata = getManualImportMetadata(db)
+  return tools.map((tool) => {
+    const toolMetadata = metadata[tool.tool]
+    return toolMetadata ? { ...tool, ...toolMetadata } : tool
+  })
+}
+
+function countExistingRecordIds(db: Database.Database, ids: string[]): number {
+  const uniqueIds = [...new Set(ids)]
+  if (uniqueIds.length === 0) return 0
+
+  const stmt = db.prepare('SELECT 1 FROM records WHERE id = ? LIMIT 1')
+  let count = 0
+  for (const id of uniqueIds) {
+    if (stmt.get(id)) count++
+  }
+  return count
+}
 
 function recalcCosts(db: Database.Database): number {
   const BATCH_SIZE = 1000
@@ -113,6 +154,49 @@ async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, u
   for await (const chunk of req) body += chunk
   if (!body.trim()) return {}
   return JSON.parse(body) as Record<string, unknown>
+}
+
+async function readBodyBuffer(req: http.IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  return Buffer.concat(chunks)
+}
+
+function multipartBoundary(contentType: string | string[] | undefined): string | null {
+  const value = Array.isArray(contentType) ? contentType[0] : contentType
+  if (!value) return null
+  const match = value.match(/(?:^|;)\s*boundary=("([^"]+)"|[^;]+)/i)
+  if (!match) return null
+  return (match[2] ?? match[1]).replace(/^"|"$/g, '')
+}
+
+async function readMultipartFile(req: http.IncomingMessage): Promise<{ filename: string; data: Buffer } | null> {
+  const boundary = multipartBoundary(req.headers['content-type'])
+  if (!boundary) return null
+
+  const body = await readBodyBuffer(req)
+  const marker = Buffer.from(`--${boundary}`)
+  let position = body.indexOf(marker)
+  while (position !== -1) {
+    position += marker.length
+    if (body.subarray(position, position + 2).toString() === '--') return null
+    if (body.subarray(position, position + 2).toString() === '\r\n') position += 2
+
+    const headerEnd = body.indexOf(Buffer.from('\r\n\r\n'), position)
+    if (headerEnd === -1) return null
+    const headers = body.subarray(position, headerEnd).toString('utf-8')
+    const filenameMatch = headers.match(/Content-Disposition:[^\r\n]*\bname="file"[^\r\n]*\bfilename="([^"]+)"/i)
+    const dataStart = headerEnd + 4
+    const nextBoundary = body.indexOf(Buffer.from(`\r\n--${boundary}`), dataStart)
+    if (nextBoundary === -1) return null
+    if (filenameMatch) return { filename: path.basename(filenameMatch[1]), data: body.subarray(dataStart, nextBoundary) }
+    position = body.indexOf(marker, nextBoundary)
+  }
+  return null
+}
+
+function isKelivoBackupFilename(filename: string): boolean {
+  return filename === 'chats.json' || filename.toLowerCase().endsWith('.zip')
 }
 
 function getDeviceName(): string {
@@ -1570,8 +1654,57 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/detected-tools ──────────────────────────────────────
       if (url.pathname === '/api/detected-tools' && req.method === 'GET') {
-        const tools = discoverTools()
+        const tools = attachManualImportMetadata(discoverTools(), db)
         json(res, { tools })
+        return
+      }
+
+      // ── /api/import/kelivo ────────────────────────────────────────
+      if (url.pathname === '/api/import/kelivo' && req.method === 'POST') {
+        let tempDir: string | null = null
+        try {
+          const upload = await readMultipartFile(req)
+          if (!upload) {
+            json(res, { error: { code: 'INVALID_UPLOAD', message: 'Missing uploaded file' } }, 400)
+            return
+          }
+          if (!isKelivoBackupFilename(upload.filename)) {
+            json(res, { error: { code: 'INVALID_FILE', message: 'Upload a Kelivo .zip backup or chats.json' } }, 400)
+            return
+          }
+
+          tempDir = mkdtempSync(path.join(tmpdir(), 'aiusage-kelivo-'))
+          const tempPath = path.join(tempDir, upload.filename)
+          writeFileSync(tempPath, upload.data)
+
+          const cfg = loadConfig()
+          const now = Date.now()
+          const result = await runParseKelivo({
+            filePath: tempPath,
+            device: getDeviceName(),
+            deviceInstanceId: options?.currentDeviceInstanceId ?? 'unknown',
+            platform: cfg?.platform ?? platform(),
+            now,
+            exchangeRate: resolveExchangeRate(cfg ?? {}),
+          })
+          if (result.errors.length > 0 && result.records.length === 0) {
+            json(res, { error: { code: 'IMPORT_FAILED', message: result.errors[0] }, errors: result.errors }, 400)
+            return
+          }
+
+          const existingCount = countExistingRecordIds(db, result.records.map((record) => record.id))
+          for (const record of result.records) insertRecord(db, record)
+          const imported = result.records.length
+          const added = Math.max(0, new Set(result.records.map((record) => record.id)).size - existingCount)
+          json(res, {
+            imported,
+            added,
+            lastImportedAt: imported > 0 ? now : undefined,
+            errors: result.errors,
+          })
+        } finally {
+          if (tempDir) rmSync(tempDir, { recursive: true, force: true })
+        }
         return
       }
 

@@ -15,6 +15,7 @@ import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
 import { runParseCursor } from './parse-cursor.js'
 import { runParseKilo } from './parse-kilo.js'
+import { runParseKelivo } from './parse-kelivo.js'
 import { runParseGoose } from './parse-goose.js'
 import { runParseZed } from './parse-zed.js'
 import { runParseKiro } from './parse-kiro.js'
@@ -117,7 +118,7 @@ function parseUiMessagesFile(options: {
     return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
   }
 
-  const taskId = filePath.split('/').slice(-2, -1)[0] || 'unknown'
+  const taskId = filePath.replace(/\\/g, '/').split('/').slice(-2, -1)[0] || 'unknown'
   for (const [index, message] of messages.entries()) {
     if (message?.say !== 'api_req_started' || typeof message.text !== 'string') continue
     let payload: any
@@ -346,6 +347,30 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
         if (tool === 'kiro' && filePath.endsWith('.json')) {
           const result = parseKiroSessionFile({
+            filePath,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            exchangeRate,
+          })
+          for (const record of result.records) {
+            insertRecord(db, record)
+            parsedCount++
+          }
+          errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          continue
+        }
+
+        if (tool === 'kelivo' && (filePath.endsWith('chats.json') || filePath.endsWith('.zip'))) {
+          const result = await runParseKelivo({
             filePath,
             device,
             deviceInstanceId,

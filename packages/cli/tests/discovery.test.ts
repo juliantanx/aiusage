@@ -34,6 +34,7 @@ describe('discovery path resolution', () => {
     delete process.env.APPDATA
     delete process.env.LOCALAPPDATA
     delete process.env.AIUSAGE_IDE_ROOTS
+    delete process.env.AIUSAGE_KELIVO_PATH
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -171,8 +172,11 @@ describe('discovery path resolution', () => {
     writeFileSync(join(ideRoot, 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1', 'ui_messages.json'), '[]')
     mkdirSync(join(home, '.local', 'share', 'goose', 'sessions'), { recursive: true })
     writeFileSync(join(home, '.local', 'share', 'goose', 'sessions', 'sessions.db'), '')
+    mkdirSync(join(home, 'kelivo-backups'), { recursive: true })
+    writeFileSync(join(home, 'kelivo-backups', 'chats.json'), JSON.stringify({ messages: [] }))
 
     process.env.AIUSAGE_IDE_ROOTS = ideRoot
+    process.env.AIUSAGE_KELIVO_PATH = join(home, 'kelivo-backups')
     const { discoverLogFiles, discoverTools } = await loadDiscovery({ home, platform: 'linux' })
 
     expect(discoverTools().find((tool) => tool.sourceKey === 'kimi')?.status).toBe('found')
@@ -180,9 +184,11 @@ describe('discovery path resolution', () => {
     expect(discoverTools().find((tool) => tool.sourceKey === 'kiro')?.status).toBe('found')
     expect(discoverTools().find((tool) => tool.sourceKey === 'roocode')?.status).toBe('found')
     expect(discoverTools().find((tool) => tool.sourceKey === 'goose')?.status).toBe('found')
+    expect(discoverTools().find((tool) => tool.sourceKey === 'kelivo')?.status).toBe('found')
     expect(discoverLogFiles().find((result) => result.tool === 'kimi')?.paths).toHaveLength(1)
     expect(discoverLogFiles().find((result) => result.tool === 'codebuddy')?.paths).toHaveLength(1)
     expect(discoverLogFiles().find((result) => result.tool === 'kiro')?.paths).toHaveLength(1)
     expect(discoverLogFiles().find((result) => result.tool === 'roocode')?.paths).toHaveLength(1)
+    expect(discoverLogFiles().find((result) => result.tool === 'kelivo')?.paths).toHaveLength(1)
   })
 })
