@@ -128,7 +128,7 @@ export const POST: RequestHandler = async ({ request }) => {
     await sql.begin(async (tx) => {
       // Upsert records
       for (const record of records) {
-        if (!record.record_id || !record.tool || !record.model) {
+        if (!record.id || !record.tool || !record.model) {
           skipped++
           continue
         }
@@ -144,7 +144,7 @@ export const POST: RequestHandler = async ({ request }) => {
               device_name, platform, updated_at, server_updated_at
             ) VALUES (
               ${id}, ${userId}, ${deviceId}, ${deviceInstanceId}, ${serverGeneration},
-              ${record.record_id}, ${record.ts || 0}, ${record.tool}, ${record.model}, ${record.provider || ''},
+              ${record.id}, ${record.ts || 0}, ${record.tool}, ${record.model}, ${record.provider || ''},
               ${record.inputTokens || 0}, ${record.outputTokens || 0}, ${record.cacheReadTokens || 0},
               ${record.cacheWriteTokens || 0}, ${record.thinkingTokens || 0},
               ${record.cost ?? null}, ${record.costSource || null}, ${record.sessionKey || ''},

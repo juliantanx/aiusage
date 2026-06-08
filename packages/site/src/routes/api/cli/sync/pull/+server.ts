@@ -64,14 +64,14 @@ export const GET: RequestHandler = async ({ request, url }) => {
     const r = row as Record<string, unknown>
     if (r.deleted_at) {
       tombstones.push({
-        record_id: r.record_id,
+        id: r.record_id,
         device_instance_id: r.device_instance_id,
         deleted_at: r.deleted_at,
         updated_at: r.updated_at
       })
     } else {
       records.push({
-        record_id: r.record_id,
+        id: r.record_id,
         ts: r.ts,
         tool: r.tool,
         model: r.model,
