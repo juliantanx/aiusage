@@ -181,16 +181,6 @@ Contributions are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md), use the is
 
 [**linux.do**](https://linux.do/) - thanks to the linux.do community for support and inspiration during the development of this project.
 
-## Star History
-
-<a href="https://www.star-history.com/?repos=juliantanx%2Faiusage&type=date&logscale=&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&theme=dark&logscale&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&logscale&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=juliantanx/aiusage&type=date&logscale&legend=top-left" />
- </picture>
-</a>
-
 ## License
 
 [MIT](./LICENSE)
