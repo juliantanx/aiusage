@@ -334,8 +334,8 @@
   }
 
   :global(html) {
-    scroll-behavior: smooth;
-    scroll-padding-top: 72px;
+    scroll-behavior: auto;
+    scroll-padding-top: 76px;
   }
 
   :global(body) {

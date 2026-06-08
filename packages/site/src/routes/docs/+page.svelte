@@ -62,6 +62,7 @@
       children: [
         { id: 'settings-general', en: 'General', zh: '通用' },
         { id: 'settings-sources', en: 'Data Sources', zh: '数据源' },
+        { id: 'settings-manual-import', en: 'Manual Import', zh: '手动导入' },
         { id: 'settings-env', en: 'Source Env Vars', zh: '数据源环境变量' },
         { id: 'settings-data', en: 'Data Management', zh: '数据管理' },
       ]
@@ -129,7 +130,7 @@
     return 0
   }
 
-  function scrollTo(id, behavior = 'smooth') {
+  function scrollTo(id, behavior = 'instant') {
     const el = document.getElementById(id)
     if (!el) return
     activeSection = id
@@ -141,7 +142,11 @@
         expandedSections = expandedSections
       }
     }
-    el.scrollIntoView({ behavior, block: 'start' })
+    // scrollIntoView ignores scroll-padding-top in most browsers,
+    // so we compute the position manually to clear the sticky header.
+    const headerOffset = 76
+    const top = el.getBoundingClientRect().top + window.scrollY - headerOffset
+    window.scrollTo({ top, behavior })
     setTimeout(() => { scrollLock = null }, behavior === 'instant' ? 100 : 600)
   }
 
@@ -853,7 +858,7 @@
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
         <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（需配置 OTEL 环境变量）' : '(requires OTEL env vars)'}</li>
         <li><strong>KiloCode</strong> — {zh ? 'IDE 扩展目录' : 'IDE extension directory'} + {zh ? '平台相关的' : 'platform-specific'} SQLite DB</li>
-        <li><strong>Kelivo</strong> — {zh ? 'Kelivo 备份导出的' : 'Kelivo backup export'} <code>chats.json</code> / <code>.zip</code></li>
+        <li><strong>Kelivo</strong> — {zh ? '通过手动导入 Kelivo 备份文件（' : 'Manual import from Kelivo backup ( '}<code>chats.json</code> / <code>.zip</code>{zh ? '），详见下方「手动导入」' : ' ), see Manual Import below'}</li>
         <li><strong>Gemini CLI</strong> — <code>~/.gemini/tmp</code></li>
         <li><strong>Kimi Code</strong> — <code>~/.kimi-code/sessions</code></li>
         <li><strong>CodeBuddy</strong> — <code>~/.codebuddy/projects</code></li>
@@ -892,6 +897,36 @@
         {zh
           ? 'aiusage 会持久化已解析的记录和解析水位线，但不会备份各 AI 工具的原始日志。执行 reset 或 clean 删除 aiusage 数据后，历史用量只能从仍然存在的原始数据源重新导入；如果原始日志、SQLite 记录、API 历史或 Copilot OTEL 文件已经被清理，总 token 可能会变少。'
           : 'aiusage persists parsed records and parse watermarks, but it does not back up raw logs from each AI tool. After reset or clean deletes aiusage data, history can only be re-imported from source data that still exists; if raw logs, SQLite rows, API history, or Copilot OTEL files have been cleaned up, total tokens may decrease.'
+        }
+      </Callout>
+    </section>
+
+    <section id="settings-manual-import">
+      <h3>{zh ? '手动导入' : 'Manual Import'}</h3>
+      <p>{zh
+        ? '部分 AI 工具不暴露本地日志文件，需要通过导出备份的方式手动导入用量数据。当前支持手动导入的工具：'
+        : 'Some AI tools do not expose local log files and require you to import usage data from exported backups. Tools that support manual import:'
+      }</p>
+      <ul>
+        <li><strong>Kelivo</strong> — {zh ? '从 Kelivo 导出的' : 'Import from Kelivo backup exports: '}<code>chats.json</code> {zh ? '或' : ' or '} <code>.zip</code> {zh ? '备份文件' : 'backup files'}</li>
+      </ul>
+      <p>{zh ? '操作步骤：' : 'Steps:'}</p>
+      <ol>
+        <li>{zh ? '在 Kelivo 中导出聊天记录备份（通常为 chats.json 或包含它的 .zip 文件）' : 'Export your chat history from Kelivo (typically a chats.json file or a .zip containing it)'}</li>
+        <li>{zh ? '打开 AIUsage 仪表盘，进入 Settings → Data Sources' : 'Open the AIUsage dashboard, go to Settings → Data Sources'}</li>
+        <li>{zh ? '找到「手动导入」区域，点击 Kelivo 旁边的导入按钮，选择备份文件' : 'Find the "Manual Imports" section, click the import button next to Kelivo, and select the backup file'}</li>
+        <li>{zh ? '等待导入完成，页面会显示导入结果（总记录数和新增记录数）' : 'Wait for the import to finish — the page shows the result (total records and newly added records)'}</li>
+      </ol>
+      <Callout type="info">
+        {zh
+          ? '手动导入的工具与自动检测的工具是分开管理的。自动检测的工具会出现在数据源列表的"已找到"或"未找到"分组中，而手动导入的工具会单独显示在「手动导入」区域，不会被隐藏。'
+          : 'Manual-import tools are managed separately from auto-detected tools. Auto-detected tools appear in the "Found" or "Not found" groups, while manual-import tools are shown in their own "Manual Imports" section and are never hidden.'
+        }
+      </Callout>
+      <Callout type="info">
+        {zh
+          ? '每次导入后，AIUsage 会记录最后导入时间。重新解析或刷新页面后仍可查看。重复导入同一份备份不会产生重复记录。'
+          : 'After each import, AIUsage records the last import time. It remains visible after re-parsing or refreshing the page. Re-importing the same backup file will not create duplicate records.'
         }
       </Callout>
     </section>
@@ -1372,7 +1407,7 @@ aiusage upload-status
       <DocsTable
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
-          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具；支持 claude-code、codex、openclaw、opencode、hermes、qoder、cursor、kilocode、copilot、gemini、kimi、codebuddy、kiro、grok、antigravity、roocode、zed、goose、omp、pi、craft、droid' : 'Only parse a specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, kilocode, copilot, gemini, kimi, codebuddy, kiro, grok, antigravity, roocode, zed, goose, omp, pi, craft, droid'],
+          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具；支持 claude-code、codex、openclaw、opencode、hermes、qoder、cursor、kilocode、copilot、kelivo、gemini、kimi、codebuddy、kiro、grok、antigravity、roocode、zed、goose、omp、pi、craft、droid' : 'Only parse a specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, kilocode, copilot, kelivo, gemini, kimi, codebuddy, kiro, grok, antigravity, roocode, zed, goose, omp, pi, craft, droid'],
           ['<code>--no-progress</code>', zh ? '隐藏实时进度输出' : 'Hide real-time progress output'],
         ]}
       />
