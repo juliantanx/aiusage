@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import type { ConsentConfig } from './sync/consent.js'
 import type { PriceEntry, ExchangeRateCache } from '@aiusage/core'
@@ -61,6 +61,7 @@ export function loadConfig(): Config | null {
 }
 
 export function saveConfig(config: Config): void {
+  mkdirSync(dirname(CONFIG_PATH), { recursive: true, mode: 0o700 })
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
 }
 

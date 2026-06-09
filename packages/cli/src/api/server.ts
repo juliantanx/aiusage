@@ -1299,36 +1299,42 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         if (req.method === 'PUT') {
           let body = ''
           for await (const chunk of req) body += chunk
+          let data: Record<string, unknown>
           try {
-            const data = JSON.parse(body)
-            if (!data.model || typeof data.input !== 'number' || typeof data.output !== 'number') {
-              json(res, { error: { code: 'INVALID_PARAM', message: 'model, input, output required' } }, 400)
-              return
-            }
-            const entry: PriceEntry = {
-              input: data.input,
-              output: data.output,
-              cacheRead: data.cacheRead,
-              cacheWrite: data.cacheWrite,
-            }
-            if (data.currency === 'CNY') {
-              entry.currency = 'CNY'
-            }
+            data = JSON.parse(body)
+          } catch {
+            json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
+            return
+          }
+          if (!data.model || typeof data.input !== 'number' || typeof data.output !== 'number') {
+            json(res, { error: { code: 'INVALID_PARAM', message: 'model, input, output required' } }, 400)
+            return
+          }
+          const entry: PriceEntry = {
+            input: data.input,
+            output: data.output,
+            cacheRead: data.cacheRead as number | undefined,
+            cacheWrite: data.cacheWrite as number | undefined,
+          }
+          if (data.currency === 'CNY') {
+            entry.currency = 'CNY'
+          }
+          try {
             await runDbWrite(() => {
-              setUserPrice(db, data.model, entry)
+              setUserPrice(db, data.model as string, entry)
               const cfg = loadConfig() ?? {}
-              cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
+              cfg.priceOverrides = { ...cfg.priceOverrides, [data.model as string]: entry }
               saveConfig(cfg)
               loadPricingRuntime(db, cfg)
             })
-            json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
           } catch (error) {
             if (isDatabaseLockedError(error)) {
               databaseBusy(res)
               return
             }
-            json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
+            throw error
           }
+          json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
           return
         }
         // DELETE: remove price override
