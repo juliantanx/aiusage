@@ -6,6 +6,15 @@ import { generateCsrfToken, validateCsrfToken, setCsrfCookie } from '$lib/server
 
 let initialized = false
 
+const CLI_SYNC_STATUS_PATH = '/api/cli/sync/status'
+
+function applyCliSyncStatusCors(response: Response) {
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  response.headers.set('Access-Control-Max-Age', '86400')
+}
+
 async function ensureInitialized() {
   if (initialized) return
   try {
@@ -18,6 +27,14 @@ async function ensureInitialized() {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+  const isCliSyncStatus = event.url.pathname === CLI_SYNC_STATUS_PATH
+
+  if (isCliSyncStatus && event.request.method === 'OPTIONS') {
+    const response = new Response(null, { status: 204 })
+    applyCliSyncStatusCors(response)
+    return response
+  }
+
   await ensureInitialized()
 
   // Set user in locals
@@ -59,6 +76,10 @@ export const handle: Handle = async ({ event, resolve }) => {
     response.headers.set('Cache-Control', 'no-store')
   } else {
     response.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'")
+  }
+
+  if (isCliSyncStatus) {
+    applyCliSyncStatusCors(response)
   }
 
   // Set CSRF cookie for browser requests

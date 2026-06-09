@@ -248,6 +248,26 @@ async function proxyLeaderboard(res: http.ServerResponse, url: URL): Promise<voi
   }
 }
 
+async function proxyCloudSyncStatus(res: http.ServerResponse): Promise<void> {
+  const upstream = new URL('/api/cli/sync/status', getSiteUrl())
+
+  try {
+    const response = await fetch(upstream, {
+      headers: { Accept: 'application/json' },
+    })
+    const contentType = response.headers.get('content-type') || ''
+    if (!response.ok || !contentType.includes('application/json')) {
+      json(res, { enabled: false })
+      return
+    }
+
+    const data = await response.json().catch(() => null)
+    json(res, data && typeof data.enabled === 'boolean' ? data : { enabled: false })
+  } catch {
+    json(res, { enabled: false })
+  }
+}
+
 
 export interface ApiServerOptions {
   currentDeviceInstanceId?: string
@@ -381,6 +401,11 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
       res.setHeader('Set-Cookie', buildClearAuthCookie())
       json(res, { ok: true })
+      return
+    }
+
+    if (url.pathname === '/api/cli/sync/status' && req.method === 'GET') {
+      await proxyCloudSyncStatus(res)
       return
     }
 
