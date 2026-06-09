@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-06-10
+
+### Added
+- **LiteLLM pricing sync** — syncs model pricing from the LiteLLM registry, guides first-time pricing sync in local web, and binds local models to pricing aliases.
+- **Cloud global toggle and public pricing** — adds a global cloud kill switch with ban semantics, public read-only pricing page and API endpoint, and per-rule risk enable/disable switches in config.
+- **Proxied cloud sync status endpoint** — exposes cloud sync status through a proxied endpoint.
+
+### Fixed
+- **Pi session parsing** ([#31](https://github.com/juliantanx/aiusage/pull/31) by @joyshan1986) — extracts per-file session ID for Pi and recognizes its cache token fields.
+- **Leaderboard cost aggregation** — aggregates leaderboard costs by period and preserves costs during recompute.
+- **Pricing alias resolution** — resolves synced pricing aliases correctly during cost recalculation.
+- **Local database write serialization** — serializes local database writes to prevent concurrent write conflicts.
+- **Config directory safety** — ensures config directory exists before saving and separates error handling.
+- **Pricing table redesign** — removes obsolete cloud sync references and redesigns the pricing table.
+- **Snapshot review pipeline** — excludes reviewed snapshots from flagged list and restores leaderboard_metrics visibility on approval.
+- **Sync record field naming** — renames `record_id` to `id` in sync API request/response fields; only counts actually changed records in sync pull.
+
+### Changed
+- **Pricing management overhaul** — enhances pricing management with recalc tracking, explicit recalculation workflow, and polished interactions.
+- **Remove bundled pricing seed** — removes the bundled pricing seed from runtime and the site pricing version model.
+- **Site Docker caching** — optimizes site Docker dependency caching.
+
+---
+
 ## [1.5.2] - 2026-06-08
 
 ### Added
@@ -326,6 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.3]: https://github.com/juliantanx/aiusage/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/juliantanx/aiusage/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/juliantanx/aiusage/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/juliantanx/aiusage/compare/v1.4.0...v1.5.0
