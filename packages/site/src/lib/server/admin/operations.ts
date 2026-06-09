@@ -244,3 +244,17 @@ export async function deletePriceEntry(adminUserId: string, entryId: string, mod
   await sql`DELETE FROM official_price_entries WHERE id = ${entryId} AND table_id = ${tableId}`
   await logAdminAction(adminUserId, 'delete_price_entry', 'official_price_tables', tableId, `Deleted model ${modelKey}`)
 }
+
+export async function getPublicPriceEntries() {
+  const existing = await sql`SELECT id FROM official_price_tables WHERE status = 'published' LIMIT 1`
+  if (existing.length === 0) return { entries: [] }
+  const tableId = (existing[0] as { id: string }).id
+
+  const entries = await sql`
+    SELECT e.model_key, e.input, e.output, e.cache_read, e.cache_write, e.currency
+    FROM official_price_entries e
+    WHERE e.table_id = ${tableId}
+    ORDER BY e.model_key ASC
+  `
+  return { entries }
+}
