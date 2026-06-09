@@ -484,5 +484,14 @@ const migrations = [
       // When the star check was last performed
       await tx`ALTER TABLE users ADD COLUMN IF NOT EXISTS github_star_checked_at TIMESTAMPTZ`
     }
+  },
+  {
+    version: 13,
+    name: 'reverse_cloud_sync_enabled_semantics',
+    up: async (tx: ReturnType<typeof sql>) => {
+      // cloud_sync_enabled semantics reversed: true now means "banned from cloud"
+      // Reset all existing true values to false (previously meant "admin override allow")
+      await tx`UPDATE users SET cloud_sync_enabled = FALSE WHERE cloud_sync_enabled = TRUE`
+    }
   }
 ]
