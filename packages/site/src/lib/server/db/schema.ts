@@ -493,5 +493,45 @@ const migrations = [
       // Reset all existing true values to false (previously meant "admin override allow")
       await tx`UPDATE users SET cloud_sync_enabled = FALSE WHERE cloud_sync_enabled = TRUE`
     }
+  },
+  {
+    version: 14,
+    name: 'current_model_price_registry',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`CREATE TABLE IF NOT EXISTS model_prices (
+        model_key TEXT PRIMARY KEY,
+        provider TEXT NOT NULL DEFAULT '',
+        input NUMERIC(20, 8) NOT NULL,
+        output NUMERIC(20, 8) NOT NULL,
+        cache_read NUMERIC(20, 8),
+        cache_write NUMERIC(20, 8),
+        currency TEXT NOT NULL DEFAULT 'USD',
+        source TEXT NOT NULL DEFAULT 'manual',
+        source_model_id TEXT,
+        source_url TEXT,
+        origin TEXT NOT NULL DEFAULT 'user',
+        status TEXT NOT NULL DEFAULT 'active',
+        last_synced_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE TABLE IF NOT EXISTS model_price_aliases (
+        alias TEXT PRIMARY KEY,
+        model_key TEXT NOT NULL REFERENCES model_prices(model_key) ON DELETE CASCADE,
+        match_type TEXT NOT NULL DEFAULT 'exact',
+        provider TEXT NOT NULL DEFAULT '',
+        priority INTEGER NOT NULL DEFAULT 100,
+        source TEXT NOT NULL DEFAULT 'manual',
+        origin TEXT NOT NULL DEFAULT 'user',
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`
+
+      await tx`CREATE INDEX IF NOT EXISTS idx_model_prices_origin ON model_prices(origin)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_model_prices_source ON model_prices(source)`
+      await tx`CREATE INDEX IF NOT EXISTS idx_model_price_aliases_model ON model_price_aliases(model_key)`
+    }
   }
 ]

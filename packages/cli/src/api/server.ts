@@ -4,7 +4,7 @@ import { hostname, platform, tmpdir } from 'node:os'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
-import { calculateCost, getPriceTable, setPriceOverride, removePriceOverride, getUserOverrides, DEFAULT_PRICE_TABLE, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
+import { calculateCost, removePriceOverride, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SyncConfig } from '../config.js'
 import { setSyncConsent } from '../init.js'
@@ -29,6 +29,7 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
+import { listPricingModels, loadPricingRuntime, removeUserPrice, setUserPrice, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
@@ -1128,45 +1129,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/pricing ────────────────────────────────────────────────
       if (url.pathname === '/api/pricing') {
-        // GET: list all prices (defaults + overrides + models from DB)
+        // GET: list all prices from the local pricing registry plus models from DB.
         if (req.method === 'GET') {
-          const table = getPriceTable()
-          const overrides = getUserOverrides()
-          // Also include models from DB that have no pricing
-          const dbModels = db.prepare("SELECT model, COUNT(*) as usage_count FROM records WHERE model != 'unknown' GROUP BY model ORDER BY usage_count DESC, model ASC").all() as any[]
-          const models = dbModels.map(r => {
-            const model = r.model
-            const exactPrice = table[model]
-            const resolvedPrice = resolvePrice(model)
-            const isOverride = model in overrides
-            const isDefault = model in DEFAULT_PRICE_TABLE && !isOverride
-            let matchedBy: string | null = null
-            if (!exactPrice && resolvedPrice) {
-              // Find which prefix matched
-              for (const prefix of Object.keys(table)) {
-                if (model.startsWith(prefix) || model.toLowerCase().startsWith(prefix)) {
-                  matchedBy = prefix
-                  break
-                }
-              }
-              if (!matchedBy) {
-                // Provider-stripped match
-                const stripped = model.replace(/^[^/]+\//, '').toLowerCase()
-                for (const prefix of Object.keys(table)) {
-                  if (stripped.startsWith(prefix)) { matchedBy = prefix; break }
-                }
-              }
-            }
-            return {
-              model,
-              price: resolvedPrice ?? null,
-              currency: resolvedPrice?.currency ?? 'USD',
-              isDefault,
-              isOverride,
-              matchedBy,
-            }
-          })
-          json(res, { models, overrides })
+          json(res, { models: listPricingModels(db) })
           return
         }
         // PUT: set price override
@@ -1188,7 +1153,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (data.currency === 'CNY') {
               entry.currency = 'CNY'
             }
-            setPriceOverride(data.model, entry)
+            setUserPrice(db, data.model, entry)
             const cfg = loadConfig() ?? {}
             cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
             saveConfig(cfg)
@@ -1206,16 +1171,30 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             json(res, { error: { code: 'INVALID_PARAM', message: 'model param required' } }, 400)
             return
           }
+          removeUserPrice(db, model)
           removePriceOverride(model)
           const cfg = loadConfig() ?? {}
           if (cfg.priceOverrides) {
             delete cfg.priceOverrides[model]
             saveConfig(cfg)
           }
+          loadPricingRuntime(db, cfg)
           const recalculated = recalcCosts(db)
           json(res, { ok: true, recalculated })
           return
         }
+      }
+
+      if (url.pathname === '/api/pricing/sync' && req.method === 'POST') {
+        try {
+          const summary = await syncPricingFromLitellm(db)
+          loadPricingRuntime(db, loadConfig())
+          const recalculated = recalcCosts(db)
+          json(res, { ok: true, summary, recalculated })
+        } catch (error) {
+          json(res, { error: { code: 'SYNC_FAILED', message: error instanceof Error ? error.message : 'Pricing sync failed' } }, 502)
+        }
+        return
       }
 
       // ── /api/pricing/recalc ─────────────────────────────────────────

@@ -9,7 +9,7 @@ export const GET: RequestHandler = async (event) => {
   const [users, flagged, priceTables, logs] = await Promise.all([
     sql`SELECT COUNT(*)::INTEGER AS count FROM users`,
     sql`SELECT COUNT(*)::INTEGER AS count FROM upload_snapshots WHERE status = 'flagged' AND review_status IS NULL`,
-    sql`SELECT COUNT(*)::INTEGER AS count FROM official_price_entries e JOIN official_price_tables t ON t.id = e.table_id WHERE t.status = 'published'`,
+    sql`SELECT COUNT(*)::INTEGER AS count FROM model_prices WHERE status = 'active'`,
     sql`SELECT COUNT(*)::INTEGER AS count FROM admin_audit_logs`,
   ])
 

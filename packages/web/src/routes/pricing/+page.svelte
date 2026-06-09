@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchPricing, updatePricing, deletePricing } from '$lib/api.js'
+  import { fetchPricing, updatePricing, deletePricing, syncPricing } from '$lib/api.js'
   import { recalcStatus, displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let models = []
@@ -12,6 +12,8 @@
   let editValues = {}
   let doneTimer = null
   let viewCurrency = $displayCurrency || 'USD'
+  let syncingPrices = false
+  let syncSummary = null
 
   onDestroy(() => { if (doneTimer) clearTimeout(doneTimer) })
 
@@ -89,6 +91,23 @@
     }
   }
 
+  async function syncPrices() {
+    try {
+      syncingPrices = true
+      recalcStatus.set('updating')
+      const r = await syncPricing()
+      syncSummary = r.summary || null
+      await loadData()
+      if (r.recalculated) markDone()
+      else recalcStatus.set('idle')
+    } catch (e) {
+      recalcStatus.set('idle')
+      alert(e.message)
+    } finally {
+      syncingPrices = false
+    }
+  }
+
   function fmt(n) {
     if (n == null) return '-'
     if (n === 0) return '0'
@@ -96,6 +115,18 @@
     if (n < 1) return n.toFixed(3)
     return n.toFixed(2)
   }
+
+  function formatSource(m) {
+    if (!m.source) return ''
+    return m.sourceModelId && m.sourceModelId !== m.model ? `${m.source}: ${m.sourceModelId}` : m.source
+  }
+
+  $: syncSummaryText = syncSummary
+    ? $t('pricing.syncSummary')
+      .replace('{added}', syncSummary.added ?? 0)
+      .replace('{updated}', syncSummary.updated ?? 0)
+      .replace('{unresolved}', syncSummary.dryRun?.unresolved?.length ?? 0)
+    : ''
 </script>
 
 <svelte:head>
@@ -110,12 +141,19 @@
     {:else if $recalcStatus === 'done'}
       <span class="toast done">{$t('pricing.costsUpdated')}</span>
     {/if}
+    <button class="btn-sm sync-btn" on:click={syncPrices} disabled={syncingPrices}>
+      {syncingPrices ? $t('pricing.syncingPrices') : $t('pricing.syncPrices')}
+    </button>
     <div class="currency-toggle">
       <button class="toggle-btn" class:active={viewCurrency === 'USD'} on:click={() => viewCurrency = 'USD'}>USD</button>
       <button class="toggle-btn" class:active={viewCurrency === 'CNY'} on:click={() => viewCurrency = 'CNY'}>CNY</button>
     </div>
   </div>
 </div>
+
+{#if syncSummaryText}
+  <div class="sync-summary mono">{syncSummaryText}</div>
+{/if}
 
 {#if loading}
   <div class="state-msg">{$t('common.loading')}</div>
@@ -188,7 +226,7 @@
           <div class="card-footer">
             {#if m.isOverride}
               <span class="badge override">{$t('pricing.override')}</span>
-            {:else if m.isDefault}
+            {:else if m.isBuiltin || m.isDefault}
               <span class="badge default">{$t('pricing.default')}</span>
             {:else if m.matchedBy}
               <span class="badge matched">{m.matchedBy}</span>
@@ -197,6 +235,9 @@
             {/if}
             {#if m.currency === 'CNY'}
               <span class="badge cny">CNY</span>
+            {/if}
+            {#if formatSource(m)}
+              <span class="badge source">{formatSource(m)}</span>
             {/if}
           </div>
         {/if}
@@ -230,6 +271,11 @@
   }
   .toast.updating { color: var(--text-muted); }
   .toast.done { color: var(--accent); }
+  .sync-summary {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin: -0.75rem 0 1rem;
+  }
   .currency-toggle {
     display: flex;
     border: 1px solid var(--border-subtle);
@@ -365,6 +411,14 @@
   .badge.matched { background: var(--badge-matched-bg); color: var(--badge-matched-fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .badge.no-price { background: var(--badge-noprice-bg); color: var(--badge-noprice-fg); }
   .badge.cny { background: var(--purple-dim); color: var(--purple); }
+  .badge.source {
+    background: var(--raised);
+    color: var(--text-muted);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: none;
+  }
 
   .btn-sm {
     font-family: var(--mono);
@@ -379,8 +433,11 @@
     transition: border-color 0.2s, color 0.2s;
   }
   .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn-sm:disabled:hover { border-color: var(--border-subtle); color: var(--text); }
   .btn-sm.save { border-color: var(--accent); color: var(--accent); }
   .btn-sm.reset { border-color: #f87171; color: #f87171; }
+  .sync-btn { height: 32px; }
 
   .edit-fields {
     display: grid;

@@ -4,6 +4,51 @@ import { sql } from '$lib/server/db/pool.js'
 import { requireAdmin } from '$lib/server/auth/session.js'
 import { nanoid } from 'nanoid'
 
+const CURRENT_PRICING_VERSION = 'current'
+const FALLBACK_CNY_USD = 0.14
+
+interface PriceEntry {
+  input: number
+  output: number
+  cacheRead?: number
+  cacheWrite?: number
+  currency?: string
+}
+
+function resolvePriceFromTable(model: string, table: Map<string, PriceEntry>): PriceEntry | undefined {
+  if (table.has(model)) return table.get(model)
+  const stripped = model.replace(/^(accounts\/fireworks\/models\/|moonshotai\/|z-ai\/|zai-org\/|frank\/|nvidia\/)/, '')
+  if (table.has(stripped)) return table.get(stripped)
+  if (table.has(stripped.toLowerCase())) return table.get(stripped.toLowerCase())
+
+  let bestKey = ''
+  let best: PriceEntry | undefined
+  for (const candidate of [model, stripped, stripped.toLowerCase()]) {
+    for (const [key, price] of table) {
+      if (candidate.startsWith(key) && key.length > bestKey.length) {
+        bestKey = key
+        best = price
+      }
+    }
+  }
+  return best
+}
+
+function calculateCost(price: PriceEntry, tokens: {
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  thinking_tokens: number
+}): number {
+  const raw = (tokens.input_tokens / 1_000_000) * price.input +
+    (tokens.output_tokens / 1_000_000) * price.output +
+    (tokens.cache_read_tokens / 1_000_000) * (price.cacheRead ?? 0) +
+    (tokens.cache_write_tokens / 1_000_000) * (price.cacheWrite ?? 0) +
+    (tokens.thinking_tokens / 1_000_000) * price.output
+  return price.currency === 'CNY' ? raw * FALLBACK_CNY_USD : raw
+}
+
 /**
  * POST /api/admin/leaderboard/recompute
  *
@@ -25,143 +70,125 @@ export const POST: RequestHandler = async (event) => {
   const periodEnd = body.period_end
   const userId = body.user_id
 
-  // Get the published pricing table
-  const priceTable = await sql`
-    SELECT id, version FROM official_price_tables WHERE status = 'published' ORDER BY created_at DESC LIMIT 1
-  `
-  const pricingVersion = priceTable.length > 0 ? (priceTable[0] as { id: string; version: string }).version : 'core_default'
-  const priceTableId = priceTable.length > 0 ? (priceTable[0] as { id: string; version: string }).id : null
+  const pricingVersion = CURRENT_PRICING_VERSION
 
-  // Build price lookup
-  const priceMap = new Map<string, { input: number; output: number; cache_read: number; cache_write: number }>()
-  if (priceTableId) {
-    const entries = await sql`
-      SELECT model_key, input, output, cache_read, cache_write
-      FROM official_price_entries WHERE table_id = ${priceTableId}
-    `
-    for (const entry of entries) {
-      const e = entry as { model_key: string; input: number; output: number; cache_read: number; cache_write: number }
-      priceMap.set(e.model_key, { input: Number(e.input), output: Number(e.output), cache_read: Number(e.cache_read), cache_write: Number(e.cache_write) })
-    }
+  const entries = await sql`
+    SELECT model_key, input, output, cache_read, cache_write, currency
+    FROM model_prices
+    WHERE status = 'active'
+  `
+  const priceMap = new Map<string, PriceEntry>()
+  for (const entry of entries) {
+    const e = entry as { model_key: string; input: string | number; output: string | number; cache_read: string | number | null; cache_write: string | number | null; currency: string }
+    priceMap.set(e.model_key, {
+      input: Number(e.input),
+      output: Number(e.output),
+      cacheRead: e.cache_read == null ? undefined : Number(e.cache_read),
+      cacheWrite: e.cache_write == null ? undefined : Number(e.cache_write),
+      currency: e.currency || 'USD',
+    })
   }
 
-  // Query accepted upload snapshots
+  // Query accepted leaderboard rows and recalculate costs from their token breakdown.
   let query = sql`
-    SELECT us.id, us.upload_request_id, us.user_id, us.device_id,
-           us.period_type, us.period_start, us.period_end,
-           us.total_tokens
-    FROM upload_snapshots us
-    JOIN users u ON u.id = us.user_id
-    WHERE us.status = 'accepted'
+    SELECT lm.id, lm.upload_request_id, lm.user_id, lm.device_id,
+           lm.period_type, lm.period_start, lm.period_end, lm.scope_type, lm.tool, lm.model,
+           lm.input_tokens, lm.output_tokens, lm.cache_read_tokens, lm.cache_write_tokens,
+           lm.thinking_tokens, lm.total_tokens
+    FROM leaderboard_metrics lm
+    JOIN users u ON u.id = lm.user_id
+    WHERE lm.visibility != 'hidden'
       AND u.status = 'active'
       AND u.leaderboard_visibility = 'public'
   `
 
   if (periodType) {
-    query = sql`${query} AND us.period_type = ${periodType}`
+    query = sql`${query} AND lm.period_type = ${periodType}`
   }
   if (periodStart) {
-    query = sql`${query} AND us.period_start >= ${periodStart}`
+    query = sql`${query} AND lm.period_start >= ${periodStart}`
   }
   if (periodEnd) {
-    query = sql`${query} AND us.period_end <= ${periodEnd}`
+    query = sql`${query} AND lm.period_end <= ${periodEnd}`
   }
   if (userId) {
-    query = sql`${query} AND us.user_id = ${userId}`
+    query = sql`${query} AND lm.user_id = ${userId}`
   }
 
-  const snapshots = await query
+  const metrics = await query
 
   let recomputed = 0
   let skipped = 0
 
-  for (const snap of snapshots) {
-    const s = snap as {
+  for (const row of metrics) {
+    const metric = row as {
       id: string; upload_request_id: string; user_id: string; device_id: string;
-      period_type: string; period_start: string; period_end: string; total_tokens: number
+      period_type: string; period_start: string; period_end: string; scope_type: string;
+      tool: string | null; model: string | null; input_tokens: number; output_tokens: number;
+      cache_read_tokens: number; cache_write_tokens: number; thinking_tokens: number; total_tokens: number
     }
 
-    // Check visibility — don't recompute hidden/rejected
-    const existing = await sql`
-      SELECT id FROM leaderboard_metrics
-      WHERE upload_request_id = ${s.upload_request_id}
-        AND visibility IN ('hidden')
-      LIMIT 1
-    `
-    if (existing.length > 0) {
-      skipped++
-      continue
-    }
-
-    // Get the snapshot's breakdown data from upload_requests
-    const uploadReq = await sql`
-      SELECT result_summary FROM upload_requests WHERE id = ${s.upload_request_id}
-    `
-    if (uploadReq.length === 0) {
-      skipped++
-      continue
-    }
-
-    const summary = (uploadReq[0] as { result_summary: Record<string, unknown> }).result_summary
-    const snapshotData = summary?.snapshots?.[0]
-    if (!snapshotData) {
-      skipped++
-      continue
-    }
-
-    const breakdowns = snapshotData.breakdowns || []
-
-    // Compute cost for each breakdown
-    for (const bd of breakdowns) {
-      const scopeType = bd.scope_type
-      const tool = bd.tool || null
-      const model = bd.model || null
-
-      const inputTokens = bd.input_tokens || 0
-      const outputTokens = bd.output_tokens || 0
-      const cacheReadTokens = bd.cache_read_tokens || 0
-      const cacheWriteTokens = bd.cache_write_tokens || 0
-      const thinkingTokens = bd.thinking_tokens || 0
-      const totalTokens = bd.total_tokens || 0
-
-      // Calculate cost using price table
-      let costUsd = 0
-      let hasUnknownCost = false
-      if (model && priceMap.has(model)) {
-        const p = priceMap.get(model)!
-        costUsd = (inputTokens * p.input + outputTokens * p.output +
-                   cacheReadTokens * p.cache_read + cacheWriteTokens * p.cache_write) / 1_000_000
-      } else if (model && model !== 'unknown') {
+    let costUsd = 0
+    let hasUnknownCost = false
+    if (metric.scope_type === 'tool_model' && metric.model && metric.model !== 'unknown') {
+      const price = resolvePriceFromTable(metric.model, priceMap)
+      if (price) {
+        costUsd = calculateCost(price, metric)
+      } else if (metric.total_tokens > 0) {
         hasUnknownCost = true
       }
-
-      const id = nanoid()
-      await sql`
-        INSERT INTO leaderboard_metrics (
-          id, upload_request_id, user_id, device_id,
-          period_type, period_start, period_end,
-          scope_type, tool, model,
-          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens,
-          total_tokens, total_cost_usd, pricing_version, has_unknown_cost, visibility
-        ) VALUES (
-          ${id}, ${s.upload_request_id}, ${s.user_id}, ${s.device_id},
-          ${s.period_type}, ${s.period_start}, ${s.period_end},
-          ${scopeType}, ${tool}, ${model},
-          ${inputTokens}, ${outputTokens}, ${cacheReadTokens}, ${cacheWriteTokens}, ${thinkingTokens},
-          ${totalTokens}, ${costUsd}, ${pricingVersion}, ${hasUnknownCost}, 'public'
-        )
-        ON CONFLICT (user_id, period_type, period_start, scope_type, COALESCE(tool, ''), COALESCE(model, ''))
-        DO UPDATE SET
-          total_tokens = EXCLUDED.total_tokens,
-          total_cost_usd = EXCLUDED.total_cost_usd,
-          pricing_version = EXCLUDED.pricing_version,
-          has_unknown_cost = EXCLUDED.has_unknown_cost,
-          updated_at = NOW()
-        WHERE leaderboard_metrics.visibility NOT IN ('hidden')
-      `
     }
 
+    await sql`
+      UPDATE leaderboard_metrics
+      SET total_cost_usd = ${costUsd},
+          pricing_version = ${pricingVersion},
+          has_unknown_cost = ${hasUnknownCost},
+          updated_at = NOW()
+      WHERE id = ${metric.id}
+        AND visibility != 'hidden'
+    `
+
     recomputed++
+  }
+
+  const aggregateRows = await sql`
+    SELECT id, scope_type, tool, model, upload_request_id, user_id, period_type, period_start
+    FROM leaderboard_metrics
+    WHERE visibility != 'hidden'
+      AND scope_type IN ('all', 'tool', 'model')
+      ${periodType ? sql`AND period_type = ${periodType}` : sql``}
+      ${periodStart ? sql`AND period_start >= ${periodStart}` : sql``}
+      ${periodEnd ? sql`AND period_end <= ${periodEnd}` : sql``}
+      ${userId ? sql`AND user_id = ${userId}` : sql``}
+  `
+
+  for (const row of aggregateRows) {
+    const metric = row as { id: string; scope_type: string; tool: string | null; model: string | null; upload_request_id: string; user_id: string; period_type: string; period_start: string }
+    let children
+    if (metric.scope_type === 'all') {
+      children = await sql`
+        SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
+        WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND visibility != 'hidden'
+      `
+    } else if (metric.scope_type === 'tool') {
+      children = await sql`
+        SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
+        WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND tool = ${metric.tool} AND visibility != 'hidden'
+      `
+    } else {
+      children = await sql`
+        SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
+        WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND model = ${metric.model} AND visibility != 'hidden'
+      `
+    }
+    const totalCost = children.reduce((sum, child) => sum + Number((child as { total_cost_usd: string | number }).total_cost_usd), 0)
+    const hasUnknownCost = children.some(child => Boolean((child as { has_unknown_cost: boolean }).has_unknown_cost))
+    await sql`
+      UPDATE leaderboard_metrics
+      SET total_cost_usd = ${totalCost}, pricing_version = ${pricingVersion}, has_unknown_cost = ${hasUnknownCost}, updated_at = NOW()
+      WHERE id = ${metric.id}
+    `
   }
 
   // Audit log

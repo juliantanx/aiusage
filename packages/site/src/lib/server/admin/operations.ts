@@ -1,6 +1,5 @@
 import { sql } from '../db/pool.js'
 import { nanoid } from 'nanoid'
-import { DEFAULT_PRICE_TABLE, type PriceEntry } from '@aiusage/core'
 import { invalidateLeaderboardCache } from '../leaderboard/query.js'
 
 export async function banUser(adminUserId: string, targetUserId: string, reason: string): Promise<void> {
@@ -150,111 +149,180 @@ async function logAdminAction(adminUserId: string, action: string, targetType: s
 
 // --- Pricing Management ---
 
-/** Get or create the single active price table, return its id */
-async function ensurePriceTable(adminUserId: string): Promise<string> {
-  const existing = await sql`SELECT id FROM official_price_tables WHERE status = 'published' LIMIT 1`
-  if (existing.length > 0) return (existing[0] as { id: string }).id
+const LITELLM_PRICING_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'
 
-  const tableId = nanoid()
-  await sql`
-    INSERT INTO official_price_tables (id, version, status, source, created_by, published_by, published_at)
-    VALUES (${tableId}, 'default', 'published', 'core_pricing', ${adminUserId}, ${adminUserId}, NOW())
-  `
-  return tableId
+interface LitellmEntry {
+  input_cost_per_token?: number
+  output_cost_per_token?: number
+  cache_read_input_token_cost?: number
+  cache_creation_input_token_cost?: number
+  input_cost_per_second?: number
+  output_cost_per_second?: number
+  litellm_provider?: string
+  mode?: string
 }
 
-/** Sync all entries from core DEFAULT_PRICE_TABLE into the active table. Upserts by model_key. */
-export async function syncPricingFromCore(adminUserId: string): Promise<{ added: number; updated: number }> {
-  const tableId = await ensurePriceTable(adminUserId)
-  let added = 0, updated = 0
+function normalizeModelKey(sourceModelId: string): string {
+  const slash = sourceModelId.indexOf('/')
+  return slash > 0 ? sourceModelId.slice(slash + 1) : sourceModelId
+}
+
+function aliasesFor(sourceModelId: string, modelKey: string): string[] {
+  const aliases = new Set([sourceModelId, modelKey])
+  if (modelKey.startsWith('claude-')) aliases.add(modelKey.replace(/-\d{8}$/, ''))
+  return [...aliases].filter(Boolean)
+}
+
+function parseLitellmEntry(sourceModelId: string, entry: LitellmEntry) {
+  if (entry.mode && entry.mode !== 'chat' && entry.mode !== 'completion' && entry.mode !== 'responses') return null
+  if (entry.input_cost_per_second != null || entry.output_cost_per_second != null) return null
+  if (typeof entry.input_cost_per_token !== 'number' || typeof entry.output_cost_per_token !== 'number') return null
+  const modelKey = normalizeModelKey(sourceModelId)
+  if (!modelKey || modelKey.includes('*')) return null
+  return {
+    modelKey,
+    provider: (entry.litellm_provider ?? '').trim().toLowerCase(),
+    input: entry.input_cost_per_token * 1_000_000,
+    output: entry.output_cost_per_token * 1_000_000,
+    cacheRead: typeof entry.cache_read_input_token_cost === 'number' ? entry.cache_read_input_token_cost * 1_000_000 : null,
+    cacheWrite: typeof entry.cache_creation_input_token_cost === 'number' ? entry.cache_creation_input_token_cost * 1_000_000 : null,
+  }
+}
+
+/** Sync builtin entries from LiteLLM. User-origin rows are preserved. */
+export async function syncPricingFromLitellm(adminUserId: string): Promise<{ added: number; updated: number; skipped: number; userPreserved: number }> {
+  const response = await fetch(LITELLM_PRICING_URL, { headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(`LiteLLM pricing fetch failed: HTTP ${response.status}`)
+  const data = await response.json() as Record<string, LitellmEntry>
+  let added = 0, updated = 0, skipped = 0, userPreserved = 0
 
   await sql.begin(async (tx) => {
-    for (const [modelKey, entry] of Object.entries(DEFAULT_PRICE_TABLE)) {
-      const existing = await tx`SELECT id FROM official_price_entries WHERE table_id = ${tableId} AND model_key = ${modelKey}`
-      if (existing.length > 0) {
+    for (const [sourceModelId, rawEntry] of Object.entries(data)) {
+      const entry = parseLitellmEntry(sourceModelId, rawEntry)
+      if (!entry) { skipped++; continue }
+
+      const existing = await tx`SELECT origin, input, output, cache_read, cache_write, currency FROM model_prices WHERE model_key = ${entry.modelKey}`
+      const row = existing[0] as { origin: string; input: string; output: string; cache_read: string | null; cache_write: string | null; currency: string } | undefined
+      if (row?.origin === 'user') { userPreserved++; continue }
+
+      if (!row) {
         await tx`
-          UPDATE official_price_entries
-          SET input = ${entry.input}, output = ${entry.output}, cache_read = ${entry.cacheRead ?? null}, cache_write = ${entry.cacheWrite ?? null}, currency = ${entry.currency ?? 'USD'}
-          WHERE table_id = ${tableId} AND model_key = ${modelKey}
-        `
-        updated++
-      } else {
-        await tx`
-          INSERT INTO official_price_entries (id, table_id, model_key, input, output, cache_read, cache_write, currency)
-          VALUES (${nanoid()}, ${tableId}, ${modelKey}, ${entry.input}, ${entry.output}, ${entry.cacheRead ?? null}, ${entry.cacheWrite ?? null}, ${entry.currency ?? 'USD'})
+          INSERT INTO model_prices (model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id, source_url, origin, status, last_synced_at)
+          VALUES (${entry.modelKey}, ${entry.provider}, ${entry.input}, ${entry.output}, ${entry.cacheRead}, ${entry.cacheWrite}, 'USD', 'litellm', ${sourceModelId}, ${LITELLM_PRICING_URL}, 'builtin', 'active', NOW())
         `
         added++
+      } else {
+        const changed = Number(row.input) !== entry.input || Number(row.output) !== entry.output ||
+          (row.cache_read == null ? null : Number(row.cache_read)) !== entry.cacheRead ||
+          (row.cache_write == null ? null : Number(row.cache_write)) !== entry.cacheWrite || row.currency !== 'USD'
+        await tx`
+          UPDATE model_prices
+          SET provider = ${entry.provider}, input = ${entry.input}, output = ${entry.output}, cache_read = ${entry.cacheRead}, cache_write = ${entry.cacheWrite},
+              currency = 'USD', source = 'litellm', source_model_id = ${sourceModelId}, source_url = ${LITELLM_PRICING_URL},
+              origin = 'builtin', status = 'active', last_synced_at = NOW(), updated_at = NOW()
+          WHERE model_key = ${entry.modelKey} AND origin = 'builtin'
+        `
+        if (changed) updated++
+      }
+
+      for (const alias of aliasesFor(sourceModelId, entry.modelKey)) {
+        await tx`
+          INSERT INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled)
+          VALUES (${alias}, ${entry.modelKey}, 'exact', ${entry.provider}, 100, 'litellm', 'builtin', TRUE)
+          ON CONFLICT (alias) DO UPDATE SET
+            model_key = CASE WHEN model_price_aliases.origin = 'builtin' THEN EXCLUDED.model_key ELSE model_price_aliases.model_key END,
+            provider = CASE WHEN model_price_aliases.origin = 'builtin' THEN EXCLUDED.provider ELSE model_price_aliases.provider END,
+            source = CASE WHEN model_price_aliases.origin = 'builtin' THEN EXCLUDED.source ELSE model_price_aliases.source END,
+            enabled = CASE WHEN model_price_aliases.origin = 'builtin' THEN TRUE ELSE model_price_aliases.enabled END,
+            updated_at = NOW()
+        `
       }
     }
   })
 
-  await logAdminAction(adminUserId, 'sync_pricing', 'official_price_tables', tableId, `Synced from core: ${added} added, ${updated} updated`)
-  return { added, updated }
+  await logAdminAction(adminUserId, 'sync_pricing', 'model_prices', 'current', `Synced from LiteLLM: ${added} added, ${updated} updated, ${skipped} skipped`)
+  return { added, updated, skipped, userPreserved }
 }
 
+export const syncPricingFromCore = syncPricingFromLitellm
+
 export async function getPriceEntries(adminUserId: string) {
-  const tableId = await ensurePriceTable(adminUserId)
   const entries = await sql`
-    SELECT e.*, COALESCE(u.usage_count, 0)::INTEGER AS usage_count
-    FROM official_price_entries e
+    SELECT p.model_key AS id, p.model_key, p.input, p.output, p.cache_read, p.cache_write, p.currency,
+           p.source, p.source_model_id, p.origin, p.last_synced_at, COALESCE(u.usage_count, 0)::INTEGER AS usage_count
+    FROM model_prices p
     LEFT JOIN (
       SELECT model, COUNT(*)::INTEGER AS usage_count
       FROM cloud_usage_records
       GROUP BY model
-    ) u ON u.model = e.model_key
-    WHERE e.table_id = ${tableId}
-    ORDER BY COALESCE(u.usage_count, 0) DESC, e.model_key ASC
+    ) u ON u.model = p.model_key
+    ORDER BY COALESCE(u.usage_count, 0) DESC, p.model_key ASC
   `
-  return { tableId, entries }
+  return { tableId: 'current', entries }
 }
 
 export async function updatePriceEntries(
   adminUserId: string,
   updates: Array<{ id: string; input: number; output: number; cache_read: number | null; cache_write: number | null }>
 ): Promise<void> {
-  const tableId = await ensurePriceTable(adminUserId)
   await sql.begin(async (tx) => {
     for (const u of updates) {
       await tx`
-        UPDATE official_price_entries
-        SET input = ${u.input}, output = ${u.output}, cache_read = ${u.cache_read}, cache_write = ${u.cache_write}
-        WHERE id = ${u.id} AND table_id = ${tableId}
+        UPDATE model_prices
+        SET input = ${u.input}, output = ${u.output}, cache_read = ${u.cache_read}, cache_write = ${u.cache_write}, origin = 'user', source = 'manual', updated_at = NOW()
+        WHERE model_key = ${u.id}
       `
     }
   })
-  await logAdminAction(adminUserId, 'update_price_entries', 'official_price_tables', tableId, `Updated ${updates.length} entries`)
+  await logAdminAction(adminUserId, 'update_price_entries', 'model_prices', 'current', `Updated ${updates.length} entries`)
 }
 
 export async function addPriceEntry(
   adminUserId: string,
   entry: { model_key: string; input: number; output: number; cache_read: number | null; cache_write: number | null; currency: string }
 ): Promise<string> {
-  const tableId = await ensurePriceTable(adminUserId)
-  const id = nanoid()
+  const id = entry.model_key
   await sql`
-    INSERT INTO official_price_entries (id, table_id, model_key, input, output, cache_read, cache_write, currency)
-    VALUES (${id}, ${tableId}, ${entry.model_key}, ${entry.input}, ${entry.output}, ${entry.cache_read}, ${entry.cache_write}, ${entry.currency})
+    INSERT INTO model_prices (model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id, origin, status)
+    VALUES (${entry.model_key}, '', ${entry.input}, ${entry.output}, ${entry.cache_read}, ${entry.cache_write}, ${entry.currency}, 'manual', ${entry.model_key}, 'user', 'active')
+    ON CONFLICT (model_key) DO UPDATE SET
+      input = EXCLUDED.input, output = EXCLUDED.output, cache_read = EXCLUDED.cache_read, cache_write = EXCLUDED.cache_write,
+      currency = EXCLUDED.currency, source = 'manual', source_model_id = EXCLUDED.source_model_id, origin = 'user', status = 'active', updated_at = NOW()
   `
-  await logAdminAction(adminUserId, 'add_price_entry', 'official_price_tables', tableId, `Added model ${entry.model_key}`)
+  await sql`
+    INSERT INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled)
+    VALUES (${entry.model_key}, ${entry.model_key}, 'exact', '', 200, 'manual', 'user', TRUE)
+    ON CONFLICT (alias) DO UPDATE SET model_key = EXCLUDED.model_key, priority = 200, source = 'manual', origin = 'user', enabled = TRUE, updated_at = NOW()
+  `
+  await logAdminAction(adminUserId, 'add_price_entry', 'model_prices', id, `Added model ${entry.model_key}`)
   return id
 }
 
 export async function deletePriceEntry(adminUserId: string, entryId: string, modelKey: string): Promise<void> {
-  const tableId = await ensurePriceTable(adminUserId)
-  await sql`DELETE FROM official_price_entries WHERE id = ${entryId} AND table_id = ${tableId}`
-  await logAdminAction(adminUserId, 'delete_price_entry', 'official_price_tables', tableId, `Deleted model ${modelKey}`)
+  await sql`DELETE FROM model_price_aliases WHERE model_key = ${modelKey}`
+  await sql`DELETE FROM model_prices WHERE model_key = ${entryId}`
+  await logAdminAction(adminUserId, 'delete_price_entry', 'model_prices', entryId, `Deleted model ${modelKey}`)
 }
 
 export async function getPublicPriceEntries() {
+  const entries = await sql`
+    SELECT model_key, input, output, cache_read, cache_write, currency, source, source_model_id, origin, last_synced_at
+    FROM model_prices
+    WHERE status = 'active'
+    ORDER BY model_key ASC
+  `
+  if (entries.length > 0) return { entries }
+
   const existing = await sql`SELECT id FROM official_price_tables WHERE status = 'published' LIMIT 1`
   if (existing.length === 0) return { entries: [] }
   const tableId = (existing[0] as { id: string }).id
 
-  const entries = await sql`
-    SELECT e.model_key, e.input, e.output, e.cache_read, e.cache_write, e.currency
+  const legacyEntries = await sql`
+    SELECT e.model_key, e.input, e.output, e.cache_read, e.cache_write, e.currency,
+           'legacy' AS source, e.model_key AS source_model_id, 'builtin' AS origin, NULL AS last_synced_at
     FROM official_price_entries e
     WHERE e.table_id = ${tableId}
     ORDER BY e.model_key ASC
   `
-  return { entries }
+  return { entries: legacyEntries }
 }

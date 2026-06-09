@@ -10,10 +10,24 @@
   let currency = 'all'
 
   $: filtered = entries.filter(e => {
-    if (search && !e.model_key.toLowerCase().includes(search.toLowerCase())) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!e.model_key.toLowerCase().includes(q) && !(e.source_model_id || '').toLowerCase().includes(q)) return false
+    }
     if (currency !== 'all' && e.currency !== currency) return false
     return true
   })
+
+  function originLabel(entry) {
+    return entry.origin === 'user' ? (zh ? '自定义' : 'Custom') : (zh ? '内置' : 'Builtin')
+  }
+
+  function sourceLabel(entry) {
+    if (entry.source === 'manual') return zh ? '手动' : 'Manual'
+    if (entry.source === 'litellm') return 'LiteLLM'
+    if (entry.source === 'legacy') return zh ? '旧表' : 'Legacy'
+    return entry.source || '-'
+  }
 
   function formatPrice(v) {
     if (v == null) return '-'
@@ -39,7 +53,7 @@
 <div class="pricing-page">
   <div class="page-header">
     <h1>{zh ? '模型价格表' : 'Model Pricing'}</h1>
-    <p class="page-desc">{zh ? 'AIUsage 使用的官方模型价格，用于费用估算和排行榜计算。' : 'Official model prices used by AIUsage for cost estimation and leaderboard calculations.'}</p>
+    <p class="page-desc">{zh ? 'AIUsage 当前使用的模型价格估算，用于费用估算和排行榜计算。' : 'Current model price estimates used by AIUsage for cost estimation and leaderboard calculations.'}</p>
   </div>
 
   {#if loading}
@@ -76,17 +90,27 @@
             <th class="col-price">{zh ? '缓存读取' : 'Cache Read'}</th>
             <th class="col-price">{zh ? '缓存写入' : 'Cache Write'}</th>
             <th class="col-currency">{zh ? '货币' : 'Currency'}</th>
+            <th class="col-source">{zh ? '来源' : 'Source'}</th>
           </tr>
         </thead>
         <tbody>
           {#each filtered as entry}
             <tr>
-              <td class="mono col-model">{entry.model_key}</td>
+              <td class="col-model">
+                <div class="model-cell">
+                  <span class="mono model-key">{entry.model_key}</span>
+                  <span class="badge" class:badge-custom={entry.origin === 'user'}>{originLabel(entry)}</span>
+                </div>
+                {#if entry.source_model_id && entry.source_model_id !== entry.model_key}
+                  <div class="source-id mono">{entry.source_model_id}</div>
+                {/if}
+              </td>
               <td class="col-price mono">{formatPrice(entry.input)}</td>
               <td class="col-price mono">{formatPrice(entry.output)}</td>
               <td class="col-price mono">{formatPrice(entry.cache_read)}</td>
               <td class="col-price mono">{formatPrice(entry.cache_write)}</td>
               <td class="col-currency text-muted">{entry.currency || 'USD'}</td>
+              <td class="col-source text-muted">{sourceLabel(entry)}</td>
             </tr>
           {/each}
         </tbody>
@@ -188,9 +212,43 @@
   }
   .price-table tbody tr:last-child td { border-bottom: none; }
   .price-table tbody tr:hover { background: var(--hover); }
-  .col-model { min-width: 200px; }
+  .col-model { min-width: 240px; }
   .col-price { min-width: 80px; text-align: right; }
   .col-currency { min-width: 60px; }
+  .col-source { min-width: 80px; text-align: center; }
+  .model-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+  .model-key {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .source-id {
+    margin-top: 0.125rem;
+    color: var(--text-secondary);
+    font-size: 0.6875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono, monospace);
+    font-size: 0.625rem;
+    font-weight: 600;
+    background: var(--surface);
+    color: var(--text-secondary);
+    padding: 0.125rem 0.35rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .badge-custom {
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
   .mono { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 0.8125rem; }
   .text-muted { color: var(--text-secondary); }
   .empty {

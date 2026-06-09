@@ -12,7 +12,7 @@ import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
 import { getSyncTarget } from '../sync/target.js'
 import { RuntimeSettingsController } from '../runtime/settings-controller.js'
-import { setPriceOverride, fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
+import { fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
 import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
@@ -37,13 +37,7 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 export function serve(options: ServeOptions): void {
-  // Restore persisted price overrides
   const config = loadConfig()
-  if (config?.priceOverrides) {
-    for (const [model, entry] of Object.entries(config.priceOverrides)) {
-      setPriceOverride(model, entry)
-    }
-  }
 
   // Initialize exchange rate: fetch if cache missing or expired (non-blocking)
   if (config == null || config.exchangeRate == null) {

@@ -8,6 +8,7 @@ import { migrateV6 } from './v6.js'
 import { migrateV7 } from './v7.js'
 import { migrateV8 } from './v8.js'
 import { migrateV9 } from './v9.js'
+import { migrateV10 } from './v10.js'
 import { createSchemaVersionTable } from '../schema.js'
 
 const MIGRATIONS = [
@@ -20,6 +21,7 @@ const MIGRATIONS = [
   { version: 7, migrate: migrateV7 },
   { version: 8, migrate: migrateV8 },
   { version: 9, migrate: migrateV9 },
+  { version: 10, migrate: migrateV10 },
 ]
 
 export function runMigrations(db: Database.Database): void {

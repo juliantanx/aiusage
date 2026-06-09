@@ -173,8 +173,7 @@
       })
       if (res.ok) {
         actionFeedback = zh ? `已保存 ${updates.length} 条价格` : `Saved ${updates.length} price(s)`
-        snapshotPriceEntries()
-        priceEntries = [...priceEntries]
+        await loadPricing()
       } else {
         const data = await res.json().catch(() => ({}))
         actionError = data.error || (zh ? '保存失败' : 'Save failed')
@@ -233,9 +232,23 @@
 
   $: filteredEntries = priceEntries.filter(e => {
     if (priceCurrency !== 'all' && (e.currency || 'USD') !== priceCurrency) return false
-    if (priceSearch.trim() && !e.model_key.toLowerCase().includes(priceSearch.toLowerCase())) return false
+    if (priceSearch.trim()) {
+      const q = priceSearch.toLowerCase()
+      if (!e.model_key.toLowerCase().includes(q) && !(e.source_model_id || '').toLowerCase().includes(q)) return false
+    }
     return true
   })
+
+  function originLabel(entry) {
+    return entry.origin === 'user' ? (zh ? '自定义' : 'Custom') : (zh ? '内置' : 'Builtin')
+  }
+
+  function sourceLabel(entry) {
+    if (entry.source === 'manual') return zh ? '手动' : 'Manual'
+    if (entry.source === 'litellm') return 'LiteLLM'
+    if (entry.source === 'legacy') return zh ? '旧表' : 'Legacy'
+    return entry.source || '-'
+  }
 
   function formatPrice(v) {
     if (v === null || v === undefined) return ''
@@ -458,9 +471,32 @@
 
   // Pricing actions
   async function syncPricing() {
-    if (!confirm(zh ? '从 Core 同步最新价格？已有模型会更新，新模型会添加。' : 'Sync latest prices from Core? Existing models will be updated, new ones added.')) return
-    if (await doAction('/api/admin/pricing/sync', {}, zh ? '价格已同步' : 'Prices synced'))
-      await loadPricing()
+    if (!confirm(zh ? '从 LiteLLM 同步当前价格？内置模型会更新，用户自定义价格会保留。' : 'Sync current prices from LiteLLM? Builtin models will update and custom prices will be preserved.')) return
+    if (actionLoading) return
+    actionLoading = '/api/admin/pricing/sync'
+    actionError = ''
+    actionFeedback = ''
+    try {
+      const res = await fetch('/api/admin/pricing/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
+        body: JSON.stringify({})
+      })
+      if (res.ok) {
+        const data = await res.json()
+        actionFeedback = zh
+          ? `价格已同步：新增 ${data.added ?? 0}，更新 ${data.updated ?? 0}，保留自定义 ${data.userPreserved ?? 0}`
+          : `Prices synced: ${data.added ?? 0} added, ${data.updated ?? 0} updated, ${data.userPreserved ?? 0} custom preserved`
+        await loadPricing()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        actionError = data.error || (zh ? '同步失败' : 'Sync failed')
+      }
+    } catch {
+      actionError = zh ? '网络错误' : 'Network error'
+    } finally {
+      actionLoading = ''
+    }
   }
   async function recomputeLeaderboard() {
     if (!confirm(zh ? '确认使用当前价格表重算全部排行榜指标？' : 'Recompute all leaderboard metrics using the current price table?')) return
@@ -661,8 +697,8 @@
           {:else if priceEntries.length === 0}
             <div class="empty">
               <p class="empty-title">{zh ? '暂无价格数据' : 'No pricing data'}</p>
-              <p class="empty-desc">{zh ? '从 Core 同步以导入模型价格。' : 'Sync from Core to import model prices.'}</p>
-              <button class="btn btn-primary" style="margin-top: 0.75rem" on:click={syncPricing} disabled={!!actionLoading}>{zh ? '从 Core 同步' : 'Sync from Core'}</button>
+              <p class="empty-desc">{zh ? '从 LiteLLM 同步以导入当前模型价格。' : 'Sync from LiteLLM to import current model prices.'}</p>
+              <button class="btn btn-primary" style="margin-top: 0.75rem" on:click={syncPricing} disabled={!!actionLoading}>{zh ? '从 LiteLLM 同步' : 'Sync LiteLLM'}</button>
             </div>
           {:else}
             <div class="toolbar">
@@ -687,7 +723,7 @@
                 {/if}
                 <button class="btn btn-ghost" on:click={() => { addingModel = !addingModel; if (addingModel) { newModel = { ...newModel, currency: priceCurrency === 'all' ? 'USD' : priceCurrency } } }}>{addingModel ? (zh ? '取消' : 'Cancel') : (zh ? '添加模型' : 'Add model')}</button>
                 <button class="btn btn-ghost" on:click={recomputeLeaderboard} disabled={!!actionLoading}>{zh ? '重算排行榜' : 'Recompute'}</button>
-                <button class="btn btn-ghost" on:click={syncPricing} disabled={!!actionLoading}>{zh ? '从 Core 同步' : 'Sync from Core'}</button>
+                <button class="btn btn-ghost" on:click={syncPricing} disabled={!!actionLoading}>{zh ? '同步 LiteLLM' : 'Sync LiteLLM'}</button>
               </div>
             </div>
 
@@ -716,18 +752,28 @@
                     <th class="col-price">{zh ? '缓存读取' : 'Cache Read'}</th>
                     <th class="col-price">{zh ? '缓存写入' : 'Cache Write'}</th>
                     <th class="col-currency">{zh ? '货币' : 'Currency'}</th>
+                    <th class="col-source">{zh ? '来源' : 'Source'}</th>
                     <th class="col-del"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {#each filteredEntries as entry (entry.id)}
                     <tr class:row-dirty={isEntryDirty(entry)}>
-                      <td class="mono col-model">{entry.model_key}</td>
+                      <td class="col-model">
+                        <div class="model-cell">
+                          <span class="mono model-key">{entry.model_key}</span>
+                          <span class="badge" class:badge-success={entry.origin === 'user'}>{originLabel(entry)}</span>
+                        </div>
+                        {#if entry.source_model_id && entry.source_model_id !== entry.model_key}
+                          <div class="source-id mono">{entry.source_model_id}</div>
+                        {/if}
+                      </td>
                       <td class="col-price"><input type="number" class="cell-input" value={formatPrice(entry.input)} on:change={(e) => updateEntry(entry.id, 'input', e.target.value)} step="0.01" /></td>
                       <td class="col-price"><input type="number" class="cell-input" value={formatPrice(entry.output)} on:change={(e) => updateEntry(entry.id, 'output', e.target.value)} step="0.01" /></td>
                       <td class="col-price"><input type="number" class="cell-input" value={formatPrice(entry.cache_read)} on:change={(e) => updateEntry(entry.id, 'cache_read', e.target.value)} step="0.001" placeholder="-" /></td>
                       <td class="col-price"><input type="number" class="cell-input" value={formatPrice(entry.cache_write)} on:change={(e) => updateEntry(entry.id, 'cache_write', e.target.value)} step="0.001" placeholder="-" /></td>
                       <td class="col-currency text-muted">{entry.currency || 'USD'}</td>
+                      <td class="col-source text-muted">{sourceLabel(entry)}</td>
                       <td class="col-del"><button class="btn-delete" on:click={() => deleteEntry(entry)} title={zh ? '删除' : 'Delete'}>&times;</button></td>
                     </tr>
                   {/each}
@@ -1139,12 +1185,6 @@
     background: oklch(0.55 0.22 25 / 0.08);
   }
 
-  .badge-github {
-    color: oklch(0.72 0.02 250);
-    background: oklch(0.72 0.02 250 / 0.08);
-    text-transform: none;
-  }
-
   .badge-star {
     display: inline-flex;
     align-items: center;
@@ -1297,6 +1337,26 @@
     text-align: left;
   }
 
+  .model-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+
+  .model-key {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .source-id {
+    margin-top: 0.125rem;
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .price-table .col-price {
     width: 120px;
     text-align: right;
@@ -1304,6 +1364,11 @@
 
   .price-table .col-currency {
     width: 56px;
+    text-align: center;
+  }
+
+  .price-table .col-source {
+    width: 84px;
     text-align: center;
   }
 

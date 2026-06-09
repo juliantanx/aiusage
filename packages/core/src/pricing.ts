@@ -8,7 +8,7 @@ export interface PriceEntry {
   currency?: 'CNY' | 'USD'  // defaults to 'USD' if omitted
 }
 
-export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
+const LEGACY_PRICE_TABLE: Record<string, PriceEntry> = {
   // Anthropic — https://platform.claude.com/docs/en/about-claude/pricing
   'claude-opus-4-8':       { input: 5,     output: 25,   cacheRead: 0.5,    cacheWrite: 6.25 },
   'claude-opus-4-7':       { input: 5,     output: 25,   cacheRead: 0.5,    cacheWrite: 6.25 },
@@ -190,24 +190,47 @@ export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {
   'qoder-lite':            { input: 0,     output: 0,     cacheRead: 0,     cacheWrite: 0 },
 }
 
-// Runtime-mutable price table (user overrides merge with defaults)
+// Runtime-mutable price table. Hosts such as the CLI and site load this from
+// their pricing registry database instead of relying on package-bundled data.
+let basePriceTable: Record<string, PriceEntry> = {}
 let userOverrides: Record<string, PriceEntry> = {}
 
-export let PRICE_TABLE: Record<string, PriceEntry> = { ...DEFAULT_PRICE_TABLE }
+export const DEFAULT_PRICE_TABLE: Record<string, PriceEntry> = {}
+
+export let PRICE_TABLE: Record<string, PriceEntry> = {}
 
 export function getPriceTable(): Record<string, PriceEntry> {
-  return { ...DEFAULT_PRICE_TABLE, ...userOverrides }
+  return { ...basePriceTable, ...userOverrides }
+}
+
+export function setBasePriceTable(table: Record<string, PriceEntry>): void {
+  basePriceTable = { ...table }
+  PRICE_TABLE = { ...basePriceTable, ...userOverrides }
+}
+
+export function setRuntimePriceTable(base: Record<string, PriceEntry>, overrides: Record<string, PriceEntry> = {}): void {
+  basePriceTable = { ...base }
+  userOverrides = { ...overrides }
+  PRICE_TABLE = { ...basePriceTable, ...userOverrides }
+}
+
+export function getBasePriceTable(): Record<string, PriceEntry> {
+  return { ...basePriceTable }
+}
+
+export function getBundledPriceSeed(): Record<string, PriceEntry> {
+  return { ...LEGACY_PRICE_TABLE }
 }
 
 export function setPriceOverride(model: string, entry: PriceEntry): void {
   userOverrides = { ...userOverrides, [model]: entry }
-  PRICE_TABLE = { ...DEFAULT_PRICE_TABLE, ...userOverrides }
+  PRICE_TABLE = { ...basePriceTable, ...userOverrides }
 }
 
 export function removePriceOverride(model: string): void {
   const { [model]: _, ...rest } = userOverrides
   userOverrides = rest
-  PRICE_TABLE = { ...DEFAULT_PRICE_TABLE, ...userOverrides }
+  PRICE_TABLE = { ...basePriceTable, ...userOverrides }
 }
 
 export function getUserOverrides(): Record<string, PriceEntry> {
@@ -234,8 +257,10 @@ export function resolvePrice(model: string): PriceEntry | undefined {
 }
 
 export function resolveDefaultPrice(model: string): PriceEntry | undefined {
-  return resolvePriceFromTable(model, DEFAULT_PRICE_TABLE)
+  return resolvePriceFromTable(model, LEGACY_PRICE_TABLE)
 }
+
+export { resolvePriceFromTable }
 
 function resolvePriceFromTable(model: string, table: Record<string, PriceEntry>): PriceEntry | undefined {
   // Exact match
