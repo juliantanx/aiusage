@@ -14,6 +14,7 @@
   let viewCurrency = $displayCurrency || 'USD'
   let syncingPrices = false
   let syncSummary = null
+  let registry = null
 
   onDestroy(() => { if (doneTimer) clearTimeout(doneTimer) })
 
@@ -24,7 +25,8 @@
     error = null
     try {
       const data = await fetchPricing()
-      models = data.models
+      models = data.models || []
+      registry = data.registry || null
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -127,6 +129,7 @@
       .replace('{updated}', syncSummary.updated ?? 0)
       .replace('{unresolved}', syncSummary.dryRun?.unresolved?.length ?? 0)
     : ''
+  $: pricingRegistryEmpty = !loading && !error && registry?.totalPrices === 0
 </script>
 
 <svelte:head>
@@ -159,6 +162,16 @@
   <div class="state-msg">{$t('common.loading')}</div>
 {:else if error}
   <div class="state-msg error">{error}</div>
+{:else if pricingRegistryEmpty}
+  <section class="empty-pricing">
+    <div class="empty-copy">
+      <h2>{$t('pricing.emptyTitle')}</h2>
+      <p>{$t('pricing.emptyBody')}</p>
+    </div>
+    <button class="btn-sm primary" on:click={syncPrices} disabled={syncingPrices}>
+      {syncingPrices ? $t('pricing.syncingPrices') : $t('pricing.emptySync')}
+    </button>
+  </section>
 {:else}
   <div class="grid">
     {#each models as m, i}
@@ -307,6 +320,36 @@
     gap: 0.75rem;
   }
 
+  .empty-pricing {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+  .empty-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 64ch;
+  }
+  .empty-copy h2 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .empty-copy p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
   .card {
     background: var(--surface);
     border-radius: 8px;
@@ -436,6 +479,7 @@
   .btn-sm:disabled { opacity: 0.55; cursor: not-allowed; }
   .btn-sm:disabled:hover { border-color: var(--border-subtle); color: var(--text); }
   .btn-sm.save { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .btn-sm.reset { border-color: #f87171; color: #f87171; }
   .sync-btn { height: 32px; }
 
@@ -473,4 +517,13 @@
   .state-msg { color: var(--text-muted); padding: 2rem; text-align: center; }
   .state-msg.error { color: var(--rose); }
   .mono { font-weight: 500; }
+
+  @media (max-width: 640px) {
+    .header-row,
+    .empty-pricing {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .header-right { flex-wrap: wrap; }
+  }
 </style>

@@ -166,6 +166,32 @@ describe('API Server', () => {
     const data = await response.json()
     expect(data.data).toEqual([])
   })
+
+  it('returns pricing registry summary for an empty local registry', async () => {
+    insertTestRecord(db)
+
+    const response = await fetch(`${baseUrl}/api/pricing`)
+    expect(response.ok).toBe(true)
+    const data = await response.json()
+
+    expect(data.models).toHaveLength(1)
+    expect(data.models[0]).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      price: null,
+      isBuiltin: false,
+      isOverride: false,
+    })
+    expect(data.registry).toEqual({
+      totalPrices: 0,
+      builtinPrices: 0,
+      userPrices: 0,
+      activeAliases: 0,
+      lastSyncedAt: null,
+      localModels: 1,
+      matchedLocalModels: 0,
+      unresolvedLocalModels: ['claude-sonnet-4-6'],
+    })
+  })
 })
 
 describe('Device filtering', () => {

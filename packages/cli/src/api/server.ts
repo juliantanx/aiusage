@@ -29,7 +29,7 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
-import { listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, syncPricingFromLitellm } from '../pricing-registry.js'
+import { getPricingRegistrySummary, listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
@@ -1131,7 +1131,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       if (url.pathname === '/api/pricing') {
         // GET: list all prices from the local pricing registry plus models from DB.
         if (req.method === 'GET') {
-          json(res, { models: listPricingModels(db) })
+          json(res, { models: listPricingModels(db), registry: getPricingRegistrySummary(db) })
           return
         }
         // PUT: set price override

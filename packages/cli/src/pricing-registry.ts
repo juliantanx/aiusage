@@ -78,6 +78,17 @@ export interface PricingModelView {
   matchedBy: string | null
 }
 
+export interface PricingRegistrySummary {
+  totalPrices: number
+  builtinPrices: number
+  userPrices: number
+  activeAliases: number
+  lastSyncedAt: number | null
+  localModels: number
+  matchedLocalModels: number
+  unresolvedLocalModels: string[]
+}
+
 function rowToPrice(row: Pick<ModelPriceRow, 'input' | 'output' | 'cache_read' | 'cache_write' | 'currency'>): PriceEntry {
   return {
     input: Number(row.input),
@@ -393,6 +404,36 @@ export function listPricingModels(db: Database.Database): PricingModelView[] {
       matchedBy: match.matchedBy,
     }
   })
+}
+
+export function getPricingRegistrySummary(db: Database.Database): PricingRegistrySummary {
+  const priceCounts = db.prepare(`
+    SELECT
+      COUNT(*) AS totalPrices,
+      SUM(CASE WHEN origin = 'builtin' THEN 1 ELSE 0 END) AS builtinPrices,
+      SUM(CASE WHEN origin = 'user' THEN 1 ELSE 0 END) AS userPrices,
+      MAX(last_synced_at) AS lastSyncedAt
+    FROM model_prices
+    WHERE status = 'active'
+  `).get() as { totalPrices: number; builtinPrices: number | null; userPrices: number | null; lastSyncedAt: number | null }
+
+  const aliasCounts = db.prepare(`
+    SELECT COUNT(*) AS activeAliases
+    FROM model_price_aliases
+    WHERE enabled = 1
+  `).get() as { activeAliases: number }
+
+  const dryRun = dryRunLocalModels(db)
+  return {
+    totalPrices: Number(priceCounts.totalPrices ?? 0),
+    builtinPrices: Number(priceCounts.builtinPrices ?? 0),
+    userPrices: Number(priceCounts.userPrices ?? 0),
+    activeAliases: Number(aliasCounts.activeAliases ?? 0),
+    lastSyncedAt: priceCounts.lastSyncedAt == null ? null : Number(priceCounts.lastSyncedAt),
+    localModels: dryRun.totalModels,
+    matchedLocalModels: dryRun.matched,
+    unresolvedLocalModels: dryRun.unresolved,
+  }
 }
 
 export function dryRunLocalModels(db: Database.Database): PricingSyncSummary['dryRun'] {
