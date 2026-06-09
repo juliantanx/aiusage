@@ -145,8 +145,8 @@ export class SyncOrchestrator {
           if (typeof record.updatedAt === 'string') {
             (record as any).updatedAt = new Date(record.updatedAt).getTime()
           }
-          insertSyncedRecord(this.db, record)
-          totalPulled++
+          const changed = insertSyncedRecord(this.db, record)
+          if (changed) totalPulled++
         } catch {}
       }
 
