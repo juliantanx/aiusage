@@ -147,6 +147,16 @@ export async function fetchSyncStatus() {
   return apiFetch('/api/sync')
 }
 
+export async function fetchCloudSyncStatus(siteUrl) {
+  try {
+    const response = await fetch(`${siteUrl}/api/cli/sync/status`)
+    if (!response.ok) return { enabled: false }
+    return response.json()
+  } catch {
+    return { enabled: false }
+  }
+}
+
 export async function fetchConfig() {
   return apiFetch('/api/config')
 }

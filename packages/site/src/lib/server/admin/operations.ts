@@ -16,11 +16,25 @@ export async function unbanUser(adminUserId: string, targetUserId: string): Prom
 }
 
 export async function approveSnapshot(adminUserId: string, snapshotId: string, note?: string): Promise<void> {
-  const snapshots = await sql`SELECT * FROM upload_snapshots WHERE id = ${snapshotId}`
-  const snap = snapshots[0] as { id: string } | undefined
+  const snapshots = await sql`
+    SELECT id, upload_request_id, user_id, period_type, period_start
+    FROM upload_snapshots WHERE id = ${snapshotId}
+  `
+  const snap = snapshots[0] as { id: string; upload_request_id: string; user_id: string; period_type: string; period_start: string } | undefined
   if (!snap) throw new Error('Snapshot not found')
 
   await sql`UPDATE upload_snapshots SET review_status = 'approved', reviewed_by = ${adminUserId}, reviewed_at = NOW(), review_note = ${note || null} WHERE id = ${snapshotId}`
+
+  // Restore leaderboard visibility for approved snapshot
+  await sql`
+    UPDATE leaderboard_metrics
+    SET visibility = 'public', updated_at = NOW()
+    WHERE upload_request_id = ${snap.upload_request_id}
+      AND user_id = ${snap.user_id}
+      AND period_type = ${snap.period_type}::period_type
+      AND period_start = ${snap.period_start}
+  `
+
   await logAdminAction(adminUserId, 'approve_snapshot', 'upload_snapshots', snapshotId, note || 'Snapshot approved')
   invalidateLeaderboardCache()
 }
@@ -88,7 +102,7 @@ export async function restoreLeaderboardEntry(adminUserId: string, entryId: stri
 
 export async function setCloudSync(adminUserId: string, targetUserId: string, enabled: boolean): Promise<void> {
   await sql`UPDATE users SET cloud_sync_enabled = ${enabled}, updated_at = NOW() WHERE id = ${targetUserId}`
-  await logAdminAction(adminUserId, 'set_cloud_sync', 'users', targetUserId, `Cloud sync ${enabled ? 'enabled' : 'disabled'}`)
+  await logAdminAction(adminUserId, 'set_cloud_sync', 'users', targetUserId, enabled ? 'Cloud sync disabled for user' : 'Cloud sync re-enabled for user')
 }
 
 export async function setUserRole(adminUserId: string, targetUserId: string, role: string): Promise<void> {
@@ -105,6 +119,7 @@ export async function getFlaggedSnapshots(limit = 50, offset = 0) {
     JOIN users u ON u.id = s.user_id
     JOIN user_devices d ON d.id = s.device_id
     WHERE s.status = 'flagged'
+      AND s.review_status IS NULL
     ORDER BY s.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `
@@ -228,4 +243,18 @@ export async function deletePriceEntry(adminUserId: string, entryId: string, mod
   const tableId = await ensurePriceTable(adminUserId)
   await sql`DELETE FROM official_price_entries WHERE id = ${entryId} AND table_id = ${tableId}`
   await logAdminAction(adminUserId, 'delete_price_entry', 'official_price_tables', tableId, `Deleted model ${modelKey}`)
+}
+
+export async function getPublicPriceEntries() {
+  const existing = await sql`SELECT id FROM official_price_tables WHERE status = 'published' LIMIT 1`
+  if (existing.length === 0) return { entries: [] }
+  const tableId = (existing[0] as { id: string }).id
+
+  const entries = await sql`
+    SELECT e.model_key, e.input, e.output, e.cache_read, e.cache_write, e.currency
+    FROM official_price_entries e
+    WHERE e.table_id = ${tableId}
+    ORDER BY e.model_key ASC
+  `
+  return { entries }
 }

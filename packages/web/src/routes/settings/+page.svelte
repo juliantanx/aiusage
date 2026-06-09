@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, importKelivoBackup, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync } from '$lib/api.js'
+  import { fetchConfig, saveConfig, fetchCredential, fetchDetectedTools, importKelivoBackup, notifySettingsUpdated, refreshExchangeRate, fetchSyncStatus, triggerSync, fetchCloudSyncStatus } from '$lib/api.js'
   import { displayCurrency, exchangeRate } from '$lib/stores.js'
   import { splitSettingsSources } from '$lib/settings-sources.js'
 
@@ -40,6 +40,7 @@
   // Sync status
   let syncStatusData = null
   let syncRunning = false
+  let cloudSyncAvailable = true
   let syncPollTimer = null
 
   $: currentSyncTarget = syncData.backend === 'cloud'
@@ -233,6 +234,9 @@
       }
 
       loadSyncStatusData()
+      if (cfg.siteUrl) {
+        fetchCloudSyncStatus(cfg.siteUrl).then(s => { cloudSyncAvailable = s.enabled })
+      }
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -736,7 +740,9 @@
           <label class="field-label" for="field-sync-backend">{$t('settings.syncBackend')}</label>
           <select id="field-sync-backend" bind:value={syncData.backend} class="field-input" on:change={onBackendChange}>
             <option value="">{$t('settings.syncBackendNone')}</option>
-            <option value="cloud">AIUsage Cloud</option>
+            {#if cloudSyncAvailable}
+              <option value="cloud">AIUsage Cloud</option>
+            {/if}
             <option value="github">GitHub</option>
             <option value="s3">S3 / Compatible</option>
           </select>
@@ -754,6 +760,14 @@
         </div>
 
         {#if syncData.backend === 'cloud'}
+          {#if !cloudSyncAvailable}
+            <div class="field full">
+              <div class="cloud-status">
+                <span class="status-dot err"></span>
+                <span>{$t('settings.cloudUnavailable')}</span>
+              </div>
+            </div>
+          {:else}
           <div class="field full">
             <div class="cloud-setup">
               <div class="cloud-setup-title">{$t('settings.syncCloudSetup')}</div>
@@ -786,6 +800,7 @@
               {/if}
             </div>
           </div>
+          {/if}
         {/if}
 
         {#if syncData.backend === 'github'}
@@ -944,7 +959,11 @@
               <div class="sync-status-item full">
                 <span class="sync-status-label">{$t('settings.syncError')}</span>
                 <span class="sync-status-value err">
-                  {#if displayedSyncStatus.lastSyncError.includes('star') || displayedSyncStatus.lastSyncError.includes('Star') || displayedSyncStatus.lastSyncError.includes('STAR_REQUIRED')}
+                  {#if displayedSyncStatus.lastSyncError.includes('CLOUD_SYNC_DISABLED') || displayedSyncStatus.lastSyncError.includes('currently unavailable')}
+                    {$t('settings.cloudUnavailable')}
+                  {:else if displayedSyncStatus.lastSyncError.includes('USER_CLOUD_BANNED') || displayedSyncStatus.lastSyncError.includes('disabled by an administrator')}
+                    {$t('settings.cloudBanned')}
+                  {:else if displayedSyncStatus.lastSyncError.includes('star') || displayedSyncStatus.lastSyncError.includes('Star') || displayedSyncStatus.lastSyncError.includes('STAR_REQUIRED')}
                     {$t('settings.syncStarRequired')}
                     <a href="https://github.com/juliantanx/aiusage" target="_blank" rel="noopener noreferrer" class="cloud-step-link">{$t('settings.syncCloudStep2')}</a>
                   {:else if displayedSyncStatus.lastSyncError.includes('bind') || displayedSyncStatus.lastSyncError.includes('GitHub') || displayedSyncStatus.lastSyncError.includes('GITHUB_BINDING')}

@@ -94,6 +94,7 @@ export const CFG = {
   SYNC_PULL_MAX_LIMIT:    'sync.pull_max_limit',
 
   // ── Cloud Sync Gating ──
+  CLOUD_SYNC_GLOBALLY_ENABLED: 'cloud.sync_globally_enabled',
   CLOUD_STAR_CACHE_TTL_HOURS: 'cloud.star_cache_ttl_hours',
 
   // ── Upload ──
@@ -112,6 +113,10 @@ export const CFG = {
   RISK_TOKEN_SPIKE_MULTIPLIER:'risk.token_spike_multiplier',
   RISK_TOKEN_SPIKE_MIN_AVG:   'risk.token_spike_min_avg',
   RISK_TOKEN_SPIKE_LOOKBACK_DAYS:'risk.token_spike_lookback_days',
+  RISK_RULE_INCONSISTENCY:    'risk.rule_inconsistency',
+  RISK_RULE_UNKNOWN_MODEL:    'risk.rule_unknown_model',
+  RISK_RULE_REPEAT:           'risk.rule_repeat',
+  RISK_RULE_TOKEN_SPIKE:      'risk.rule_token_spike',
 
   // ── Leaderboard ──
   LEADERBOARD_PAGE_SIZE:   'leaderboard.page_size',
@@ -167,6 +172,7 @@ const DEFAULTS: Record<string, number> = {
   [CFG.SYNC_PULL_MAX_LIMIT]:     2000,
 
   [CFG.CLOUD_STAR_CACHE_TTL_HOURS]:     24,
+  [CFG.CLOUD_SYNC_GLOBALLY_ENABLED]: 1,
 
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        1_000_000,
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           5,
@@ -182,6 +188,10 @@ const DEFAULTS: Record<string, number> = {
   [CFG.RISK_TOKEN_SPIKE_MULTIPLIER]:   10,
   [CFG.RISK_TOKEN_SPIKE_MIN_AVG]:      1000,
   [CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS]:30,
+  [CFG.RISK_RULE_INCONSISTENCY]:  1,
+  [CFG.RISK_RULE_UNKNOWN_MODEL]:  1,
+  [CFG.RISK_RULE_REPEAT]:         1,
+  [CFG.RISK_RULE_TOKEN_SPIKE]:    1,
 
   [CFG.LEADERBOARD_PAGE_SIZE]:   50,
   [CFG.LEADERBOARD_CACHE_TTL_MS]:60_000,
@@ -228,6 +238,7 @@ export const CONFIG_CATEGORIES: Record<string, { label: string; label_zh: string
     label: 'Data Sync',
     label_zh: '数据同步',
     keys: [
+      CFG.CLOUD_SYNC_GLOBALLY_ENABLED,
       CFG.SYNC_MAX_RECORDS, CFG.SYNC_MAX_TOMBSTONES, CFG.SYNC_BODY_MAX_SIZE,
       CFG.SYNC_PULL_DEFAULT_LIMIT, CFG.SYNC_PULL_MAX_LIMIT,
       CFG.CLOUD_STAR_CACHE_TTL_HOURS,
@@ -248,6 +259,8 @@ export const CONFIG_CATEGORIES: Record<string, { label: string; label_zh: string
       CFG.RISK_INCONSISTENCY_PCT, CFG.RISK_UNKNOWN_MODEL_PCT, CFG.RISK_REPEAT_COUNT,
       CFG.RISK_REPEAT_WINDOW_HOURS, CFG.RISK_TOKEN_SPIKE_MULTIPLIER,
       CFG.RISK_TOKEN_SPIKE_MIN_AVG, CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS,
+      CFG.RISK_RULE_INCONSISTENCY, CFG.RISK_RULE_UNKNOWN_MODEL,
+      CFG.RISK_RULE_REPEAT, CFG.RISK_RULE_TOKEN_SPIKE,
     ],
   },
   leaderboard: {
@@ -302,6 +315,7 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: 'Default number of records returned per sync pull',
   [CFG.SYNC_PULL_MAX_LIMIT]:     'Maximum records allowed per sync pull',
   [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: 'How long to cache GitHub star check results (hours)',
+  [CFG.CLOUD_SYNC_GLOBALLY_ENABLED]: 'Enable or disable AIUsage Cloud globally (1=on, 0=off)',
 
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        'Max data size per upload (MB)',
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           'Max usage snapshots per upload',
@@ -317,6 +331,10 @@ export const CONFIG_DESCRIPTIONS: Record<string, string> = {
   [CFG.RISK_TOKEN_SPIKE_MULTIPLIER]:   'Flag if usage exceeds historical average by this factor',
   [CFG.RISK_TOKEN_SPIKE_MIN_AVG]:      'Minimum average tokens before spike detection applies',
   [CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS]:'Days of history used for spike comparison',
+  [CFG.RISK_RULE_INCONSISTENCY]:  'Enable breakdown inconsistency check (1=on, 0=off)',
+  [CFG.RISK_RULE_UNKNOWN_MODEL]:  'Enable unknown model ratio check (1=on, 0=off)',
+  [CFG.RISK_RULE_REPEAT]:         'Enable repeat upload detection (1=on, 0=off)',
+  [CFG.RISK_RULE_TOKEN_SPIKE]:    'Enable token spike detection (1=on, 0=off)',
 
   [CFG.LEADERBOARD_PAGE_SIZE]:   'Entries shown per leaderboard page',
   [CFG.LEADERBOARD_CACHE_TTL_MS]:'How long leaderboard data is cached (sec)',
@@ -362,6 +380,7 @@ export const CONFIG_DESCRIPTIONS_ZH: Record<string, string> = {
   [CFG.SYNC_PULL_DEFAULT_LIMIT]: '同步拉取时默认返回几条',
   [CFG.SYNC_PULL_MAX_LIMIT]:     '同步拉取时最多返回几条',
   [CFG.CLOUD_STAR_CACHE_TTL_HOURS]: 'GitHub Star 检查结果缓存多少小时',
+  [CFG.CLOUD_SYNC_GLOBALLY_ENABLED]: '全局启用或禁用 AIUsage Cloud（1=开启，0=关闭）',
 
   [CFG.UPLOAD_MAX_PAYLOAD_SIZE]:        '单次上传数据最大多少 MB',
   [CFG.UPLOAD_MAX_SNAPSHOTS]:           '单次上传最多包含几个快照',
@@ -377,6 +396,10 @@ export const CONFIG_DESCRIPTIONS_ZH: Record<string, string> = {
   [CFG.RISK_TOKEN_SPIKE_MULTIPLIER]:   '用量超过历史平均值几倍时标记为可疑',
   [CFG.RISK_TOKEN_SPIKE_MIN_AVG]:      '启用异常检测所需的最低平均 Token 数',
   [CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS]:'计算历史平均值时回溯几天的数据',
+  [CFG.RISK_RULE_INCONSISTENCY]:  '启用数据不一致检测（1=开启，0=关闭）',
+  [CFG.RISK_RULE_UNKNOWN_MODEL]:  '启用未知模型占比检测（1=开启，0=关闭）',
+  [CFG.RISK_RULE_REPEAT]:         '启用重复上传检测（1=开启，0=关闭）',
+  [CFG.RISK_RULE_TOKEN_SPIKE]:    '启用 Token 异常飙升检测（1=开启，0=关闭）',
 
   [CFG.LEADERBOARD_PAGE_SIZE]:   '排行榜每页显示几条',
   [CFG.LEADERBOARD_CACHE_TTL_MS]:'排行榜数据缓存多久（秒）',

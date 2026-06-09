@@ -493,69 +493,82 @@ async function assessRisk(
   const tokenSpikeMinAvg = await getConfigValue(CFG.RISK_TOKEN_SPIKE_MIN_AVG)
   const tokenSpikeLookbackDays = await getConfigValue(CFG.RISK_TOKEN_SPIKE_LOOKBACK_DAYS)
 
-  // Rule 1: Breakdown consistency — all-scope total must equal sum of breakdowns
-  const allBd = snapshot.breakdowns.find(b => b.scope_type === 'all')
-  if (allBd) {
-    const toolModelTotal = snapshot.breakdowns
-      .filter(b => b.scope_type === 'tool_model')
-      .reduce((sum, b) => sum + b.total_tokens, 0)
-    if (toolModelTotal > 0 && Math.abs(allBd.total_tokens - toolModelTotal) > allBd.total_tokens * inconsistencyPct) {
-      return {
-        status: 'flagged',
-        reasonCode: 'breakdown_inconsistent',
-        reasonMessage: `All-scope total (${allBd.total_tokens}) differs from tool_model sum (${toolModelTotal}) by >${(inconsistencyPct * 100).toFixed(0)}%`
+  const ruleInconsistency = await getConfigValue(CFG.RISK_RULE_INCONSISTENCY)
+  const ruleUnknownModel = await getConfigValue(CFG.RISK_RULE_UNKNOWN_MODEL)
+  const ruleRepeat = await getConfigValue(CFG.RISK_RULE_REPEAT)
+  const ruleTokenSpike = await getConfigValue(CFG.RISK_RULE_TOKEN_SPIKE)
+
+  if (ruleInconsistency) {
+    // Rule 1: Breakdown consistency — all-scope total must equal sum of breakdowns
+    const allBd = snapshot.breakdowns.find(b => b.scope_type === 'all')
+    if (allBd) {
+      const toolModelTotal = snapshot.breakdowns
+        .filter(b => b.scope_type === 'tool_model')
+        .reduce((sum, b) => sum + b.total_tokens, 0)
+      if (toolModelTotal > 0 && Math.abs(allBd.total_tokens - toolModelTotal) > allBd.total_tokens * inconsistencyPct) {
+        return {
+          status: 'flagged',
+          reasonCode: 'breakdown_inconsistent',
+          reasonMessage: `All-scope total (${allBd.total_tokens}) differs from tool_model sum (${toolModelTotal}) by >${(inconsistencyPct * 100).toFixed(0)}%`
+        }
       }
     }
   }
 
-  // Rule 2: Unknown model ratio — tokens from unknown models in cost breakdown
-  const { unknownModels } = buildCostMap(snapshot)
-  if (unknownModels.size > 0) {
-    const toolModelBds = snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')
-    const totalToolModel = toolModelBds.reduce((sum, b) => sum + b.total_tokens, 0)
-    const unknownTokens = toolModelBds
-      .filter(b => b.model && unknownModels.has(b.model))
-      .reduce((sum, b) => sum + b.total_tokens, 0)
-    if (totalToolModel > 0 && unknownTokens / totalToolModel > unknownModelPct) {
-      return {
-        status: 'flagged',
-        reasonCode: 'unknown_model_ratio',
-        reasonMessage: `${Math.round(unknownTokens / totalToolModel * 100)}% of tokens from models not in official price table`
+  if (ruleUnknownModel) {
+    // Rule 2: Unknown model ratio — tokens from unknown models in cost breakdown
+    const { unknownModels } = buildCostMap(snapshot)
+    if (unknownModels.size > 0) {
+      const toolModelBds = snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')
+      const totalToolModel = toolModelBds.reduce((sum, b) => sum + b.total_tokens, 0)
+      const unknownTokens = toolModelBds
+        .filter(b => b.model && unknownModels.has(b.model))
+        .reduce((sum, b) => sum + b.total_tokens, 0)
+      if (totalToolModel > 0 && unknownTokens / totalToolModel > unknownModelPct) {
+        return {
+          status: 'flagged',
+          reasonCode: 'unknown_model_ratio',
+          reasonMessage: `${Math.round(unknownTokens / totalToolModel * 100)}% of tokens from models not in official price table`
+        }
       }
     }
   }
 
-  // Rule 3: Repeat uploads — same device uploaded same period too many times
-  const repeatResult = await tx`
-    SELECT COUNT(*) as cnt FROM upload_snapshots
-    WHERE device_id = ${deviceId}
-      AND period_type = ${snapshot.period_type}
-      AND period_start = ${snapshot.period_start}
-      AND created_at > NOW() - ${`${repeatWindowHours} hours`}::interval
-  `
-  const repeatCnt = Number((repeatResult[0] as { cnt: bigint }).cnt)
-  if (repeatCnt >= repeatCount) {
-    return {
-      status: 'flagged',
-      reasonCode: 'repeat_upload',
-      reasonMessage: `Same period uploaded ${repeatCnt} times in ${repeatWindowHours}h`
+  if (ruleRepeat) {
+    // Rule 3: Repeat uploads — same device uploaded same period too many times
+    const repeatResult = await tx`
+      SELECT COUNT(*) as cnt FROM upload_snapshots
+      WHERE device_id = ${deviceId}
+        AND period_type = ${snapshot.period_type}
+        AND period_start = ${snapshot.period_start}
+        AND created_at > NOW() - ${`${repeatWindowHours} hours`}::interval
+    `
+    const repeatCnt = Number((repeatResult[0] as { cnt: bigint }).cnt)
+    if (repeatCnt >= repeatCount) {
+      return {
+        status: 'flagged',
+        reasonCode: 'repeat_upload',
+        reasonMessage: `Same period uploaded ${repeatCnt} times in ${repeatWindowHours}h`
+      }
     }
   }
 
-  // Rule 4: Massive growth — total_tokens > N x user's historical average for this period type
-  const userAvg = await tx`
-    SELECT COALESCE(AVG(total_tokens), 0) as avg_tokens FROM upload_snapshots
-    WHERE user_id = ${userId}
-      AND period_type = ${snapshot.period_type}
-      AND status = 'accepted'
-      AND created_at > NOW() - ${`${tokenSpikeLookbackDays} days`}::interval
-  `
-  const avgTokens = Number((userAvg[0] as { avg_tokens: number }).avg_tokens)
-  if (avgTokens > tokenSpikeMinAvg && snapshot.total_tokens > avgTokens * tokenSpikeMultiplier) {
-    return {
-      status: 'flagged',
-      reasonCode: 'token_spike',
-      reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) is ${Math.round(snapshot.total_tokens / avgTokens)}x the ${tokenSpikeLookbackDays}-day average (${avgTokens.toLocaleString()})`
+  if (ruleTokenSpike) {
+    // Rule 4: Massive growth — total_tokens > N x user's historical average for this period type
+    const userAvg = await tx`
+      SELECT COALESCE(AVG(total_tokens), 0) as avg_tokens FROM upload_snapshots
+      WHERE user_id = ${userId}
+        AND period_type = ${snapshot.period_type}
+        AND status = 'accepted'
+        AND created_at > NOW() - ${`${tokenSpikeLookbackDays} days`}::interval
+    `
+    const avgTokens = Number((userAvg[0] as { avg_tokens: number }).avg_tokens)
+    if (avgTokens > tokenSpikeMinAvg && snapshot.total_tokens > avgTokens * tokenSpikeMultiplier) {
+      return {
+        status: 'flagged',
+        reasonCode: 'token_spike',
+        reasonMessage: `Total tokens (${snapshot.total_tokens.toLocaleString()}) is ${Math.round(snapshot.total_tokens / avgTokens)}x the ${tokenSpikeLookbackDays}-day average (${avgTokens.toLocaleString()})`
+      }
     }
   }
 

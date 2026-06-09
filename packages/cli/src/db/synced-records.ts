@@ -1,10 +1,10 @@
 import type Database from 'better-sqlite3'
 import type { SyncRecord } from '@aiusage/core'
 
-export function insertSyncedRecord(db: Database.Database, record: SyncRecord): void {
+export function insertSyncedRecord(db: Database.Database, record: SyncRecord): boolean {
   // Only replace if the incoming record is newer than what we already have.
   // Without this check, a stale remote record could silently overwrite a newer one.
-  db.prepare(`
+  const result = db.prepare(`
     INSERT INTO synced_records (
       id, ts, tool, model, provider, input_tokens, output_tokens,
       cache_read_tokens, cache_write_tokens, thinking_tokens,
@@ -57,6 +57,7 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord): v
     sourceFile: record.sourceFile ?? '',
     cwd: record.cwd ?? '',
   })
+  return result.changes > 0
 }
 
 export function getSyncedRecordById(db: Database.Database, id: string): SyncRecord | null {

@@ -451,8 +451,8 @@
   }
 
   async function toggleCloudSync(id, username, currentValue) {
-    const enabled = !currentValue
-    if (await doAction(`/api/admin/users/${id}/cloud-sync`, { enabled }, zh ? `@${username} Cloud Sync ${enabled ? '已开启' : '已关闭'}` : `@${username} Cloud Sync ${enabled ? 'enabled' : 'disabled'}`))
+    const disabled = !currentValue
+    if (await doAction(`/api/admin/users/${id}/cloud-sync`, { enabled: disabled }, zh ? `@${username} AIUsage Cloud ${disabled ? '已禁用' : '已解除禁用'}` : `@${username} AIUsage Cloud ${disabled ? 'disabled' : 're-enabled'}`))
       await searchUsers()
   }
 
@@ -627,9 +627,9 @@
                     </div>
                   </div>
                   <div class="list-item-actions">
-                    <label class="toggle-label" title={zh ? 'Cloud Sync' : 'Cloud Sync'}>
+                    <label class="toggle-label" title={zh ? '禁用 AIUsage Cloud' : 'Disable AIUsage Cloud'}>
                       <input type="checkbox" checked={user.cloud_sync_enabled} on:change={() => toggleCloudSync(user.id, user.username, user.cloud_sync_enabled)} disabled={!!actionLoading} />
-                      <span class="toggle-text">Cloud</span>
+                      <span class="toggle-text">{zh ? '禁用 Cloud' : 'Ban Cloud'}</span>
                     </label>
                     {#if user.status === 'active'}
                       <button class="btn btn-danger" on:click={() => banUser(user.id, user.username)} disabled={!!actionLoading}>{zh ? '封禁' : 'Ban'}</button>

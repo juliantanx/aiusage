@@ -5,7 +5,7 @@ const STAR_REPO = 'juliantanx/aiusage'
 
 export interface StarCheckResult {
   allowed: boolean
-  error_code?: 'STAR_REQUIRED' | 'GITHUB_BINDING_REQUIRED'
+  error_code?: 'CLOUD_SYNC_DISABLED' | 'USER_CLOUD_BANNED' | 'STAR_REQUIRED' | 'GITHUB_BINDING_REQUIRED'
   message?: string
   repo?: string
   url?: string
@@ -15,13 +15,24 @@ export interface StarCheckResult {
  * Check whether a user is allowed to use Cloud Sync.
  *
  * Decision order:
- * 1. users.cloud_sync_enabled = true → ALLOW (admin override)
+ * 0. cloud.sync_globally_enabled = 0 → DENY (CLOUD_SYNC_DISABLED)
+ * 1. users.cloud_sync_enabled = true → DENY (USER_CLOUD_BANNED, admin banned this user)
  * 2. No GitHub identity → DENY (GITHUB_BINDING_REQUIRED)
  * 3. Cached star check within TTL → use cached value
  * 4. Call GitHub API to verify star → update cache
  */
 export async function checkCloudSyncAccess(userId: string): Promise<StarCheckResult> {
-  // 1. Check admin override
+  // 0. Check global kill switch
+  const globalEnabled = await getConfigValue(CFG.CLOUD_SYNC_GLOBALLY_ENABLED)
+  if (!globalEnabled) {
+    return {
+      allowed: false,
+      error_code: 'CLOUD_SYNC_DISABLED',
+      message: 'AIUsage Cloud is currently unavailable.',
+    }
+  }
+
+  // 1. Check if user is banned from cloud
   const userRows = await sql`
     SELECT cloud_sync_enabled, github_starred, github_star_checked_at
     FROM users WHERE id = ${userId}
@@ -37,7 +48,11 @@ export async function checkCloudSyncAccess(userId: string): Promise<StarCheckRes
   }
 
   if (user.cloud_sync_enabled) {
-    return { allowed: true }
+    return {
+      allowed: false,
+      error_code: 'USER_CLOUD_BANNED',
+      message: 'Your AIUsage Cloud access has been disabled by an administrator.',
+    }
   }
 
   // 2. Check for GitHub identity with access token
