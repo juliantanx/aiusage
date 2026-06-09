@@ -338,6 +338,26 @@ export function calculateCost(
   return calculateCostWithResolver(model, tokens, exchangeRate, resolvePrice)
 }
 
+export function calculateCostForPrice(
+  price: PriceEntry,
+  tokens: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    thinkingTokens: number
+  },
+  exchangeRate?: number
+): number {
+  const inputCost = (tokens.inputTokens / 1_000_000) * price.input
+  const outputCost = (tokens.outputTokens / 1_000_000) * price.output
+  const cacheReadCost = (tokens.cacheReadTokens / 1_000_000) * (price.cacheRead ?? 0)
+  const cacheWriteCost = (tokens.cacheWriteTokens / 1_000_000) * (price.cacheWrite ?? 0)
+  const thinkingCost = (tokens.thinkingTokens / 1_000_000) * price.output
+  const rawCost = inputCost + outputCost + cacheReadCost + cacheWriteCost + thinkingCost
+  return price.currency === 'CNY' ? convertToUSD(rawCost, exchangeRate ?? FALLBACK_RATE) : rawCost
+}
+
 export function calculateDefaultCost(
   model: string,
   tokens: {

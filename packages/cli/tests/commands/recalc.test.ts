@@ -64,4 +64,31 @@ describe('Recalc Command', () => {
     expect(record.cost_source).toBe('pricing')
     expect(record.cost).toBeGreaterThan(0)
   })
+
+  it('recalculates cost for alias-only model ids from the pricing registry', () => {
+    db.prepare(`
+      UPDATE model_prices
+      SET input = 2, output = 8, cache_read = NULL, cache_write = NULL, currency = 'USD', source = 'litellm', source_model_id = 'openai/gpt-4o'
+      WHERE model_key = 'gpt-4o'
+    `).run()
+    db.prepare(`
+      INSERT OR REPLACE INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled, created_at, updated_at)
+      VALUES ('openai/gpt-4o', 'gpt-4o', 'exact', 'openai', 100, 'litellm', 'builtin', 1, ?, ?)
+    `).run(Date.now(), Date.now())
+
+    insertRecord(db, {
+      id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
+      lineOffset: 100, tool: 'codex', model: 'openai/gpt-4o', provider: 'openai',
+      inputTokens: 1000000, outputTokens: 500000, cacheReadTokens: 0, cacheWriteTokens: 0,
+      thinkingTokens: 0, cost: 0, costSource: 'unknown', sessionId: 's1',
+      sourceFile: '/f1', device: 'd1', deviceInstanceId: 'di1',
+    })
+
+    const result = recalcPricing(db)
+    expect(result.updatedCount).toBe(1)
+
+    const record = db.prepare('SELECT * FROM records WHERE id = ?').get('r1') as any
+    expect(record.cost_source).toBe('pricing')
+    expect(record.cost).toBe(6)
+  })
 })

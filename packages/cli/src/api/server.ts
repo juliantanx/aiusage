@@ -4,7 +4,7 @@ import { hostname, platform, tmpdir } from 'node:os'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
-import { calculateCost, removePriceOverride, resolvePrice, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
+import { calculateCostForPrice, removePriceOverride, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
 import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../config.js'
 import type { Config, SyncConfig } from '../config.js'
 import { setSyncConsent } from '../init.js'
@@ -29,7 +29,7 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
-import { listPricingModels, loadPricingRuntime, removeUserPrice, setUserPrice, syncPricingFromLitellm } from '../pricing-registry.js'
+import { listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
@@ -89,15 +89,15 @@ function recalcCosts(db: Database.Database): number {
         const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
         const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
         const provider = model !== r.model ? inferProvider(model) : r.provider
-        const hasPrice = resolvePrice(model) != null
-        const cost = hasPrice ? calculateCost(model, {
+        const price = resolvePriceFromRegistry(db, model)
+        const cost = price ? calculateCostForPrice(price, {
           inputTokens: r.input_tokens,
           outputTokens: r.output_tokens,
           cacheReadTokens: r.cache_read_tokens,
           cacheWriteTokens: r.cache_write_tokens,
           thinkingTokens: r.thinking_tokens,
         }, exchangeRate) : 0
-        const costSource = hasPrice ? 'pricing' : 'unknown'
+        const costSource = price ? 'pricing' : 'unknown'
 
         if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
         updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)

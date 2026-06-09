@@ -190,11 +190,11 @@ function parseLitellmEntry(sourceModelId: string, entry: LitellmEntry) {
 }
 
 /** Sync builtin entries from LiteLLM. User-origin rows are preserved. */
-export async function syncPricingFromLitellm(adminUserId: string): Promise<{ added: number; updated: number; skipped: number; userPreserved: number }> {
+export async function syncPricingFromLitellm(adminUserId: string): Promise<{ added: number; updated: number; skipped: number; userPreserved: number; aliasesAdded: number; aliasesUpdated: number }> {
   const response = await fetch(LITELLM_PRICING_URL, { headers: { Accept: 'application/json' } })
   if (!response.ok) throw new Error(`LiteLLM pricing fetch failed: HTTP ${response.status}`)
   const data = await response.json() as Record<string, LitellmEntry>
-  let added = 0, updated = 0, skipped = 0, userPreserved = 0
+  let added = 0, updated = 0, skipped = 0, userPreserved = 0, aliasesAdded = 0, aliasesUpdated = 0
 
   await sql.begin(async (tx) => {
     for (const [sourceModelId, rawEntry] of Object.entries(data)) {
@@ -203,9 +203,9 @@ export async function syncPricingFromLitellm(adminUserId: string): Promise<{ add
 
       const existing = await tx`SELECT origin, input, output, cache_read, cache_write, currency FROM model_prices WHERE model_key = ${entry.modelKey}`
       const row = existing[0] as { origin: string; input: string; output: string; cache_read: string | null; cache_write: string | null; currency: string } | undefined
-      if (row?.origin === 'user') { userPreserved++; continue }
-
-      if (!row) {
+      if (row?.origin === 'user') {
+        userPreserved++
+      } else if (!row) {
         await tx`
           INSERT INTO model_prices (model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id, source_url, origin, status, last_synced_at)
           VALUES (${entry.modelKey}, ${entry.provider}, ${entry.input}, ${entry.output}, ${entry.cacheRead}, ${entry.cacheWrite}, 'USD', 'litellm', ${sourceModelId}, ${LITELLM_PRICING_URL}, 'builtin', 'active', NOW())
@@ -226,6 +226,7 @@ export async function syncPricingFromLitellm(adminUserId: string): Promise<{ add
       }
 
       for (const alias of aliasesFor(sourceModelId, entry.modelKey)) {
+        const before = await tx`SELECT model_key, origin, enabled FROM model_price_aliases WHERE alias = ${alias}` as Array<{ model_key: string; origin: string; enabled: boolean }>
         await tx`
           INSERT INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled)
           VALUES (${alias}, ${entry.modelKey}, 'exact', ${entry.provider}, 100, 'litellm', 'builtin', TRUE)
@@ -236,12 +237,15 @@ export async function syncPricingFromLitellm(adminUserId: string): Promise<{ add
             enabled = CASE WHEN model_price_aliases.origin = 'builtin' THEN TRUE ELSE model_price_aliases.enabled END,
             updated_at = NOW()
         `
+        const existingAlias = before[0]
+        if (!existingAlias) aliasesAdded++
+        else if (existingAlias.origin !== 'user' && (existingAlias.model_key !== entry.modelKey || existingAlias.enabled !== true)) aliasesUpdated++
       }
     }
   })
 
-  await logAdminAction(adminUserId, 'sync_pricing', 'model_prices', 'current', `Synced from LiteLLM: ${added} added, ${updated} updated, ${skipped} skipped`)
-  return { added, updated, skipped, userPreserved }
+  await logAdminAction(adminUserId, 'sync_pricing', 'model_prices', 'current', `Synced from LiteLLM: ${added} added, ${updated} updated, ${skipped} skipped, ${aliasesAdded} aliases added, ${aliasesUpdated} aliases updated`)
+  return { added, updated, skipped, userPreserved, aliasesAdded, aliasesUpdated }
 }
 
 export const syncPricingFromCore = syncPricingFromLitellm

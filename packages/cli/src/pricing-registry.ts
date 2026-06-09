@@ -144,6 +144,15 @@ function loadUserRows(db: Database.Database): ModelPriceRow[] {
   `).all() as ModelPriceRow[]
 }
 
+function loadAliasRows(db: Database.Database): AliasRow[] {
+  return db.prepare(`
+    SELECT alias, model_key, match_type, provider, priority, source, origin, enabled
+    FROM model_price_aliases
+    WHERE enabled = 1
+    ORDER BY priority ASC
+  `).all() as AliasRow[]
+}
+
 export function loadPricingRuntime(db: Database.Database, config?: Config | null): void {
   const builtin: Record<string, PriceEntry> = {}
   for (const row of loadBuiltinRows(db)) builtin[row.model_key] = rowToPrice(row)
@@ -152,6 +161,15 @@ export function loadPricingRuntime(db: Database.Database, config?: Config | null
   const userRows = loadUserRows(db)
   const configOverrides = config?.priceOverrides ?? {}
   for (const row of userRows) overrides[row.model_key] = rowToPrice(row)
+
+  const activePrices = priceTableFromDb(db)
+  for (const alias of loadAliasRows(db)) {
+    const price = activePrices[alias.model_key]
+    if (!price) continue
+    if (alias.origin === 'user') overrides[alias.alias] = price
+    else builtin[alias.alias] = price
+  }
+
   for (const [model, entry] of Object.entries(configOverrides)) overrides[model] = entry
   setRuntimePriceTable(builtin, overrides)
 }

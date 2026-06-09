@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
-import { calculateCost, inferProvider, normalizeQoderModel, resolvePrice, resolveExchangeRate } from '@aiusage/core'
+import { calculateCostForPrice, inferProvider, normalizeQoderModel, resolveExchangeRate } from '@aiusage/core'
 import { loadConfig } from '../config.js'
+import { resolvePriceFromRegistry } from '../pricing-registry.js'
 
 export interface RecalcResult {
   updatedCount: number
@@ -32,15 +33,15 @@ export function recalcPricing(db: Database.Database): RecalcResult {
 
       const model = record.tool === 'qoder' ? normalizeQoderModel(record.model) : record.model
       const provider = model !== record.model ? inferProvider(model) : record.provider
-      const hasPrice = resolvePrice(model) != null
-      const newCost = hasPrice ? calculateCost(model, {
+      const price = resolvePriceFromRegistry(db, model)
+      const newCost = price ? calculateCostForPrice(price, {
         inputTokens: record.input_tokens,
         outputTokens: record.output_tokens,
         cacheReadTokens: record.cache_read_tokens,
         cacheWriteTokens: record.cache_write_tokens,
         thinkingTokens: record.thinking_tokens,
       }, exchangeRate) : 0
-      const costSource = hasPrice ? 'pricing' : 'unknown'
+      const costSource = price ? 'pricing' : 'unknown'
 
       if (model !== record.model || provider !== record.provider || newCost !== record.cost || costSource !== record.cost_source) {
         updateStmt.run(model, provider, newCost, costSource, Date.now(), record.id)

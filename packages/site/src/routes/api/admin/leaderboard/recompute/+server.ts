@@ -2,52 +2,10 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { requireAdmin } from '$lib/server/auth/session.js'
+import { calculateRegistryCost, loadPricingRegistry, resolvePriceFromRegistry } from '$lib/server/pricing/registry.js'
 import { nanoid } from 'nanoid'
 
 const CURRENT_PRICING_VERSION = 'current'
-const FALLBACK_CNY_USD = 0.14
-
-interface PriceEntry {
-  input: number
-  output: number
-  cacheRead?: number
-  cacheWrite?: number
-  currency?: string
-}
-
-function resolvePriceFromTable(model: string, table: Map<string, PriceEntry>): PriceEntry | undefined {
-  if (table.has(model)) return table.get(model)
-  const stripped = model.replace(/^(accounts\/fireworks\/models\/|moonshotai\/|z-ai\/|zai-org\/|frank\/|nvidia\/)/, '')
-  if (table.has(stripped)) return table.get(stripped)
-  if (table.has(stripped.toLowerCase())) return table.get(stripped.toLowerCase())
-
-  let bestKey = ''
-  let best: PriceEntry | undefined
-  for (const candidate of [model, stripped, stripped.toLowerCase()]) {
-    for (const [key, price] of table) {
-      if (candidate.startsWith(key) && key.length > bestKey.length) {
-        bestKey = key
-        best = price
-      }
-    }
-  }
-  return best
-}
-
-function calculateCost(price: PriceEntry, tokens: {
-  input_tokens: number
-  output_tokens: number
-  cache_read_tokens: number
-  cache_write_tokens: number
-  thinking_tokens: number
-}): number {
-  const raw = (tokens.input_tokens / 1_000_000) * price.input +
-    (tokens.output_tokens / 1_000_000) * price.output +
-    (tokens.cache_read_tokens / 1_000_000) * (price.cacheRead ?? 0) +
-    (tokens.cache_write_tokens / 1_000_000) * (price.cacheWrite ?? 0) +
-    (tokens.thinking_tokens / 1_000_000) * price.output
-  return price.currency === 'CNY' ? raw * FALLBACK_CNY_USD : raw
-}
 
 /**
  * POST /api/admin/leaderboard/recompute
@@ -72,22 +30,7 @@ export const POST: RequestHandler = async (event) => {
 
   const pricingVersion = CURRENT_PRICING_VERSION
 
-  const entries = await sql`
-    SELECT model_key, input, output, cache_read, cache_write, currency
-    FROM model_prices
-    WHERE status = 'active'
-  `
-  const priceMap = new Map<string, PriceEntry>()
-  for (const entry of entries) {
-    const e = entry as { model_key: string; input: string | number; output: string | number; cache_read: string | number | null; cache_write: string | number | null; currency: string }
-    priceMap.set(e.model_key, {
-      input: Number(e.input),
-      output: Number(e.output),
-      cacheRead: e.cache_read == null ? undefined : Number(e.cache_read),
-      cacheWrite: e.cache_write == null ? undefined : Number(e.cache_write),
-      currency: e.currency || 'USD',
-    })
-  }
+  const pricing = await loadPricingRegistry(sql)
 
   // Query accepted leaderboard rows and recalculate costs from their token breakdown.
   let query = sql`
@@ -131,9 +74,9 @@ export const POST: RequestHandler = async (event) => {
     let costUsd = 0
     let hasUnknownCost = false
     if (metric.scope_type === 'tool_model' && metric.model && metric.model !== 'unknown') {
-      const price = resolvePriceFromTable(metric.model, priceMap)
+      const price = resolvePriceFromRegistry(metric.model, pricing)
       if (price) {
-        costUsd = calculateCost(price, metric)
+        costUsd = calculateRegistryCost(price, metric)
       } else if (metric.total_tokens > 0) {
         hasUnknownCost = true
       }

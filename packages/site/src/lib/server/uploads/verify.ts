@@ -2,6 +2,7 @@ import { sql } from '../db/pool.js'
 import { decryptDeviceSecret, sha256, buildCanonicalString, hashIp, computeHmac } from '../crypto/hmac.js'
 import { invalidateLeaderboardCache } from '../leaderboard/query.js'
 import { getConfigValue, CFG } from '../config.js'
+import { calculateRegistryCost, loadPricingRegistry, resolvePriceFromRegistry, type PricingRegistry } from '../pricing/registry.js'
 import { nanoid } from 'nanoid'
 import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
 
@@ -21,16 +22,6 @@ interface TokenTotals {
   cache_write_tokens: number
   thinking_tokens: number
 }
-
-interface PriceEntry {
-  input: number
-  output: number
-  cacheRead?: number
-  cacheWrite?: number
-  currency?: string
-}
-
-const FALLBACK_CNY_USD = 0.14
 
 export interface UploadBreakdown extends TokenTotals {
   scope_type: ScopeType
@@ -441,62 +432,14 @@ export function validatePeriodBoundary(snap: UploadSnapshot): boolean {
   }
 }
 
-function resolvePriceFromTable(model: string, table: Map<string, PriceEntry>): PriceEntry | undefined {
-  if (table.has(model)) return table.get(model)
-  const stripped = model.replace(/^(accounts\/fireworks\/models\/|moonshotai\/|z-ai\/|zai-org\/|frank\/|nvidia\/)/, '')
-  if (table.has(stripped)) return table.get(stripped)
-  if (table.has(stripped.toLowerCase())) return table.get(stripped.toLowerCase())
-
-  let bestKey = ''
-  let best: PriceEntry | undefined
-  for (const candidate of [model, stripped, stripped.toLowerCase()]) {
-    for (const [key, price] of table) {
-      if (candidate.startsWith(key) && key.length > bestKey.length) {
-        bestKey = key
-        best = price
-      }
-    }
-  }
-  return best
-}
-
-function calculateCost(price: PriceEntry, row: UploadBreakdown): number {
-  const raw = (row.input_tokens / 1_000_000) * price.input +
-    (row.output_tokens / 1_000_000) * price.output +
-    (row.cache_read_tokens / 1_000_000) * (price.cacheRead ?? 0) +
-    (row.cache_write_tokens / 1_000_000) * (price.cacheWrite ?? 0) +
-    (row.thinking_tokens / 1_000_000) * price.output
-  return price.currency === 'CNY' ? raw * FALLBACK_CNY_USD : raw
-}
-
-async function loadCurrentPriceTable(tx: ReturnType<typeof sql>): Promise<Map<string, PriceEntry>> {
-  const rows = await tx`
-    SELECT model_key, input, output, cache_read, cache_write, currency
-    FROM model_prices
-    WHERE status = 'active'
-  ` as Array<{ model_key: string; input: string | number; output: string | number; cache_read: string | number | null; cache_write: string | number | null; currency: string }>
-
-  const table = new Map<string, PriceEntry>()
-  for (const row of rows) {
-    table.set(row.model_key, {
-      input: Number(row.input),
-      output: Number(row.output),
-      cacheRead: row.cache_read == null ? undefined : Number(row.cache_read),
-      cacheWrite: row.cache_write == null ? undefined : Number(row.cache_write),
-      currency: row.currency || 'USD',
-    })
-  }
-  return table
-}
-
-function costForBreakdown(row: UploadBreakdown, priceTable: Map<string, PriceEntry>): { cost: number; unknown: boolean } {
+function costForBreakdown(row: UploadBreakdown, pricing: PricingRegistry): { cost: number; unknown: boolean } {
   if (row.scope_type !== 'tool_model' || !row.model) return { cost: 0, unknown: false }
-  const price = resolvePriceFromTable(row.model, priceTable)
+  const price = resolvePriceFromRegistry(row.model, pricing)
   if (!price) {
     return { cost: 0, unknown: row.total_tokens > 0 }
   }
   return {
-    cost: calculateCost(price, row),
+    cost: calculateRegistryCost(price, row),
     unknown: false,
   }
 }
@@ -506,13 +449,13 @@ interface CostMapResult {
   unknownModels: Set<string>
 }
 
-function buildCostMap(snapshot: UploadSnapshot, priceTable: Map<string, PriceEntry>): CostMapResult {
+function buildCostMap(snapshot: UploadSnapshot, pricing: PricingRegistry): CostMapResult {
   const costs = new Map<string, number>()
   const unknownModels = new Set<string>()
   let allCost = 0
 
   for (const row of snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')) {
-    const { cost, unknown } = costForBreakdown(row, priceTable)
+    const { cost, unknown } = costForBreakdown(row, pricing)
     if (unknown && row.model) unknownModels.add(row.model)
     allCost += cost
     costs.set(metricKey('tool_model', row.tool, row.model), cost)
@@ -535,7 +478,7 @@ async function assessRisk(
   userId: string,
   deviceId: string,
   snapshot: UploadSnapshot,
-  priceTable: Map<string, PriceEntry>
+  pricing: PricingRegistry
 ): Promise<RiskAssessment> {
   const inconsistencyPct = await getConfigValue(CFG.RISK_INCONSISTENCY_PCT)
   const unknownModelPct = await getConfigValue(CFG.RISK_UNKNOWN_MODEL_PCT)
@@ -569,7 +512,7 @@ async function assessRisk(
 
   if (ruleUnknownModel) {
     // Rule 2: Unknown model ratio — tokens from unknown models in cost breakdown
-    const { unknownModels } = buildCostMap(snapshot, priceTable)
+    const { unknownModels } = buildCostMap(snapshot, pricing)
     if (unknownModels.size > 0) {
       const toolModelBds = snapshot.breakdowns.filter(b => b.scope_type === 'tool_model')
       const totalToolModel = toolModelBds.reduce((sum, b) => sum + b.total_tokens, 0)
@@ -668,12 +611,12 @@ export async function processUpload(
       VALUES (${requestId}, ${userId}, ${deviceId}, ${idempotencyKey}, ${payloadHash}, 'accepted', ${JSON.stringify(snapshotResults)}, ${request.client_version}, ${request.client_platform}, ${request.schema_version}, ${ipHash})
     `
 
-    const priceTable = await loadCurrentPriceTable(tx)
+    const pricing = await loadPricingRegistry(tx)
     const pricingVersion = CURRENT_PRICING_VERSION
 
     for (const snapshot of request.snapshots) {
       // Run risk assessment
-      const risk = await assessRisk(tx, userId, deviceId, snapshot, priceTable)
+      const risk = await assessRisk(tx, userId, deviceId, snapshot, pricing)
       const snapshotStatus = risk.status
 
       const snapshotId = nanoid()
@@ -693,7 +636,7 @@ export async function processUpload(
       // Flagged snapshots get 'flagged' visibility; accepted get 'public'
       const metricVisibility = snapshotStatus === 'flagged' ? 'flagged' : 'public'
 
-      const { costs, unknownModels } = buildCostMap(snapshot, priceTable)
+      const { costs, unknownModels } = buildCostMap(snapshot, pricing)
       for (const row of snapshot.breakdowns) {
         const metricId = nanoid()
         const cost = costs.get(metricKey(row.scope_type, row.tool, row.model)) ?? 0
