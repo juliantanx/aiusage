@@ -62,6 +62,7 @@ function usageFromAny(parsed: any): {
     ?? usage.cache_read_tokens
     ?? usage.input_cache_read
     ?? usage.cacheReads
+    ?? usage.cacheRead
     ?? cachedFromDetails,
   )
 
@@ -74,7 +75,8 @@ function usageFromAny(parsed: any): {
       ?? usage.cache_write_input_tokens
       ?? usage.cache_write_tokens
       ?? usage.input_cache_creation
-      ?? usage.cacheWrites,
+      ?? usage.cacheWrites
+      ?? usage.cacheWrite,
     ),
     thinkingTokens: num(
       usage.thinking_tokens

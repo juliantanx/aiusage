@@ -89,6 +89,12 @@ function extractSessionId(filePath: string, tool: Tool): string {
     const parts = filePath.split('/')
     return (parts.pop() ?? '').replace('.jsonl', '')
   }
+  if (tool === 'pi') {
+    // Extract UUID from filename like 2026-06-08T14-04-37-182Z_019ea78c-b5be-711c-8f30-c8fc56c92b85.jsonl
+    const filename = filePath.split('/').pop() ?? ''
+    const match = filename.match(/_([^_]+)\.jsonl$/)
+    return match ? match[1] : filename.replace('.jsonl', '')
+  }
   return 'unknown'
 }
 
