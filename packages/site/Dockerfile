@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:20-slim AS base
 
 ARG BUILD_DATE
 
@@ -12,10 +12,12 @@ LABEL org.opencontainers.image.title="aiusage-site" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.authors="Julian <juliantanx@users.noreply.github.com>"
 
+WORKDIR /app
+
 # Pin pnpm to v9 (compatible with Node 20)
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-WORKDIR /app
+FROM base AS builder
 
 # Copy workspace root files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
@@ -34,16 +36,17 @@ COPY packages/site/ packages/site/
 # Build
 RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/site build
 
-# Prepare production directory: copy build output and create a standalone package
-# with the workspace core package converted to a local file dependency.
-RUN mkdir -p /deploy && \
-    cp -r /app/packages/site/build /deploy/build && \
-    mkdir -p /deploy/packages/core && \
-    cp -r /app/packages/core/dist /deploy/packages/core/dist && \
+FROM base AS prod-deps
+
+# Install production dependencies in their own layer. Source changes should not
+# invalidate this expensive step unless dependency manifests change.
+COPY packages/core/package.json packages/core/package.json
+COPY packages/site/package.json packages/site/package.json
+RUN mkdir -p /deploy/packages/core && \
     cp /app/packages/core/package.json /deploy/packages/core/package.json && \
     cat /app/packages/site/package.json | \
       node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('/dev/stdin','utf8')); delete pkg.devDependencies; delete pkg.scripts; pkg.type='module'; pkg.dependencies=pkg.dependencies||{}; pkg.dependencies['@aiusage/core']='file:./packages/core'; fs.writeFileSync('/deploy/package.json',JSON.stringify(pkg,null,2)+'\n')" && \
-    cd /deploy && npm install --omit=dev
+    cd /deploy && npm install --omit=dev --no-audit --no-fund
 
 FROM node:20-slim
 
@@ -56,9 +59,11 @@ LABEL org.opencontainers.image.title="aiusage-site" \
 
 WORKDIR /app
 
-COPY --from=builder /deploy/build ./build
-COPY --from=builder /deploy/package.json ./
-COPY --from=builder /deploy/node_modules ./node_modules
+COPY --from=builder /app/packages/site/build ./build
+COPY --from=prod-deps /deploy/package.json ./
+COPY --from=prod-deps /deploy/node_modules ./node_modules
+COPY --from=prod-deps /deploy/packages/core/package.json ./packages/core/package.json
+COPY --from=builder /app/packages/core/dist ./packages/core/dist
 
 ENV NODE_ENV=production
 ENV PORT=3000
