@@ -148,6 +148,9 @@
         <a href="/leaderboard" class="nav-link" class:active={$page.url.pathname.startsWith('/leaderboard')}>
           {zh ? '排行榜' : 'Leaderboard'}
         </a>
+        <a href="/pricing" class="nav-link" class:active={$page.url.pathname.startsWith('/pricing')}>
+          {zh ? '价格表' : 'Pricing'}
+        </a>
       </nav>
 
       <div class="header-actions">
