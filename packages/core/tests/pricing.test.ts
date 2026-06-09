@@ -1,38 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { PRICE_TABLE, calculateCost, resolvePrice } from '../src/pricing.js'
 import { FALLBACK_RATE } from '../src/exchange-rate.js'
+import { TEST_PRICE_TABLE } from './setup.js'
 
 describe('PRICE_TABLE', () => {
   it('contains expected models', () => {
+    expect(PRICE_TABLE).toEqual(TEST_PRICE_TABLE)
     expect(PRICE_TABLE).toHaveProperty('claude-opus-4-6')
     expect(PRICE_TABLE).toHaveProperty('claude-sonnet-4-6')
-    expect(PRICE_TABLE).toHaveProperty('claude-haiku-4-5')
-    expect(PRICE_TABLE).toHaveProperty('gpt-4.1')
     expect(PRICE_TABLE).toHaveProperty('gpt-4o')
-    expect(PRICE_TABLE).toHaveProperty('o4-mini')
-    // Kimi (Moonshot AI)
     expect(PRICE_TABLE).toHaveProperty('kimi-k2')
-    // GLM (Z.ai)
-    expect(PRICE_TABLE).toHaveProperty('glm-5')
-    // Qwen (Alibaba)
-    expect(PRICE_TABLE).toHaveProperty('qwen-max')
-    // MiniMax
-    expect(PRICE_TABLE).toHaveProperty('minimax-m2.5')
-    // Mistral AI
-    expect(PRICE_TABLE).toHaveProperty('mistral-large')
-    // xAI Grok
-    expect(PRICE_TABLE).toHaveProperty('grok-4')
-    // Cohere
-    expect(PRICE_TABLE).toHaveProperty('command-r-plus')
-    // Doubao (ByteDance)
-    expect(PRICE_TABLE).toHaveProperty('doubao-seed-2.0-pro')
-    // Hunyuan (Tencent)
-    expect(PRICE_TABLE).toHaveProperty('hunyuan-t1')
-    // ERNIE (Baidu)
-    expect(PRICE_TABLE).toHaveProperty('ernie-4.5-300b')
-    // Qoder tiers
     expect(PRICE_TABLE).toHaveProperty('qoder-ultimate')
-    expect(PRICE_TABLE).toHaveProperty('qoder-efficient')
   })
 
   it('has correct price structure', () => {

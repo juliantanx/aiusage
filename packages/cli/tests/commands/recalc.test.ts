@@ -8,6 +8,24 @@ import type { StatsRecord } from '@aiusage/core'
 describe('Recalc Command', () => {
   let db: Database.Database
 
+  function insertPrice(modelKey: string, entry: { input: number; output: number; cacheRead?: number | null; cacheWrite?: number | null; provider?: string; sourceModelId?: string }) {
+    const now = Date.now()
+    db.prepare(`
+      INSERT INTO model_prices (
+        model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+        source_url, origin, status, last_synced_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'USD', 'litellm', ?, NULL, 'builtin', 'active', ?, ?, ?)
+    `).run(modelKey, entry.provider ?? '', entry.input, entry.output, entry.cacheRead ?? null, entry.cacheWrite ?? null, entry.sourceModelId ?? modelKey, now, now, now)
+  }
+
+  function insertAlias(alias: string, modelKey: string, provider = '') {
+    const now = Date.now()
+    db.prepare(`
+      INSERT OR REPLACE INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled, created_at, updated_at)
+      VALUES (?, ?, 'exact', ?, 100, 'litellm', 'builtin', 1, ?, ?)
+    `).run(alias, modelKey, provider, now, now)
+  }
+
   beforeEach(() => {
     db = new Database(':memory:')
     initializeDatabase(db)
@@ -18,6 +36,8 @@ describe('Recalc Command', () => {
   })
 
   it('recalculates cost for pricing-sourced records', () => {
+    insertPrice('claude-sonnet-4-6', { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75, provider: 'anthropic' })
+
     insertRecord(db, {
       id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
       lineOffset: 100, tool: 'claude-code', model: 'claude-sonnet-4-6', provider: 'anthropic',
@@ -47,6 +67,8 @@ describe('Recalc Command', () => {
   })
 
   it('normalizes legacy qoder tier models and recalculates cost', () => {
+    insertPrice('qoder-ultimate', { input: 1.6, output: 1.6, cacheRead: 1.6, cacheWrite: 1.6, provider: 'qoder' })
+
     insertRecord(db, {
       id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
       lineOffset: 100, tool: 'qoder', model: 'ultimate', provider: 'unknown',
@@ -66,15 +88,8 @@ describe('Recalc Command', () => {
   })
 
   it('recalculates cost for alias-only model ids from the pricing registry', () => {
-    db.prepare(`
-      UPDATE model_prices
-      SET input = 2, output = 8, cache_read = NULL, cache_write = NULL, currency = 'USD', source = 'litellm', source_model_id = 'openai/gpt-4o'
-      WHERE model_key = 'gpt-4o'
-    `).run()
-    db.prepare(`
-      INSERT OR REPLACE INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled, created_at, updated_at)
-      VALUES ('openai/gpt-4o', 'gpt-4o', 'exact', 'openai', 100, 'litellm', 'builtin', 1, ?, ?)
-    `).run(Date.now(), Date.now())
+    insertPrice('gpt-4o', { input: 2, output: 8, provider: 'openai', sourceModelId: 'openai/gpt-4o' })
+    insertAlias('openai/gpt-4o', 'gpt-4o', 'openai')
 
     insertRecord(db, {
       id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),

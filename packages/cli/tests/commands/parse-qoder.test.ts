@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { initializeDatabase } from '../../src/db/index.js'
+import { loadPricingRuntime } from '../../src/pricing-registry.js'
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual('node:os')
@@ -14,6 +15,16 @@ vi.mock('node:os', async () => {
 })
 
 const { runParse } = await import('../../src/commands/parse.js')
+
+function insertPrice(db: Database.Database, modelKey: string, entry: { input: number; output: number; cacheRead?: number | null; cacheWrite?: number | null; provider?: string }) {
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO model_prices (
+      model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+      source_url, origin, status, last_synced_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'USD', 'litellm', ?, NULL, 'builtin', 'active', ?, ?, ?)
+  `).run(modelKey, entry.provider ?? '', entry.input, entry.output, entry.cacheRead ?? null, entry.cacheWrite ?? null, modelKey, now, now, now)
+}
 
 describe('runParse with qoder', () => {
   const testDir = join(tmpdir(), 'aiusage-parse-qoder-test')
@@ -29,6 +40,9 @@ describe('runParse with qoder', () => {
 
     cacheDb = new Database(':memory:')
     initializeDatabase(cacheDb)
+    insertPrice(cacheDb, 'qoder-ultimate', { input: 1.6, output: 1.6, cacheRead: 1.6, cacheWrite: 1.6, provider: 'qoder' })
+    insertPrice(cacheDb, 'gpt-4o', { input: 2.5, output: 10, provider: 'openai' })
+    loadPricingRuntime(cacheDb, null)
 
     qoderSegmentPath = join(testDir, '.qoder', 'logs', 'sessions', '-workspace-project', 'sess_qoder', 'segments', '2026-05-12T17-06-16-450+08-00-xj6lr3-p16146.jsonl')
     mkdirSync(join(qoderSegmentPath, '..'), { recursive: true })

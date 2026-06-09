@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3'
 import {
-  getBundledPriceSeed,
   setRuntimePriceTable,
   setPriceOverride,
   resolvePriceFromTable,
@@ -50,7 +49,7 @@ interface LitellmEntry {
 }
 
 export interface PricingSyncSummary {
-  source: 'litellm' | 'bundled'
+  source: 'litellm'
   added: number
   updated: number
   unchanged: number
@@ -213,39 +212,6 @@ export function setUserPrice(db: Database.Database, modelKey: string, entry: Pri
 export function removeUserPrice(db: Database.Database, modelKey: string): void {
   db.prepare("DELETE FROM model_price_aliases WHERE model_key = ? AND origin = 'user'").run(modelKey)
   db.prepare("DELETE FROM model_prices WHERE model_key = ? AND origin = 'user'").run(modelKey)
-}
-
-export function ensureBundledPricingSeed(db: Database.Database): PricingSyncSummary {
-  const count = (db.prepare('SELECT COUNT(*) AS count FROM model_prices').get() as { count: number }).count
-  if (count > 0) return buildDrySummary(db, 'bundled')
-
-  const now = Date.now()
-  const seed = getBundledPriceSeed()
-  const insertPrice = db.prepare(`
-    INSERT INTO model_prices (
-      model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
-      source_url, origin, status, last_synced_at, created_at, updated_at
-    ) VALUES (?, '', ?, ?, ?, ?, ?, 'bundled', ?, NULL, 'builtin', 'active', ?, ?, ?)
-  `)
-  const insertAlias = db.prepare(`
-    INSERT OR IGNORE INTO model_price_aliases (
-      alias, model_key, match_type, provider, priority, source, origin, enabled, created_at, updated_at
-    ) VALUES (?, ?, 'exact', '', 100, 'bundled', 'builtin', 1, ?, ?)
-  `)
-
-  let added = 0
-  const tx = db.transaction(() => {
-    for (const [modelKey, price] of Object.entries(seed)) {
-      insertPrice.run(modelKey, price.input, price.output, price.cacheRead ?? null, price.cacheWrite ?? null, price.currency ?? 'USD', modelKey, now, now, now)
-      insertAlias.run(modelKey, modelKey, now, now)
-      added++
-    }
-  })
-  tx()
-  const summary = buildDrySummary(db, 'bundled')
-  summary.added = added
-  summary.aliasesAdded = added
-  return summary
 }
 
 function upsertBuiltinPrice(
@@ -440,7 +406,7 @@ export function dryRunLocalModels(db: Database.Database): PricingSyncSummary['dr
   return { totalModels: models.length, matched, unresolved: unresolved.slice(0, 50) }
 }
 
-function buildDrySummary(db: Database.Database, source: 'litellm' | 'bundled'): PricingSyncSummary {
+function buildDrySummary(db: Database.Database, source: 'litellm'): PricingSyncSummary {
   return {
     source,
     added: 0,
