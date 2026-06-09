@@ -38,5 +38,22 @@ describe('AsyncTaskQueue', () => {
     await expect(failed).rejects.toThrow('boom')
     await expect(next).resolves.toBe('ok')
   })
-})
 
+  it('reports running and pending task counts', async () => {
+    const queue = new AsyncTaskQueue()
+    let releaseFirst!: () => void
+
+    const first = queue.run(async () => {
+      await new Promise<void>((resolve) => { releaseFirst = resolve })
+    })
+    const second = queue.run(() => 'next')
+
+    await Promise.resolve()
+    expect(queue.getStatus()).toEqual({ running: true, pending: 1 })
+
+    releaseFirst()
+    await first
+    await second
+    expect(queue.getStatus()).toEqual({ running: false, pending: 0 })
+  })
+})

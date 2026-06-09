@@ -79,6 +79,12 @@ function insertTestPrice(db: Database.Database, modelKey = 'claude-sonnet-4-6') 
       source_url, origin, status, last_synced_at, created_at, updated_at
     ) VALUES (?, 'anthropic', 3, 15, NULL, NULL, 'USD', 'litellm', ?, NULL, 'builtin', 'active', ?, ?, ?)
   `).run(modelKey, modelKey, now, now, now)
+  db.prepare(`
+    INSERT INTO model_price_sync_baselines (
+      model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+      source_url, last_synced_at, updated_at
+    ) VALUES (?, 'anthropic', 3, 15, NULL, NULL, 'USD', 'litellm', ?, NULL, ?, ?)
+  `).run(modelKey, modelKey, now, now)
 }
 
 async function waitForPricingRecalcDone(baseUrl: string) {
@@ -238,11 +244,50 @@ describe('API Server', () => {
     const after = await fetch(`${baseUrl}/api/pricing`)
     const afterData = await after.json()
     expect(afterData.registry.unresolvedLocalModels).not.toContain('provider/claude-sonnet-4-6')
+    expect(afterData.localBindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        model: 'provider/claude-sonnet-4-6',
+        modelKey: 'claude-sonnet-4-6',
+        origin: 'user',
+        matchType: 'alias',
+      }),
+    ]))
     expect(afterData.models[0]).toMatchObject({
       model: 'provider/claude-sonnet-4-6',
       isBuiltin: true,
       matchedBy: 'claude-sonnet-4-6',
     })
+  })
+
+  it('unbinds a manual local model alias without recalculating costs', async () => {
+    insertTestRecord(db, { model: 'provider/claude-sonnet-4-6', cost: 0, cost_source: 'unknown' })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const bind = await fetch(`${baseUrl}/api/pricing/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias: 'provider/claude-sonnet-4-6', modelKey: 'claude-sonnet-4-6' }),
+    })
+    expect(bind.ok).toBe(true)
+
+    const unbind = await fetch(`${baseUrl}/api/pricing/alias?alias=${encodeURIComponent('provider/claude-sonnet-4-6')}`, { method: 'DELETE' })
+    expect(unbind.ok).toBe(true)
+    expect(await unbind.json()).toMatchObject({ ok: true, needsRecalc: true })
+
+    const after = await fetch(`${baseUrl}/api/pricing`)
+    const afterData = await after.json()
+    expect(afterData.registry.unresolvedLocalModels).toContain('provider/claude-sonnet-4-6')
+    expect(afterData.localBindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        model: 'provider/claude-sonnet-4-6',
+        modelKey: null,
+        hasPrice: false,
+      }),
+    ]))
+
+    const unchanged = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
+    expect(unchanged.cost).toBe(0)
+    expect(unchanged.cost_source).toBe('unknown')
   })
 
   it('recalculates pricing costs only after the explicit recalc endpoint is triggered', async () => {
@@ -272,7 +317,7 @@ describe('API Server', () => {
     expect(start.status).toBe(202)
     const startData = await start.json()
     expect(startData.accepted).toBe(true)
-    expect(startData.status.state).toBe('queued')
+    expect(startData.status.state).toBe('running')
 
     const done = await waitForPricingRecalcDone(baseUrl)
     expect(done.total).toBe(1)
@@ -282,6 +327,340 @@ describe('API Server', () => {
     const recalculated = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
     expect(recalculated.cost_source).toBe('pricing')
     expect(recalculated.cost).toBeCloseTo(10.5)
+  })
+
+  it('reports pricing changes as needing recalculation until recalculation completes', async () => {
+    insertTestRecord(db, {
+      model: 'claude-sonnet-4-6',
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cost: 0,
+      cost_source: 'unknown',
+    })
+
+    const update = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', input: 6, output: 12, currency: 'USD' }),
+    })
+    expect(update.ok).toBe(true)
+    const updateData = await update.json()
+    expect(updateData).toMatchObject({ ok: true, needsRecalc: true })
+    expect(typeof updateData.needsRecalcSince).toBe('number')
+
+    const pending = await fetch(`${baseUrl}/api/pricing/recalc`)
+    expect(pending.ok).toBe(true)
+    const pendingStatus = await pending.json()
+    expect(pendingStatus).toMatchObject({
+      state: 'idle',
+      needsRecalc: true,
+      needsRecalcSince: updateData.needsRecalcSince,
+    })
+
+    const start = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(start.status).toBe(202)
+    const startData = await start.json()
+    expect(startData.status).toMatchObject({
+      state: 'running',
+      needsRecalc: true,
+      needsRecalcSince: updateData.needsRecalcSince,
+    })
+
+    const done = await waitForPricingRecalcDone(baseUrl)
+    expect(done).toMatchObject({
+      state: 'done',
+      needsRecalc: false,
+      needsRecalcSince: null,
+    })
+
+    const finalStatusResponse = await fetch(`${baseUrl}/api/pricing/recalc`)
+    const finalStatus = await finalStatusResponse.json()
+    expect(finalStatus).toMatchObject({
+      state: 'done',
+      needsRecalc: false,
+      needsRecalcSince: null,
+    })
+  })
+
+  it('starts pricing recalculation even when other database writes are queued', async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    server = createApiServer(db, {
+      getDbWriteQueueStatus: () => ({ running: true, pending: 8 }),
+    })
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        baseUrl = `http://127.0.0.1:${address.port}`
+        resolve()
+      })
+    })
+
+    insertTestRecord(db, {
+      model: 'claude-sonnet-4-6',
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cost: 0,
+      cost_source: 'unknown',
+    })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const start = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(start.status).toBe(202)
+    const startData = await start.json()
+    expect(startData.accepted).toBe(true)
+    expect(startData.status).toMatchObject({ state: 'running', queueRunning: false, queuePending: 0 })
+
+    const done = await waitForPricingRecalcDone(baseUrl)
+    expect(done.state).toBe('done')
+    expect(done.updated).toBe(1)
+  })
+
+  it('resets a modified synced price back to the synced baseline', async () => {
+    insertTestRecord(db, {
+      model: 'claude-sonnet-4-6',
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const override = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', input: 30, output: 60, currency: 'USD' }),
+    })
+    expect(override.ok).toBe(true)
+
+    const modified = await fetch(`${baseUrl}/api/pricing`)
+    const modifiedData = await modified.json()
+    expect(modifiedData.models[0]).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      isOverride: true,
+      hasSyncedBaseline: true,
+    })
+    expect(modifiedData.models[0].price).toMatchObject({ input: 30, output: 60 })
+
+    const reset = await fetch(`${baseUrl}/api/pricing?model=${encodeURIComponent('claude-sonnet-4-6')}`, { method: 'DELETE' })
+    expect(reset.ok).toBe(true)
+
+    const restored = await fetch(`${baseUrl}/api/pricing`)
+    const restoredData = await restored.json()
+    expect(restoredData.models[0]).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      isBuiltin: true,
+      isOverride: false,
+      hasSyncedBaseline: true,
+    })
+    expect(restoredData.models[0].price).toMatchObject({ input: 3, output: 15 })
+  })
+
+  it('keeps manual local model bindings when resetting a target price', async () => {
+    insertTestRecord(db, {
+      model: 'local-sonnet-alias',
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+    })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const override = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', input: 30, output: 60, currency: 'USD' }),
+    })
+    expect(override.ok).toBe(true)
+
+    const bind = await fetch(`${baseUrl}/api/pricing/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias: 'local-sonnet-alias', modelKey: 'claude-sonnet-4-6' }),
+    })
+    expect(bind.ok).toBe(true)
+
+    const reset = await fetch(`${baseUrl}/api/pricing?model=${encodeURIComponent('claude-sonnet-4-6')}`, { method: 'DELETE' })
+    expect(reset.ok).toBe(true)
+
+    const restored = await fetch(`${baseUrl}/api/pricing`)
+    const restoredData = await restored.json()
+    expect(restoredData.aliasBindings).toContainEqual(expect.objectContaining({
+      alias: 'local-sonnet-alias',
+      modelKey: 'claude-sonnet-4-6',
+      origin: 'user',
+    }))
+    expect(restoredData.localBindings).toContainEqual(expect.objectContaining({
+      model: 'local-sonnet-alias',
+      modelKey: 'claude-sonnet-4-6',
+      origin: 'user',
+      priceOrigin: 'builtin',
+      matchType: 'alias',
+      bindingType: 'manual',
+      hasManualBinding: true,
+      hasPrice: true,
+    }))
+  })
+
+  it('marks direct custom prices separately from manual bindings', async () => {
+    insertTestRecord(db, { model: 'local-custom-model' })
+
+    const override = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'local-custom-model', input: 12, output: 24, currency: 'USD' }),
+    })
+    expect(override.ok).toBe(true)
+
+    const response = await fetch(`${baseUrl}/api/pricing`)
+    const data = await response.json()
+    expect(data.aliasBindings).not.toContainEqual(expect.objectContaining({
+      alias: 'local-custom-model',
+      modelKey: 'local-custom-model',
+      origin: 'user',
+    }))
+    expect(data.localBindings).toContainEqual(expect.objectContaining({
+      model: 'local-custom-model',
+      modelKey: 'local-custom-model',
+      origin: 'user',
+      priceOrigin: 'user',
+      matchType: 'exact',
+      bindingType: 'custom',
+      hasManualBinding: false,
+      hasPrice: true,
+    }))
+  })
+
+  it('clears direct custom pricing after reset when no manual binding exists', async () => {
+    insertTestRecord(db, { model: 'local-custom-model' })
+
+    const override = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'local-custom-model', input: 12, output: 24, currency: 'USD' }),
+    })
+    expect(override.ok).toBe(true)
+
+    const reset = await fetch(`${baseUrl}/api/pricing?model=${encodeURIComponent('local-custom-model')}`, { method: 'DELETE' })
+    expect(reset.ok).toBe(true)
+
+    const response = await fetch(`${baseUrl}/api/pricing`)
+    const data = await response.json()
+    expect(data.aliasBindings).not.toContainEqual(expect.objectContaining({
+      alias: 'local-custom-model',
+      modelKey: 'local-custom-model',
+    }))
+    expect(data.localBindings).toContainEqual(expect.objectContaining({
+      model: 'local-custom-model',
+      modelKey: null,
+      priceOrigin: null,
+      matchType: null,
+      bindingType: 'none',
+      hasManualBinding: false,
+      hasPrice: false,
+    }))
+  })
+
+  it('marks manual bindings to edited pricing models as custom pricing', async () => {
+    insertTestRecord(db, { model: 'local-sonnet-alias' })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const bind = await fetch(`${baseUrl}/api/pricing/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias: 'local-sonnet-alias', modelKey: 'claude-sonnet-4-6' }),
+    })
+    expect(bind.ok).toBe(true)
+
+    const override = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', input: 30, output: 60, currency: 'USD' }),
+    })
+    expect(override.ok).toBe(true)
+
+    const response = await fetch(`${baseUrl}/api/pricing`)
+    const data = await response.json()
+    expect(data.localBindings).toContainEqual(expect.objectContaining({
+      model: 'local-sonnet-alias',
+      modelKey: 'claude-sonnet-4-6',
+      origin: 'user',
+      priceOrigin: 'user',
+      matchType: 'alias',
+      bindingType: 'custom',
+      hasManualBinding: true,
+      hasPrice: true,
+    }))
+  })
+
+  it('lets a direct custom price override a manual binding until reset', async () => {
+    insertTestRecord(db, {
+      model: 'local-sonnet-alias',
+      input_tokens: 1_000_000,
+      output_tokens: 1_000_000,
+      cost: 0,
+    })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const bind = await fetch(`${baseUrl}/api/pricing/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias: 'local-sonnet-alias', modelKey: 'claude-sonnet-4-6' }),
+    })
+    expect(bind.ok).toBe(true)
+
+    const override = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'local-sonnet-alias', input: 20, output: 40, currency: 'USD' }),
+    })
+    expect(override.ok).toBe(true)
+
+    const customized = await fetch(`${baseUrl}/api/pricing`)
+    const customizedData = await customized.json()
+    expect(customizedData.models).toContainEqual(expect.objectContaining({
+      model: 'local-sonnet-alias',
+      isOverride: true,
+      matchedBy: null,
+      price: expect.objectContaining({ input: 20, output: 40 }),
+    }))
+    expect(customizedData.localBindings).toContainEqual(expect.objectContaining({
+      model: 'local-sonnet-alias',
+      modelKey: 'claude-sonnet-4-6',
+      priceOrigin: 'user',
+      bindingType: 'custom',
+      hasManualBinding: true,
+      hasPrice: true,
+    }))
+
+    const customRecalc = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(customRecalc.ok).toBe(true)
+    await waitForPricingRecalcDone(baseUrl)
+    const customCost = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
+    expect(customCost.cost_source).toBe('pricing')
+    expect(customCost.cost).toBeCloseTo(60)
+
+    const reset = await fetch(`${baseUrl}/api/pricing?model=${encodeURIComponent('local-sonnet-alias')}`, { method: 'DELETE' })
+    expect(reset.ok).toBe(true)
+
+    const restored = await fetch(`${baseUrl}/api/pricing`)
+    const restoredData = await restored.json()
+    expect(restoredData.models).toContainEqual(expect.objectContaining({
+      model: 'local-sonnet-alias',
+      isOverride: false,
+      matchedBy: 'claude-sonnet-4-6',
+      price: expect.objectContaining({ input: 3, output: 15 }),
+    }))
+    expect(restoredData.localBindings).toContainEqual(expect.objectContaining({
+      model: 'local-sonnet-alias',
+      modelKey: 'claude-sonnet-4-6',
+      priceOrigin: 'builtin',
+      bindingType: 'manual',
+      hasManualBinding: true,
+      hasPrice: true,
+    }))
+
+    const restoredRecalc = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(restoredRecalc.ok).toBe(true)
+    await waitForPricingRecalcDone(baseUrl)
+    const restoredCost = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
+    expect(restoredCost.cost_source).toBe('pricing')
+    expect(restoredCost.cost).toBeCloseTo(18)
   })
 })
 

@@ -26,6 +26,21 @@ interface ModelPriceRow {
   updated_at: number
 }
 
+interface ModelPriceSyncBaselineRow {
+  model_key: string
+  provider: string
+  input: number
+  output: number
+  cache_read: number | null
+  cache_write: number | null
+  currency: 'USD' | 'CNY'
+  source: string
+  source_model_id: string | null
+  source_url: string | null
+  last_synced_at: number
+  updated_at: number
+}
+
 interface AliasRow {
   alias: string
   model_key: string
@@ -66,6 +81,7 @@ export interface PricingSyncSummary {
 
 export interface PricingModelView {
   model: string
+  provider: string | null
   price: PriceEntry | null
   currency: 'USD' | 'CNY'
   origin: 'builtin' | 'user' | null
@@ -75,6 +91,7 @@ export interface PricingModelView {
   isBuiltin: boolean
   isOverride: boolean
   isDefault: boolean
+  hasSyncedBaseline: boolean
   matchedBy: string | null
 }
 
@@ -96,6 +113,25 @@ export interface PricingAliasTarget {
   source: string
   sourceModelId: string | null
   currency: 'USD' | 'CNY'
+}
+
+export interface PricingAliasBinding {
+  alias: string
+  modelKey: string
+  origin: 'builtin' | 'user'
+  source: string
+}
+
+export interface PricingLocalModelBinding {
+  model: string
+  modelKey: string | null
+  origin: 'builtin' | 'user' | null
+  priceOrigin: 'builtin' | 'user' | null
+  source: string | null
+  matchType: 'alias' | 'exact' | 'prefix' | null
+  bindingType: 'automatic' | 'manual' | 'custom' | 'none'
+  hasManualBinding: boolean
+  hasPrice: boolean
 }
 
 function rowToPrice(row: Pick<ModelPriceRow, 'input' | 'output' | 'cache_read' | 'cache_write' | 'currency'>): PriceEntry {
@@ -163,6 +199,14 @@ function loadUserRows(db: Database.Database): ModelPriceRow[] {
   `).all() as ModelPriceRow[]
 }
 
+function loadSyncedBaselineRows(db: Database.Database): ModelPriceSyncBaselineRow[] {
+  return db.prepare(`
+    SELECT model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+           source_url, last_synced_at, updated_at
+    FROM model_price_sync_baselines
+  `).all() as ModelPriceSyncBaselineRow[]
+}
+
 function loadAliasRows(db: Database.Database): AliasRow[] {
   return db.prepare(`
     SELECT alias, model_key, match_type, provider, priority, source, origin, enabled
@@ -179,7 +223,6 @@ export function loadPricingRuntime(db: Database.Database, config?: Config | null
   const overrides: Record<string, PriceEntry> = {}
   const userRows = loadUserRows(db)
   const configOverrides = config?.priceOverrides ?? {}
-  for (const row of userRows) overrides[row.model_key] = rowToPrice(row)
 
   const activePrices = priceTableFromDb(db)
   for (const alias of loadAliasRows(db)) {
@@ -189,18 +232,25 @@ export function loadPricingRuntime(db: Database.Database, config?: Config | null
     else builtin[alias.alias] = price
   }
 
+  for (const row of userRows) overrides[row.model_key] = rowToPrice(row)
   for (const [model, entry] of Object.entries(configOverrides)) overrides[model] = entry
   setRuntimePriceTable(builtin, overrides)
 }
 
 export function setUserPrice(db: Database.Database, modelKey: string, entry: PriceEntry): void {
   const now = Date.now()
+  const baseline = db.prepare(`
+    SELECT provider, source, source_model_id, source_url, last_synced_at
+    FROM model_price_sync_baselines
+    WHERE model_key = ?
+  `).get(modelKey) as (Pick<ModelPriceSyncBaselineRow, 'provider' | 'source' | 'source_model_id' | 'source_url' | 'last_synced_at'> | undefined)
   db.prepare(`
     INSERT INTO model_prices (
       model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
       source_url, origin, status, last_synced_at, created_at, updated_at
-    ) VALUES (?, '', ?, ?, ?, ?, ?, 'manual', ?, NULL, 'user', 'active', NULL, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, 'user', 'active', ?, ?, ?)
     ON CONFLICT(model_key) DO UPDATE SET
+      provider = excluded.provider,
       input = excluded.input,
       output = excluded.output,
       cache_read = excluded.cache_read,
@@ -208,25 +258,78 @@ export function setUserPrice(db: Database.Database, modelKey: string, entry: Pri
       currency = excluded.currency,
       source = 'manual',
       source_model_id = excluded.source_model_id,
-      source_url = NULL,
+      source_url = excluded.source_url,
       origin = 'user',
       status = 'active',
+      last_synced_at = excluded.last_synced_at,
       updated_at = excluded.updated_at
-  `).run(modelKey, entry.input, entry.output, entry.cacheRead ?? null, entry.cacheWrite ?? null, entry.currency ?? 'USD', modelKey, now, now)
-
-  db.prepare(`
-    INSERT INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled, created_at, updated_at)
-    VALUES (?, ?, 'exact', '', 200, 'manual', 'user', 1, ?, ?)
-    ON CONFLICT(alias) DO UPDATE SET
-      model_key = excluded.model_key,
-      priority = excluded.priority,
-      source = 'manual',
-      origin = 'user',
-      enabled = 1,
-      updated_at = excluded.updated_at
-  `).run(modelKey, modelKey, now, now)
+  `).run(
+    modelKey,
+    baseline?.provider ?? '',
+    entry.input,
+    entry.output,
+    entry.cacheRead ?? null,
+    entry.cacheWrite ?? null,
+    entry.currency ?? 'USD',
+    baseline?.source_model_id ?? modelKey,
+    baseline?.source_url ?? null,
+    baseline?.last_synced_at ?? null,
+    now,
+    now,
+  )
 
   setPriceOverride(modelKey, entry)
+}
+
+export function resetUserPriceToSynced(db: Database.Database, modelKey: string): void {
+  const baseline = db.prepare(`
+    SELECT model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+           source_url, last_synced_at, updated_at
+    FROM model_price_sync_baselines
+    WHERE model_key = ?
+  `).get(modelKey) as (ModelPriceSyncBaselineRow | undefined)
+
+  if (!baseline) {
+    removeUserPrice(db, modelKey)
+    return
+  }
+
+  const now = Date.now()
+  db.prepare("DELETE FROM model_price_aliases WHERE alias = ? AND model_key = ? AND origin = 'user'").run(modelKey, modelKey)
+  db.prepare(`
+    INSERT INTO model_prices (
+      model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+      source_url, origin, status, last_synced_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'builtin', 'active', ?, ?, ?)
+    ON CONFLICT(model_key) DO UPDATE SET
+      provider = excluded.provider,
+      input = excluded.input,
+      output = excluded.output,
+      cache_read = excluded.cache_read,
+      cache_write = excluded.cache_write,
+      currency = excluded.currency,
+      source = excluded.source,
+      source_model_id = excluded.source_model_id,
+      source_url = excluded.source_url,
+      origin = 'builtin',
+      status = 'active',
+      last_synced_at = excluded.last_synced_at,
+      updated_at = excluded.updated_at
+  `).run(
+    baseline.model_key,
+    baseline.provider,
+    baseline.input,
+    baseline.output,
+    baseline.cache_read,
+    baseline.cache_write,
+    baseline.currency,
+    baseline.source,
+    baseline.source_model_id,
+    baseline.source_url,
+    baseline.last_synced_at,
+    now,
+    now,
+  )
 }
 
 export function setUserPricingAlias(db: Database.Database, alias: string, modelKey: string): void {
@@ -257,8 +360,14 @@ export function setUserPricingAlias(db: Database.Database, alias: string, modelK
   `).run(aliasKey, targetKey, target.provider ?? '', now, now)
 }
 
+export function removeUserPricingAlias(db: Database.Database, alias: string): void {
+  const aliasKey = alias.trim()
+  if (!aliasKey) throw new Error('alias required')
+  db.prepare("DELETE FROM model_price_aliases WHERE alias = ? AND origin = 'user'").run(aliasKey)
+}
+
 export function removeUserPrice(db: Database.Database, modelKey: string): void {
-  db.prepare("DELETE FROM model_price_aliases WHERE model_key = ? AND origin = 'user'").run(modelKey)
+  db.prepare("DELETE FROM model_price_aliases WHERE alias = ? AND model_key = ? AND origin = 'user'").run(modelKey, modelKey)
   db.prepare("DELETE FROM model_prices WHERE model_key = ? AND origin = 'user'").run(modelKey)
 }
 
@@ -267,6 +376,37 @@ function upsertBuiltinPrice(
   entry: { modelKey: string; provider: string; price: PriceEntry; sourceModelId: string; sourceUrl: string },
   now: number
 ): 'added' | 'updated' | 'unchanged' | 'user_preserved' {
+  db.prepare(`
+    INSERT INTO model_price_sync_baselines (
+      model_key, provider, input, output, cache_read, cache_write, currency, source,
+      source_model_id, source_url, last_synced_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'litellm', ?, ?, ?, ?)
+    ON CONFLICT(model_key) DO UPDATE SET
+      provider = excluded.provider,
+      input = excluded.input,
+      output = excluded.output,
+      cache_read = excluded.cache_read,
+      cache_write = excluded.cache_write,
+      currency = excluded.currency,
+      source = excluded.source,
+      source_model_id = excluded.source_model_id,
+      source_url = excluded.source_url,
+      last_synced_at = excluded.last_synced_at,
+      updated_at = excluded.updated_at
+  `).run(
+    entry.modelKey,
+    entry.provider,
+    entry.price.input,
+    entry.price.output,
+    entry.price.cacheRead ?? null,
+    entry.price.cacheWrite ?? null,
+    entry.price.currency ?? 'USD',
+    entry.sourceModelId,
+    entry.sourceUrl,
+    now,
+    now,
+  )
+
   const existing = db.prepare('SELECT origin, input, output, cache_read, cache_write, currency FROM model_prices WHERE model_key = ?').get(entry.modelKey) as (ModelPriceRow | undefined)
   if (existing?.origin === 'user') return 'user_preserved'
 
@@ -368,6 +508,13 @@ function priceTableFromDb(db: Database.Database): Record<string, PriceEntry> {
 }
 
 export function resolvePriceFromRegistry(db: Database.Database, model: string): PriceEntry | undefined {
+  const directUserPrice = db.prepare(`
+    SELECT input, output, cache_read, cache_write, currency
+    FROM model_prices
+    WHERE model_key = ? AND origin = 'user' AND status = 'active'
+  `).get(model) as (Pick<ModelPriceRow, 'input' | 'output' | 'cache_read' | 'cache_write' | 'currency'> | undefined)
+  if (directUserPrice) return rowToPrice(directUserPrice)
+
   const exactAlias = db.prepare(`
     SELECT p.input, p.output, p.cache_read, p.cache_write, p.currency
     FROM model_price_aliases a
@@ -380,6 +527,14 @@ export function resolvePriceFromRegistry(db: Database.Database, model: string): 
 }
 
 function findMatch(db: Database.Database, model: string): { price: PriceEntry; row: ModelPriceRow; matchedBy: string | null } | null {
+  const directUserMatch = db.prepare(`
+    SELECT model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+           source_url, origin, status, last_synced_at, updated_at
+    FROM model_prices
+    WHERE model_key = ? AND origin = 'user' AND status = 'active'
+  `).get(model) as (ModelPriceRow | undefined)
+  if (directUserMatch) return { price: rowToPrice(directUserMatch), row: directUserMatch, matchedBy: null }
+
   const aliasMatch = db.prepare(`
     SELECT p.model_key, p.provider, p.input, p.output, p.cache_read, p.cache_write, p.currency, p.source,
            p.source_model_id, p.source_url, p.origin, p.status, p.last_synced_at, p.updated_at, a.alias
@@ -414,12 +569,14 @@ export function listPricingModels(db: Database.Database): PricingModelView[] {
   const knownModels = new Set(dbModels.map(row => row.model))
   const userRows = loadUserRows(db)
   for (const row of userRows) knownModels.add(row.model_key)
+  const syncedBaselines = new Set(loadSyncedBaselineRows(db).map(row => row.model_key))
 
   return [...knownModels].map((model) => {
     const match = findMatch(db, model)
     if (!match) {
       return {
         model,
+        provider: null,
         price: null,
         currency: 'USD',
         origin: null,
@@ -429,11 +586,13 @@ export function listPricingModels(db: Database.Database): PricingModelView[] {
         isBuiltin: false,
         isOverride: false,
         isDefault: false,
+        hasSyncedBaseline: syncedBaselines.has(model),
         matchedBy: null,
       }
     }
     return {
       model,
+      provider: match.row.provider || null,
       price: match.price,
       currency: match.price.currency ?? 'USD',
       origin: match.row.origin,
@@ -443,6 +602,7 @@ export function listPricingModels(db: Database.Database): PricingModelView[] {
       isBuiltin: match.row.origin === 'builtin',
       isOverride: match.row.origin === 'user',
       isDefault: match.row.origin === 'builtin',
+      hasSyncedBaseline: syncedBaselines.has(match.row.model_key),
       matchedBy: match.matchedBy,
     }
   })
@@ -496,6 +656,88 @@ export function listPricingAliasTargets(db: Database.Database): PricingAliasTarg
   }))
 }
 
+export function listLocalModelBindings(db: Database.Database): PricingLocalModelBinding[] {
+  const rows = db.prepare("SELECT DISTINCT model FROM records WHERE model != 'unknown' ORDER BY model ASC").all() as Array<{ model: string }>
+  const priceRows = db.prepare(`
+    SELECT model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+           source_url, origin, status, last_synced_at, updated_at
+    FROM model_prices WHERE status = 'active'
+  `).all() as ModelPriceRow[]
+
+  return rows.map(({ model }) => {
+    const directUserPrice = db.prepare(`
+      SELECT model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+             source_url, origin, status, last_synced_at, updated_at
+      FROM model_prices
+      WHERE model_key = ? AND origin = 'user' AND status = 'active'
+    `).get(model) as (ModelPriceRow | undefined)
+    const aliasMatch = db.prepare(`
+      SELECT a.alias, a.model_key AS modelKey, a.origin, a.source, p.origin AS priceOrigin
+      FROM model_price_aliases a
+      JOIN model_prices p ON p.model_key = a.model_key
+      WHERE a.alias = ? AND a.enabled = 1 AND p.status = 'active'
+      ORDER BY a.priority DESC LIMIT 1
+    `).get(model) as ({ alias: string; modelKey: string; origin: 'builtin' | 'user'; source: string; priceOrigin: 'builtin' | 'user' } | undefined)
+
+    if (directUserPrice) {
+      const hasManualBinding = Boolean(aliasMatch && aliasMatch.origin === 'user' && !(aliasMatch.alias === model && aliasMatch.modelKey === model))
+      return {
+        model,
+        modelKey: hasManualBinding ? aliasMatch!.modelKey : directUserPrice.model_key,
+        origin: hasManualBinding ? aliasMatch!.origin : directUserPrice.origin,
+        priceOrigin: directUserPrice.origin,
+        source: directUserPrice.source,
+        matchType: 'exact',
+        bindingType: 'custom',
+        hasManualBinding,
+        hasPrice: true,
+      }
+    }
+
+    if (aliasMatch) {
+      const selfAlias = aliasMatch.alias === model && aliasMatch.modelKey === model
+      const hasManualBinding = aliasMatch.origin === 'user' && !selfAlias
+      return {
+        model,
+        modelKey: aliasMatch.modelKey,
+        origin: aliasMatch.origin,
+        priceOrigin: aliasMatch.priceOrigin,
+        source: aliasMatch.source,
+        matchType: selfAlias ? 'exact' : 'alias',
+        bindingType: aliasMatch.priceOrigin === 'user' ? 'custom' : hasManualBinding ? 'manual' : 'automatic',
+        hasManualBinding,
+        hasPrice: true,
+      }
+    }
+
+    let best: ModelPriceRow | null = null
+    let matchType: 'exact' | 'prefix' | null = null
+    for (const row of priceRows) {
+      if (model === row.model_key) {
+        best = row
+        matchType = 'exact'
+        break
+      }
+      if (model.startsWith(row.model_key) && (!best || row.model_key.length > best.model_key.length)) {
+        best = row
+        matchType = 'prefix'
+      }
+    }
+
+    return {
+      model,
+      modelKey: best?.model_key ?? null,
+      origin: best?.origin ?? null,
+      priceOrigin: best?.origin ?? null,
+      source: best?.source ?? null,
+      matchType,
+      bindingType: best?.origin === 'user' ? 'custom' : best ? 'automatic' : 'none',
+      hasManualBinding: false,
+      hasPrice: Boolean(best),
+    }
+  })
+}
+
 export function dryRunLocalModels(db: Database.Database): PricingSyncSummary['dryRun'] {
   const models = db.prepare("SELECT DISTINCT model FROM records WHERE model != 'unknown' ORDER BY model ASC").all() as Array<{ model: string }>
   const unresolved: string[] = []
@@ -505,6 +747,15 @@ export function dryRunLocalModels(db: Database.Database): PricingSyncSummary['dr
     else unresolved.push(row.model)
   }
   return { totalModels: models.length, matched, unresolved: unresolved.slice(0, 50) }
+}
+
+export function getUserAliasBindings(db: Database.Database): PricingAliasBinding[] {
+  return db.prepare(`
+    SELECT alias, model_key AS modelKey, origin, source
+    FROM model_price_aliases
+    WHERE origin = 'user' AND enabled = 1
+    ORDER BY alias ASC
+  `).all() as PricingAliasBinding[]
 }
 
 function buildDrySummary(db: Database.Database, source: 'litellm'): PricingSyncSummary {

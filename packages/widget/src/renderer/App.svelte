@@ -59,12 +59,6 @@
     return String(n)
   }
 
-  function formatModelName(name: string): string {
-    return name
-      .replace(/^(claude-|gpt-|gemini-|deepseek-|qwen-)/i, '')
-      .replace(/-\d{8}$/, '')
-  }
-
   $: locale = settings?.locale ?? initialLocale
   $: i18n = t(locale)
   $: currency = settings?.currency ?? 'USD'
@@ -146,7 +140,7 @@
   $: todayCostStr = data ? formatUsdCost(data.todayCost, currency, locale, exchangeRate) : '--'
   $: rangeCostStr = data ? formatUsdCost(data.rangeCost, currency, locale, exchangeRate) : '--'
   $: rangeLabelStr = data ? rangeLabel(data.rangeDays) : i18n.lastNDays(30)
-  $: modelStr = data?.topModel ? formatModelName(data.topModel.name) : '--'
+  $: modelStr = data?.topModel ? data.topModel.name : '--'
   $: modelSubStr = data?.topModel ? `${data.topModel.share}%` : ''
   $: toolStr = data?.topTool?.name ?? '--'
   $: toolSubStr = data?.topTool ? `${data.topTool.share}%` : ''

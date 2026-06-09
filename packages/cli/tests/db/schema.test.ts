@@ -70,6 +70,13 @@ describe('Database Schema', () => {
     expect(tableNames).toContain('tool_calls')
   })
 
+  it('creates synced pricing baseline table', () => {
+    initializeDatabase(db)
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()
+    const tableNames = tables.map((t: any) => t.name)
+    expect(tableNames).toContain('model_price_sync_baselines')
+  })
+
   it('creates readonly views for visualization tools', () => {
     initializeDatabase(db)
     const views = db.prepare("SELECT name FROM sqlite_master WHERE type='view'").all()
@@ -110,7 +117,7 @@ describe('Database Schema', () => {
   it('records latest schema version', () => {
     initializeDatabase(db)
     const version = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get()
-    expect((version as any).version).toBe(10)
+    expect((version as any).version).toBe(11)
   })
 
   it('queries visualization views successfully', () => {

@@ -29,8 +29,8 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
-import { AsyncTaskQueue } from '../db/write-queue.js'
-import { getPricingRegistrySummary, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
+import { AsyncTaskQueue, type AsyncTaskQueueStatus } from '../db/write-queue.js'
+import { getPricingRegistrySummary, getUserAliasBindings, listLocalModelBindings, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPricingAlias, resetUserPriceToSynced, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
@@ -76,10 +76,14 @@ type PricingRecalcState = 'idle' | 'queued' | 'running' | 'done' | 'error'
 
 interface PricingRecalcStatus {
   state: PricingRecalcState
+  needsRecalc: boolean
+  needsRecalcSince: number | null
   total: number
   processed: number
   updated: number
   skipped: number
+  queueRunning: boolean
+  queuePending: number
   startedAt: number | null
   finishedAt: number | null
   error: string | null
@@ -88,10 +92,14 @@ interface PricingRecalcStatus {
 function emptyPricingRecalcStatus(): PricingRecalcStatus {
   return {
     state: 'idle',
+    needsRecalc: false,
+    needsRecalcSince: null,
     total: 0,
     processed: 0,
     updated: 0,
     skipped: 0,
+    queueRunning: false,
+    queuePending: 0,
     startedAt: null,
     finishedAt: null,
     error: null,
@@ -105,6 +113,13 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
   let skipped = 0
   let lastId = ''
   const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
+  const priceCache = new Map<string, PriceEntry | null>()
+  const resolveCachedPrice = (model: string): PriceEntry | undefined => {
+    if (priceCache.has(model)) return priceCache.get(model) ?? undefined
+    const price = resolvePriceFromRegistry(db, model) ?? null
+    priceCache.set(model, price)
+    return price ?? undefined
+  }
   const totalRow = db.prepare('SELECT COUNT(*) AS total FROM records').get() as { total: number }
   const total = totalRow.total
   onProgress?.({ total, processed, updated, skipped })
@@ -126,7 +141,7 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
         const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
         const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
         const provider = model !== r.model ? inferProvider(model) : r.provider
-        const price = resolvePriceFromRegistry(db, model)
+        const price = resolveCachedPrice(model)
         const cost = price ? calculateCostForPrice(price, {
           inputTokens: r.input_tokens,
           outputTokens: r.output_tokens,
@@ -329,6 +344,7 @@ export interface ApiServerOptions {
   getSyncStatus?: () => SyncStatusSnapshot | null
   onConfigUpdated?: () => void
   runDbWrite?: <T>(task: () => T | Promise<T>) => Promise<T>
+  getDbWriteQueueStatus?: () => AsyncTaskQueueStatus
 }
 
 interface DeviceFilter {
@@ -414,23 +430,52 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
   const dashboardPassword = getDashboardPassword()
   const localWriteQueue = new AsyncTaskQueue()
   const runDbWrite = options?.runDbWrite ?? (<T>(task: () => T | Promise<T>) => localWriteQueue.run(task))
+  const getDbWriteQueueStatus = options?.getDbWriteQueueStatus ?? (() => localWriteQueue.getStatus())
   let pricingRecalcStatus = emptyPricingRecalcStatus()
+  let pricingNeedsRecalcSince: number | null = null
+  let pricingRecalcGeneration = 0
+
+  const currentPricingRecalcStatus = (): PricingRecalcStatus => {
+    const status = {
+      ...pricingRecalcStatus,
+      needsRecalc: pricingNeedsRecalcSince != null,
+      needsRecalcSince: pricingNeedsRecalcSince,
+    }
+    if (status.state !== 'queued') return status
+    const queueStatus = getDbWriteQueueStatus()
+    return {
+      ...status,
+      queueRunning: queueStatus.running,
+      queuePending: queueStatus.pending,
+    }
+  }
+
+  const markPricingNeedsRecalc = (): number => {
+    pricingRecalcGeneration += 1
+    pricingNeedsRecalcSince = Date.now()
+    return pricingNeedsRecalcSince
+  }
 
   const startPricingRecalc = (): { accepted: boolean; status: PricingRecalcStatus } => {
     if (pricingRecalcStatus.state === 'queued' || pricingRecalcStatus.state === 'running') {
-      return { accepted: false, status: pricingRecalcStatus }
+      return { accepted: false, status: currentPricingRecalcStatus() }
     }
+
+    const startedAt = Date.now()
+    const startedGeneration = pricingRecalcGeneration
 
     pricingRecalcStatus = {
       ...emptyPricingRecalcStatus(),
-      state: 'queued',
-      startedAt: Date.now(),
+      state: 'running',
+      startedAt,
     }
 
-    void runDbWrite(async () => {
+    const runRecalc = async () => {
       pricingRecalcStatus = {
         ...pricingRecalcStatus,
         state: 'running',
+        queueRunning: false,
+        queuePending: 0,
         startedAt: pricingRecalcStatus.startedAt ?? Date.now(),
       }
       try {
@@ -441,9 +486,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             state: 'running',
           }
         })
+        if (pricingNeedsRecalcSince != null && pricingRecalcGeneration === startedGeneration) {
+          pricingNeedsRecalcSince = null
+        }
         pricingRecalcStatus = {
           ...pricingRecalcStatus,
           state: 'done',
+          needsRecalc: pricingNeedsRecalcSince != null,
+          needsRecalcSince: pricingNeedsRecalcSince,
           finishedAt: Date.now(),
           error: null,
         }
@@ -455,16 +505,20 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           error: error instanceof Error ? error.message : String(error),
         }
       }
-    }).catch((error) => {
-      pricingRecalcStatus = {
-        ...pricingRecalcStatus,
-        state: 'error',
-        finishedAt: Date.now(),
-        error: error instanceof Error ? error.message : String(error),
-      }
+    }
+
+    setImmediate(() => {
+      void runRecalc().catch((error) => {
+        pricingRecalcStatus = {
+          ...pricingRecalcStatus,
+          state: 'error',
+          finishedAt: Date.now(),
+          error: error instanceof Error ? error.message : String(error),
+        }
+      })
     })
 
-    return { accepted: true, status: pricingRecalcStatus }
+    return { accepted: true, status: currentPricingRecalcStatus() }
   }
 
   const server = http.createServer(async (req, res) => {
@@ -1238,7 +1292,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       if (url.pathname === '/api/pricing') {
         // GET: list all prices from the local pricing registry plus models from DB.
         if (req.method === 'GET') {
-          json(res, { models: listPricingModels(db), registry: getPricingRegistrySummary(db), targets: listPricingAliasTargets(db) })
+          json(res, { models: listPricingModels(db), registry: getPricingRegistrySummary(db), targets: listPricingAliasTargets(db), aliasBindings: getUserAliasBindings(db), localBindings: listLocalModelBindings(db) })
           return
         }
         // PUT: set price override
@@ -1267,7 +1321,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               saveConfig(cfg)
               loadPricingRuntime(db, cfg)
             })
-            json(res, { ok: true, needsRecalc: true })
+            json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
           } catch (error) {
             if (isDatabaseLockedError(error)) {
               databaseBusy(res)
@@ -1286,7 +1340,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           }
           try {
             await runDbWrite(() => {
-              removeUserPrice(db, model)
+              resetUserPriceToSynced(db, model)
               removePriceOverride(model)
               const cfg = loadConfig() ?? {}
               if (cfg.priceOverrides) {
@@ -1295,7 +1349,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               }
               loadPricingRuntime(db, cfg)
             })
-            json(res, { ok: true, needsRecalc: true })
+            json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
           } catch (error) {
             if (isDatabaseLockedError(error)) {
               databaseBusy(res)
@@ -1318,7 +1372,29 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             setUserPricingAlias(db, data.alias, data.modelKey)
             loadPricingRuntime(db, loadConfig())
           })
-          json(res, { ok: true, needsRecalc: true })
+          json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
+        } catch (error) {
+          if (isDatabaseLockedError(error)) {
+            databaseBusy(res)
+            return
+          }
+          json(res, { error: { code: 'INVALID_PARAM', message: error instanceof Error ? error.message : 'Invalid pricing alias' } }, 400)
+        }
+        return
+      }
+
+      if (url.pathname === '/api/pricing/alias' && req.method === 'DELETE') {
+        const alias = url.searchParams.get('alias')
+        if (!alias) {
+          json(res, { error: { code: 'INVALID_PARAM', message: 'alias param required' } }, 400)
+          return
+        }
+        try {
+          await runDbWrite(() => {
+            removeUserPricingAlias(db, alias)
+            loadPricingRuntime(db, loadConfig())
+          })
+          json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
         } catch (error) {
           if (isDatabaseLockedError(error)) {
             databaseBusy(res)
@@ -1336,7 +1412,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             loadPricingRuntime(db, loadConfig())
             return summary
           })
-          json(res, { ok: true, summary, needsRecalc: true })
+          json(res, { ok: true, summary, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
         } catch (error) {
           if (isDatabaseLockedError(error)) {
             databaseBusy(res)
@@ -1349,7 +1425,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/pricing/recalc ─────────────────────────────────────────
       if (url.pathname === '/api/pricing/recalc' && req.method === 'GET') {
-        json(res, pricingRecalcStatus)
+        json(res, currentPricingRecalcStatus())
         return
       }
 

@@ -94,6 +94,7 @@ export function serve(options: ServeOptions): void {
     getSyncStatus: () => syncRuntime.getStatus(),
     onConfigUpdated: () => runtimeSettings.reload(),
     runDbWrite,
+    getDbWriteQueueStatus: () => dbWriteQueue.getStatus(),
   })
   const webBuildDir = (() => {
     const prodDir = join(dirname(fileURLToPath(import.meta.url)), 'web')

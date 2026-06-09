@@ -138,6 +138,15 @@ export async function bindPricingAlias(alias, modelKey) {
   return response.json()
 }
 
+export async function unbindPricingAlias(alias) {
+  const response = await fetch(`/api/pricing/alias?alias=${encodeURIComponent(alias)}`, { method: 'DELETE' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
 export async function recalcPricing() {
   const response = await fetch('/api/pricing/recalc', { method: 'POST' })
   if (!response.ok) {
@@ -148,7 +157,12 @@ export async function recalcPricing() {
 }
 
 export async function fetchPricingRecalcStatus() {
-  return apiFetch('/api/pricing/recalc')
+  const response = await fetch('/api/pricing/recalc', { cache: 'no-store' })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
 }
 
 export async function syncPricing() {
