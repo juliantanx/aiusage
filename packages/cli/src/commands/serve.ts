@@ -12,6 +12,7 @@ import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
 import { getSyncTarget } from '../sync/target.js'
 import { RuntimeSettingsController } from '../runtime/settings-controller.js'
+import { AsyncTaskQueue } from '../db/write-queue.js'
 import { fetchExchangeRate, CACHE_TTL_MS } from '@aiusage/core'
 import type Database from 'better-sqlite3'
 
@@ -38,6 +39,8 @@ const MIME_TYPES: Record<string, string> = {
 
 export function serve(options: ServeOptions): void {
   const config = loadConfig()
+  const dbWriteQueue = new AsyncTaskQueue()
+  const runDbWrite = <T>(task: () => T | Promise<T>) => dbWriteQueue.run(task)
 
   // Initialize exchange rate: fetch if cache missing or expired (non-blocking)
   if (config == null || config.exchangeRate == null) {
@@ -59,8 +62,10 @@ export function serve(options: ServeOptions): void {
 
   const syncRuntime = new SyncRuntimeController({
     runSync: async (runtimeOptions) => {
-      await runParse(options.db)
-      await runSync(options.db, runtimeOptions)
+      await runDbWrite(async () => {
+        await runParse(options.db)
+        await runSync(options.db, runtimeOptions)
+      })
     },
     getPersistedState: () => getState(AIUSAGE_DIR),
     getCurrentTarget: () => getSyncTarget(loadConfig()?.sync),
@@ -69,8 +74,8 @@ export function serve(options: ServeOptions): void {
   const runtimeSettings = new RuntimeSettingsController({
     db: options.db,
     loadConfig,
-    runParse,
-    runCleanup: cleanOldData,
+    runParse: (db) => runDbWrite(() => runParse(db)),
+    runCleanup: (db, retentionDays) => runDbWrite(() => cleanOldData(db, retentionDays)),
     runLeaderboardUpload: (db) => uploadLeaderboardData(db, getState(AIUSAGE_DIR)?.deviceInstanceId).then(() => undefined),
     runSync: () => syncRuntime.start(),
     onSyncScheduleChanged: (ts) => syncRuntime.setNextSyncAt(ts),
@@ -78,7 +83,7 @@ export function serve(options: ServeOptions): void {
   runtimeSettings.start()
 
   // Parse logs once on startup so the dashboard has data immediately
-  runParse(options.db).catch((err) => {
+  runDbWrite(() => runParse(options.db)).catch((err) => {
     console.error('[serve] initial parse failed:', err)
   })
 
@@ -88,6 +93,7 @@ export function serve(options: ServeOptions): void {
     onSyncStart: () => syncRuntime.start(),
     getSyncStatus: () => syncRuntime.getStatus(),
     onConfigUpdated: () => runtimeSettings.reload(),
+    runDbWrite,
   })
   const webBuildDir = (() => {
     const prodDir = join(dirname(fileURLToPath(import.meta.url)), 'web')

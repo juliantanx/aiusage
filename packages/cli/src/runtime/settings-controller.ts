@@ -5,7 +5,7 @@ export interface RuntimeSettingsControllerOptions {
   db: Database.Database
   loadConfig: () => Config | null
   runParse: (db: Database.Database) => Promise<unknown>
-  runCleanup: (db: Database.Database, retentionDays: number) => unknown
+  runCleanup: (db: Database.Database, retentionDays: number) => unknown | Promise<unknown>
   runLeaderboardUpload?: (db: Database.Database) => Promise<unknown>
   runSync?: () => void
   onSyncScheduleChanged?: (nextSyncAt: number | undefined) => void
@@ -29,6 +29,7 @@ export class RuntimeSettingsController {
   private leaderboardUploadTimer: ReturnType<typeof setInterval> | null = null
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private parseInFlight = false
+  private cleanupInFlight = false
   private leaderboardUploadInFlight = false
   private started = false
 
@@ -89,12 +90,7 @@ export class RuntimeSettingsController {
 
     if (retentionDays > 0) {
       this.cleanupTimer = setInterval(() => {
-        try {
-          this.runCleanupFn(this.db, retentionDays)
-        } catch (err) {
-          // Keep scheduling active after individual cleanup failures.
-          console.error('[settings-controller] cleanup failed:', err)
-        }
+        void this.runCleanupSafely(retentionDays)
       }, this.cleanupIntervalMs)
     }
 
@@ -129,6 +125,19 @@ export class RuntimeSettingsController {
       console.error('[settings-controller] parse failed:', err)
     } finally {
       this.parseInFlight = false
+    }
+  }
+
+  private async runCleanupSafely(retentionDays: number): Promise<void> {
+    if (this.cleanupInFlight) return
+    this.cleanupInFlight = true
+    try {
+      await this.runCleanupFn(this.db, retentionDays)
+    } catch (err) {
+      // Keep scheduling active after individual cleanup failures.
+      console.error('[settings-controller] cleanup failed:', err)
+    } finally {
+      this.cleanupInFlight = false
     }
   }
 

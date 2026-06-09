@@ -29,6 +29,7 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
+import { AsyncTaskQueue } from '../db/write-queue.js'
 import { getPricingRegistrySummary, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
@@ -148,6 +149,19 @@ function getDateRangeFilter(range: string | null, from: string | null, to: strin
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(data))
+}
+
+function isDatabaseLockedError(error: unknown): boolean {
+  return error instanceof Error && /database is locked|SQLITE_BUSY/i.test(error.message)
+}
+
+function databaseBusy(res: http.ServerResponse): void {
+  json(res, {
+    error: {
+      code: 'DATABASE_BUSY',
+      message: 'Database is busy. Wait for the current refresh, sync, or import to finish and retry.',
+    },
+  }, 503)
 }
 
 async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
@@ -276,6 +290,7 @@ export interface ApiServerOptions {
   onSyncStart?: () => SyncStartResult
   getSyncStatus?: () => SyncStatusSnapshot | null
   onConfigUpdated?: () => void
+  runDbWrite?: <T>(task: () => T | Promise<T>) => Promise<T>
 }
 
 interface DeviceFilter {
@@ -359,6 +374,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
   const cfg = loadConfig()
   let weekStart: 0 | 1 = (cfg?.weekStart ?? 1) as 0 | 1
   const dashboardPassword = getDashboardPassword()
+  const localWriteQueue = new AsyncTaskQueue()
+  const runDbWrite = options?.runDbWrite ?? (<T>(task: () => T | Promise<T>) => localWriteQueue.run(task))
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
@@ -1153,13 +1170,19 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (data.currency === 'CNY') {
               entry.currency = 'CNY'
             }
-            setUserPrice(db, data.model, entry)
-            const cfg = loadConfig() ?? {}
-            cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
-            saveConfig(cfg)
-            const recalculated = recalcCosts(db)
+            const recalculated = await runDbWrite(() => {
+              setUserPrice(db, data.model, entry)
+              const cfg = loadConfig() ?? {}
+              cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
+              saveConfig(cfg)
+              return recalcCosts(db)
+            })
             json(res, { ok: true, recalculated })
-          } catch {
+          } catch (error) {
+            if (isDatabaseLockedError(error)) {
+              databaseBusy(res)
+              return
+            }
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
           }
           return
@@ -1171,16 +1194,26 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             json(res, { error: { code: 'INVALID_PARAM', message: 'model param required' } }, 400)
             return
           }
-          removeUserPrice(db, model)
-          removePriceOverride(model)
-          const cfg = loadConfig() ?? {}
-          if (cfg.priceOverrides) {
-            delete cfg.priceOverrides[model]
-            saveConfig(cfg)
+          try {
+            const recalculated = await runDbWrite(() => {
+              removeUserPrice(db, model)
+              removePriceOverride(model)
+              const cfg = loadConfig() ?? {}
+              if (cfg.priceOverrides) {
+                delete cfg.priceOverrides[model]
+                saveConfig(cfg)
+              }
+              loadPricingRuntime(db, cfg)
+              return recalcCosts(db)
+            })
+            json(res, { ok: true, recalculated })
+          } catch (error) {
+            if (isDatabaseLockedError(error)) {
+              databaseBusy(res)
+              return
+            }
+            throw error
           }
-          loadPricingRuntime(db, cfg)
-          const recalculated = recalcCosts(db)
-          json(res, { ok: true, recalculated })
           return
         }
       }
@@ -1192,11 +1225,17 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             json(res, { error: { code: 'INVALID_PARAM', message: 'alias and modelKey required' } }, 400)
             return
           }
-          setUserPricingAlias(db, data.alias, data.modelKey)
-          loadPricingRuntime(db, loadConfig())
-          const recalculated = recalcCosts(db)
+          const recalculated = await runDbWrite(() => {
+            setUserPricingAlias(db, data.alias, data.modelKey)
+            loadPricingRuntime(db, loadConfig())
+            return recalcCosts(db)
+          })
           json(res, { ok: true, recalculated })
         } catch (error) {
+          if (isDatabaseLockedError(error)) {
+            databaseBusy(res)
+            return
+          }
           json(res, { error: { code: 'INVALID_PARAM', message: error instanceof Error ? error.message : 'Invalid pricing alias' } }, 400)
         }
         return
@@ -1204,11 +1243,18 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       if (url.pathname === '/api/pricing/sync' && req.method === 'POST') {
         try {
-          const summary = await syncPricingFromLitellm(db)
-          loadPricingRuntime(db, loadConfig())
-          const recalculated = recalcCosts(db)
+          const { summary, recalculated } = await runDbWrite(async () => {
+            const summary = await syncPricingFromLitellm(db)
+            loadPricingRuntime(db, loadConfig())
+            const recalculated = recalcCosts(db)
+            return { summary, recalculated }
+          })
           json(res, { ok: true, summary, recalculated })
         } catch (error) {
+          if (isDatabaseLockedError(error)) {
+            databaseBusy(res)
+            return
+          }
           json(res, { error: { code: 'SYNC_FAILED', message: error instanceof Error ? error.message : 'Pricing sync failed' } }, 502)
         }
         return
@@ -1216,8 +1262,16 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/pricing/recalc ─────────────────────────────────────────
       if (url.pathname === '/api/pricing/recalc' && req.method === 'POST') {
-        const updated = recalcCosts(db)
-        json(res, { updated })
+        try {
+          const updated = await runDbWrite(() => recalcCosts(db))
+          json(res, { updated })
+        } catch (error) {
+          if (isDatabaseLockedError(error)) {
+            databaseBusy(res)
+            return
+          }
+          throw error
+        }
         return
       }
 
@@ -1244,8 +1298,16 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, { error: { code: 'NOT_AVAILABLE', message: 'Refresh not available' } }, 501)
           return
         }
-        const result = await options.onRefresh()
-        json(res, result)
+        try {
+          const result = await runDbWrite(() => options.onRefresh!())
+          json(res, result)
+        } catch (error) {
+          if (isDatabaseLockedError(error)) {
+            databaseBusy(res)
+            return
+          }
+          throw error
+        }
         return
       }
 
@@ -1713,8 +1775,11 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return
           }
 
-          const existingCount = countExistingRecordIds(db, result.records.map((record) => record.id))
-          for (const record of result.records) insertRecord(db, record)
+          const existingCount = await runDbWrite(() => {
+            const existingCount = countExistingRecordIds(db, result.records.map((record) => record.id))
+            for (const record of result.records) insertRecord(db, record)
+            return existingCount
+          })
           const imported = result.records.length
           const added = Math.max(0, new Set(result.records.map((record) => record.id)).size - existingCount)
           json(res, {
