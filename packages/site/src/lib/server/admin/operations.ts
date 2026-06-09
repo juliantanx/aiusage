@@ -16,11 +16,25 @@ export async function unbanUser(adminUserId: string, targetUserId: string): Prom
 }
 
 export async function approveSnapshot(adminUserId: string, snapshotId: string, note?: string): Promise<void> {
-  const snapshots = await sql`SELECT * FROM upload_snapshots WHERE id = ${snapshotId}`
-  const snap = snapshots[0] as { id: string } | undefined
+  const snapshots = await sql`
+    SELECT id, upload_request_id, user_id, period_type, period_start
+    FROM upload_snapshots WHERE id = ${snapshotId}
+  `
+  const snap = snapshots[0] as { id: string; upload_request_id: string; user_id: string; period_type: string; period_start: string } | undefined
   if (!snap) throw new Error('Snapshot not found')
 
   await sql`UPDATE upload_snapshots SET review_status = 'approved', reviewed_by = ${adminUserId}, reviewed_at = NOW(), review_note = ${note || null} WHERE id = ${snapshotId}`
+
+  // Restore leaderboard visibility for approved snapshot
+  await sql`
+    UPDATE leaderboard_metrics
+    SET visibility = 'public', updated_at = NOW()
+    WHERE upload_request_id = ${snap.upload_request_id}
+      AND user_id = ${snap.user_id}
+      AND period_type = ${snap.period_type}::period_type
+      AND period_start = ${snap.period_start}
+  `
+
   await logAdminAction(adminUserId, 'approve_snapshot', 'upload_snapshots', snapshotId, note || 'Snapshot approved')
   invalidateLeaderboardCache()
 }
