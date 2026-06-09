@@ -119,6 +119,7 @@ export async function getFlaggedSnapshots(limit = 50, offset = 0) {
     JOIN users u ON u.id = s.user_id
     JOIN user_devices d ON d.id = s.device_id
     WHERE s.status = 'flagged'
+      AND s.review_status IS NULL
     ORDER BY s.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `
