@@ -106,17 +106,31 @@ export const POST: RequestHandler = async (event) => {
     if (metric.scope_type === 'all') {
       children = await sql`
         SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
-        WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND visibility != 'hidden'
+        WHERE user_id = ${metric.user_id}
+          AND period_type = ${metric.period_type}
+          AND period_start = ${metric.period_start}
+          AND scope_type = 'model'
+          AND visibility != 'hidden'
       `
     } else if (metric.scope_type === 'tool') {
       children = await sql`
         SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
-        WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND tool = ${metric.tool} AND visibility != 'hidden'
+        WHERE user_id = ${metric.user_id}
+          AND period_type = ${metric.period_type}
+          AND period_start = ${metric.period_start}
+          AND scope_type = 'tool_model'
+          AND tool = ${metric.tool}
+          AND visibility != 'hidden'
       `
     } else {
       children = await sql`
         SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
-        WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND model = ${metric.model} AND visibility != 'hidden'
+        WHERE user_id = ${metric.user_id}
+          AND period_type = ${metric.period_type}
+          AND period_start = ${metric.period_start}
+          AND scope_type = 'tool_model'
+          AND model = ${metric.model}
+          AND visibility != 'hidden'
       `
     }
 
