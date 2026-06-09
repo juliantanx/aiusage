@@ -996,26 +996,17 @@
         : 'Sync uploads this device\'s data, pulls data from other devices, and merges the results. You can trigger it from the sidebar Sync button after configuring the backend via init or the Settings page.'
       }</p>
       <ul>
-        <li><strong>{zh ? '官方同步（推荐）' : 'Official Cloud (Recommended)'}</strong> — {zh ? '使用 AIUsage 账号直接同步，无需配置 GitHub 或 S3。需要先 aiusage login 授权设备。' : 'Sync directly via your AIUsage account — no GitHub or S3 setup needed. Requires aiusage login to authorize your device.'}</li>
         <li><strong>GitHub</strong> — {zh ? '推送到 GitHub 仓库' : 'Push to a GitHub repository'}</li>
         <li><strong>S3 / {zh ? '兼容存储' : 'Compatible'}</strong> — {zh ? '推送到 Amazon S3 或任何 S3 兼容存储（Cloudflare R2、MinIO 等）' : 'Push to Amazon S3 or any S3-compatible storage (Cloudflare R2, MinIO, etc.)'}</li>
       </ul>
-      <CodeBlock lang="Terminal" copyText={'aiusage login\naiusage init --backend cloud\naiusage sync'}>
-        <span slot="lines"><span>1</span><span>2</span><span>3</span></span>
-        <span class="tk-kw">aiusage</span> login  <span class="tk-cmt"># authorize device</span>
-<span class="tk-kw">aiusage</span> init --backend cloud  <span class="tk-cmt"># configure official sync</span>
+      <CodeBlock lang="Terminal" copyText={'aiusage init --backend github --repo owner/repo --token ghp_xxx\naiusage sync'}>
+        <span slot="lines"><span>1</span><span>2</span></span>
+        <span class="tk-kw">aiusage</span> init --backend github --repo owner/repo --token ghp_xxx
 <span class="tk-kw">aiusage</span> sync  <span class="tk-cmt"># push/pull</span>
       </CodeBlock>
-      <Callout type="info">
-        {zh
-          ? '官方同步使用 HMAC 签名认证，数据加密传输。支持增量同步、tombstone 删除传播和 generation 机制防止旧设备覆盖已清空的数据。'
-          : 'Official sync uses HMAC-signed authentication with encrypted transport. Supports incremental sync, tombstone propagation, and a generation mechanism to prevent stale devices from overwriting cleared data.'
-        }
-      </Callout>
       <DocsTable
         headers={zh ? ['后端', '配置命令'] : ['Backend', 'Configuration command']}
         rows={[
-          ['Official Cloud', '<code>aiusage login<br>aiusage init --backend cloud<br>aiusage sync</code>'],
           ['GitHub', '<code>aiusage init --backend github --repo owner/repo --token ghp_xxx<br>aiusage sync</code>'],
           ['S3 / R2 / MinIO', '<code>aiusage init --backend s3 --bucket my-bucket --prefix aiusage/ --endpoint https://example.r2.cloudflarestorage.com --access-key-id xxx --secret-access-key yyy<br>aiusage sync</code>'],
         ]}
@@ -1202,8 +1193,8 @@
         <h2>{zh ? '站点账号' : 'Site Account'}</h2>
       </div>
       <p>{zh
-        ? 'AIUsage 官方站点（aiusage.jtanx.com）提供账号系统，用于排行榜上传、云同步、设备授权和个人资料管理。注册和登录支持密码和第三方 OAuth。'
-        : 'The AIUsage official site (aiusage.jtanx.com) provides an account system for leaderboard uploads, cloud sync, device authorization, and profile management. Registration and login support both password and third-party OAuth.'
+        ? 'AIUsage 官方站点（aiusage.jtanx.com）提供账号系统，用于排行榜上传、设备授权和个人资料管理。注册和登录支持密码和第三方 OAuth。'
+        : 'The AIUsage official site (aiusage.jtanx.com) provides an account system for leaderboard uploads, device authorization, and profile management. Registration and login support both password and third-party OAuth.'
       }</p>
     </section>
 
@@ -1219,8 +1210,8 @@
     <section id="account-verify">
       <h3>{zh ? '邮箱验证' : 'Email Verification'}</h3>
       <p>{zh
-        ? '使用邮箱注册后，系统会发送验证邮件到你的注册邮箱。点击邮件中的验证链接完成邮箱验证。邮箱验证是上传排行榜数据和使用云同步功能的前提条件。'
-        : 'After registering with email, a verification email is sent to your inbox. Click the verification link to complete email verification. Email verification is required before uploading leaderboard data or using cloud sync.'
+        ? '使用邮箱注册后，系统会发送验证邮件到你的注册邮箱。点击邮件中的验证链接完成邮箱验证。邮箱验证是上传排行榜数据的前提条件。'
+        : 'After registering with email, a verification email is sent to your inbox. Click the verification link to complete email verification. Email verification is required before uploading leaderboard data.'
       }</p>
       <Callout type="info">
         {zh
@@ -1456,8 +1447,8 @@ aiusage upload-status
     <section id="cli-clean">
       <h3><code>clean</code> — {zh ? '清理数据' : 'Clean Data'}</h3>
       <p>{zh
-        ? '清理本地数据。配合 --all 可清空全部数据（等价于原 reset）。如果配置了云同步（AIUsage Cloud、GitHub、S3），默认会将删除传播到所有远端后端，并在执行前列出受影响的后端供确认。'
-        : 'Clean local data. Use --all to wipe everything (equivalent to the former reset command). If cloud sync is configured (AIUsage Cloud, GitHub, S3), deletions are propagated to all remote backends by default, with affected backends listed for confirmation before execution.'
+        ? '清理本地数据。配合 --all 可清空全部数据（等价于原 reset）。如果配置了云同步（GitHub、S3），默认会将删除传播到所有远端后端，并在执行前列出受影响的后端供确认。'
+        : 'Clean local data. Use --all to wipe everything (equivalent to the former reset command). If sync is configured (GitHub, S3), deletions are propagated to all remote backends by default, with affected backends listed for confirmation before execution.'
       }</p>
       <DocsTable
         headers={zh ? ['选项', '说明', '默认'] : ['Option', 'Description', 'Default']}
@@ -1471,8 +1462,8 @@ aiusage upload-status
       />
       <Callout type="warn">
         {zh
-          ? '如果配置了云同步，clean 会将删除传播到所有远端后端。执行前会列出受影响的后端（如 AIUsage Cloud、GitHub、S3），需要输入 confirm 确认。使用 --local-only 可跳过远端传播。'
-          : 'If cloud sync is configured, clean propagates deletions to all remote backends. Affected backends (e.g. AIUsage Cloud, GitHub, S3) are listed before execution and require typing confirm. Use --local-only to skip remote propagation.'
+          ? '如果配置了云同步，clean 会将删除传播到所有远端后端。执行前会列出受影响的后端（如 GitHub、S3），需要输入 confirm 确认。使用 --local-only 可跳过远端传播。'
+          : 'If sync is configured, clean propagates deletions to all remote backends. Affected backends (e.g. GitHub, S3) are listed before execution and require typing confirm. Use --local-only to skip remote propagation.'
         }
       </Callout>
     </section>
@@ -1513,11 +1504,11 @@ aiusage upload-status
         rows={[
           ['<code>status</code>', zh ? '显示版本号、设备名称、数据库路径、schema 版本、对象数量、记录数、数据库大小、同步后端和同步状态' : 'Show version, device name, DB path, schema version, object counts, record count, DB size, sync backend, and sync status'],
           ['<code>menu</code>', zh ? '打开交互式管理菜单，覆盖仪表盘、数据、同步、排行榜和系统命令' : 'Open the interactive management menu for dashboard, data, sync, leaderboard, and system commands'],
-          ['<code>login</code>', zh ? '授权当前设备（用于云同步和排行榜上传）' : 'Authorize this device (for cloud sync and leaderboard uploads)'],
+          ['<code>login</code>', zh ? '授权当前设备（用于排行榜上传）' : 'Authorize this device (for leaderboard uploads)'],
           ['<code>logout</code>', zh ? '删除本地设备凭证' : 'Remove local device credentials'],
-          ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步（支持 cloud / GitHub / S3）' : 'Push, pull, and merge data with the remote backend (cloud / GitHub / S3)'],
+          ['<code>sync</code>', zh ? '与远程后端执行推送 / 拉取 / 合并同步（支持 GitHub / S3）' : 'Push, pull, and merge data with the remote backend (GitHub / S3)'],
           ['<code>recalc</code>', zh ? '按最新定价重新计算费用' : 'Recalculate costs with latest pricing'],
-          ['<code>init</code>', zh ? '初始化同步后端（支持 cloud / GitHub / S3）' : 'Initialize sync backend (cloud / GitHub / S3)'],
+          ['<code>init</code>', zh ? '初始化同步后端（支持 GitHub / S3）' : 'Initialize sync backend (GitHub / S3)'],
           ['<code>widget</code>', zh ? '启动桌面托盘 Widget' : 'Launch the desktop tray widget'],
           ['<code>pm2-setup [--server-only]</code>', zh ? '生成 PM2 ecosystem.config.cjs，可跳过 widget' : 'Generate PM2 ecosystem.config.cjs, optionally skipping the widget'],
           ['<code>pm2-start [--server-only]</code>', zh ? '生成配置并启动 PM2 后台服务，可跳过 widget' : 'Generate config and start PM2 background services, optionally skipping the widget'],
@@ -1526,7 +1517,7 @@ aiusage upload-status
       <DocsTable
         headers={zh ? ['init 选项', '说明'] : ['init option', 'Description']}
         rows={[
-          ['<code>--backend &lt;backend&gt;</code>', zh ? 'cloud、github、s3 或 skip' : 'cloud, github, s3, or skip'],
+          ['<code>--backend &lt;backend&gt;</code>', zh ? 'github、s3 或 skip' : 'github, s3, or skip'],
           ['<code>--device &lt;alias&gt;</code>', zh ? '设置当前设备别名' : 'Set this device alias'],
           ['<code>--repo &lt;owner/repo&gt;</code>', zh ? 'GitHub 同步仓库' : 'GitHub sync repository'],
           ['<code>--token &lt;token&gt;</code>', zh ? 'GitHub Personal Access Token' : 'GitHub Personal Access Token'],

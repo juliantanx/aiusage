@@ -31,7 +31,7 @@
 
 - **一个本地仪表盘** 查看 token、费用、会话、模型、项目、工具调用和配额。
 - **广泛的数据源支持**，覆盖 Claude Code、Codex、OpenCode、Cursor、Copilot、Gemini CLI 等工具。
-- **可选多机同步**，支持官方云同步、GitHub、S3、R2 或 MinIO。
+- **可选多机同步**，支持 GitHub、S3、R2 或 MinIO。
 - **可选公开排行榜**，只上传签名后的聚合用量。
 - **桌面小组件**，可在菜单栏或系统托盘快速查看最近用量。
 - **默认保护隐私**：本地解析和本地仪表盘不会上传 prompt、completion、源码或文件路径。
@@ -112,7 +112,7 @@ AIUsage 采用本地优先设计。
 
 - 本地解析会读取各工具日志，并把解析后的用量写入 `~/.aiusage/cache.db`。
 - 本地仪表盘无需账号，不发送遥测。
-- 可选同步由用户主动配置，支持官方云同步、GitHub、S3、R2 或 MinIO。
+- 可选同步由用户主动配置，支持 GitHub、S3、R2 或 MinIO。
 - 可选排行榜上传只包含各排名周期的聚合 token 总量，不包含 prompt、completion、源码、文件路径或本地费用估算。
 - 费用是基于定价元数据的估算值，刷新或重新计算定价后可能变化。
 - 历史总量取决于各 AI 工具是否仍保留原始日志或本地数据库。
@@ -123,7 +123,7 @@ AIUsage 采用本地优先设计。
 
 同步和排行榜是两个互相独立的可选功能。
 
-- **同步** 用于在自己的多台设备之间保持数据一致，支持官方云同步、GitHub、S3、R2 或 MinIO。使用 `aiusage init` 配置，再运行 `aiusage sync`。
+- **同步** 用于在自己的多台设备之间保持数据一致，支持 GitHub、S3、R2 或 MinIO。使用 `aiusage init` 配置，再运行 `aiusage sync`。
 - **排行榜** 面向明确选择分享聚合数据的用户。先用 `aiusage login` 授权设备，再运行 `aiusage upload`。
 - 参与排行榜时，可在 [站点设置](https://aiusage.jtanx.com/settings) 中开启匿名模式。
 

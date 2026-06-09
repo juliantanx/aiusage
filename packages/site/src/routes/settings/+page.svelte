@@ -490,7 +490,7 @@
                   {zh ? '绑定 GitHub' : 'Bind GitHub'}
                 </a>
                 <span class="field-hint" style="margin-top: 0.5rem;">
-                  {zh ? '绑定 GitHub 后可使用 Cloud Sync 功能。' : 'Bind GitHub to use Cloud Sync.'}
+                  {zh ? '绑定 GitHub 后可关联第三方身份。' : 'Bind GitHub to associate your third-party identity.'}
                 </span>
               </div>
             {/if}

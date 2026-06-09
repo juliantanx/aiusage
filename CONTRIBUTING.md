@@ -29,7 +29,7 @@ pnpm lint
 ```text
 packages/
   core/     - Shared types, database schema, pricing data
-  cli/      - CLI tool for parsing logs, querying data, cloud sync
+  cli/      - CLI tool for parsing logs, querying data, sync
   web/      - SvelteKit web dashboard (SPA)
 ```
 

@@ -31,7 +31,7 @@ Track tokens, cost, sessions, models, projects, tool calls, and quota pressure a
 
 - **One local dashboard** for tokens, cost, sessions, models, projects, tool calls, and quotas.
 - **Broad parser support** for Claude Code, Codex, OpenCode, Cursor, Copilot, Gemini CLI, and more.
-- **Optional sync** through AIUsage Cloud (when available), GitHub, S3, R2, or MinIO.
+- **Optional sync** through GitHub, S3, R2, or MinIO.
 - **Optional public leaderboard** with signed aggregate uploads only.
 - **Desktop widget** for a tray/menu-bar glance at recent usage.
 - **Private by default**: local parsing and local dashboards do not upload your prompts, completions, source code, or file paths.
@@ -112,7 +112,7 @@ AIUsage is designed to be local-first.
 
 - Local parsing reads tool logs and stores parsed usage in `~/.aiusage/cache.db`.
 - Local dashboard mode does not require an account and does not send telemetry.
-- Optional sync is user-configured and can use AIUsage Cloud (when available), GitHub, S3, R2, or MinIO.
+- Optional sync is user-configured and can use GitHub, S3, R2, or MinIO.
 - Optional leaderboard uploads contain aggregate token totals for ranking periods. They do not include prompts, completions, source code, file paths, or local cost estimates.
 - Cost is an estimate based on pricing metadata and can change when pricing is refreshed or recalculated.
 - Historical totals depend on whether each AI tool still retains its source logs or local databases.
@@ -123,7 +123,7 @@ Security issues should be reported privately when possible. See [SECURITY.md](./
 
 Sync and leaderboard are independent optional features.
 
-- **Sync** keeps your own devices aligned through AIUsage Cloud (when available), GitHub, S3, R2, or MinIO. Configure it with `aiusage init`, then run `aiusage sync`.
+- **Sync** keeps your own devices aligned through GitHub, S3, R2, or MinIO. Configure it with `aiusage init`, then run `aiusage sync`.
 - **Leaderboard** is public ranking for users who explicitly upload aggregate totals. Authorize a device with `aiusage login`, then run `aiusage upload`.
 - Anonymous mode is available in [site settings](https://aiusage.jtanx.com/settings) for leaderboard participation.
 

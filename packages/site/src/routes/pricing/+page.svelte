@@ -77,7 +77,7 @@
           <button class="cur-btn" class:cur-active={currency === 'CNY'} on:click={() => currency = 'CNY'}>CNY</button>
         </div>
       </div>
-      <div class="entry-count">{filtered.length} {zh ? '个模型' : 'models'}</div>
+      <span class="entry-count">{filtered.length} {zh ? '个模型' : 'models'}</span>
     </div>
 
     <div class="price-table-wrap">
@@ -97,20 +97,18 @@
           {#each filtered as entry}
             <tr>
               <td class="col-model">
-                <div class="model-cell">
-                  <span class="mono model-key">{entry.model_key}</span>
-                  <span class="badge" class:badge-custom={entry.origin === 'user'}>{originLabel(entry)}</span>
-                </div>
+                <span class="model-key">{entry.model_key}</span>
+                <span class="badge" class:badge-custom={entry.origin === 'user'}>{originLabel(entry)}</span>
                 {#if entry.source_model_id && entry.source_model_id !== entry.model_key}
-                  <div class="source-id mono">{entry.source_model_id}</div>
+                  <div class="source-id">{entry.source_model_id}</div>
                 {/if}
               </td>
-              <td class="col-price mono">{formatPrice(entry.input)}</td>
-              <td class="col-price mono">{formatPrice(entry.output)}</td>
-              <td class="col-price mono">{formatPrice(entry.cache_read)}</td>
-              <td class="col-price mono">{formatPrice(entry.cache_write)}</td>
-              <td class="col-currency text-muted">{entry.currency || 'USD'}</td>
-              <td class="col-source text-muted">{sourceLabel(entry)}</td>
+              <td class="col-price">{formatPrice(entry.input)}</td>
+              <td class="col-price">{formatPrice(entry.output)}</td>
+              <td class="col-price">{formatPrice(entry.cache_read)}</td>
+              <td class="col-price">{formatPrice(entry.cache_write)}</td>
+              <td class="col-currency">{entry.currency || 'USD'}</td>
+              <td class="col-source">{sourceLabel(entry)}</td>
             </tr>
           {/each}
         </tbody>
@@ -126,134 +124,195 @@
 
 <style>
   .pricing-page {
-    max-width: 960px;
+    width: var(--content-width);
     margin: 0 auto;
-    padding: 2rem 1rem;
+    padding: 2.5rem 0 3rem;
   }
+
   .page-header {
     margin-bottom: 1.5rem;
   }
   .page-header h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin: 0 0 0.5rem;
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.375rem;
   }
   .page-desc {
     color: var(--text-secondary);
     font-size: 0.875rem;
     margin: 0;
   }
+
   .toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     flex-wrap: wrap;
   }
   .search-wrap {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.625rem;
     flex: 1;
     min-width: 200px;
   }
   .search-input {
     padding: 0.375rem 0.75rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: 6px;
     font-size: 0.8125rem;
-    background: var(--bg);
+    background: var(--surface);
     color: var(--text);
+    height: 32px;
+    box-sizing: border-box;
     flex: 1;
-    max-width: 240px;
+    max-width: 280px;
+    transition: border-color 150ms ease-out;
+  }
+  .search-input:focus {
+    outline: none;
+    border-color: var(--accent);
   }
   .currency-filter {
     display: flex;
-    gap: 0.25rem;
+    gap: 2px;
   }
   .cur-btn {
-    padding: 0.25rem 0.625rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    padding: 0 0.625rem;
+    border: 1px solid var(--border-subtle);
     font-size: 0.75rem;
+    font-weight: 500;
     cursor: pointer;
-    background: var(--bg);
+    background: var(--surface);
     color: var(--text-secondary);
+    height: 32px;
+    transition: background 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
   }
+  .cur-btn:first-child { border-radius: 6px 0 0 6px; }
+  .cur-btn:last-child { border-radius: 0 6px 6px 0; }
+  .cur-btn:not(:first-child) { margin-left: -1px; }
   .cur-btn:hover { background: var(--hover); }
-  .cur-active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
-  .entry-count {
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
+  .cur-active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-color: var(--accent);
+    position: relative;
+    z-index: 1;
   }
+  .entry-count {
+    font-size: 0.75rem;
+    font-weight: 550;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
   .price-table-wrap {
     overflow-x: auto;
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
+    background: var(--surface);
   }
   .price-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8125rem;
+    table-layout: fixed;
   }
+
   .price-table th {
     text-align: left;
-    padding: 0.625rem 0.75rem;
-    border-bottom: 1px solid var(--border);
-    font-weight: 600;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    background: var(--surface);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.6875rem;
+    font-weight: 550;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   .price-table td {
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid var(--border-dim, var(--border));
+    border-bottom: 1px solid oklch(0.94 0.005 85);
+    vertical-align: top;
   }
   .price-table tbody tr:last-child td { border-bottom: none; }
-  .price-table tbody tr:hover { background: var(--hover); }
-  .col-model { min-width: 240px; }
-  .col-price { min-width: 80px; text-align: right; }
-  .col-currency { min-width: 60px; }
-  .col-source { min-width: 80px; text-align: center; }
-  .model-cell {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    min-width: 0;
+  .price-table tbody tr:hover td { background: var(--hover); }
+
+  .col-model { width: auto; min-width: 280px; }
+  th.col-price { text-align: right; }
+  td.col-price {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    white-space: nowrap;
   }
+  th.col-currency,
+  td.col-currency {
+    width: 64px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+  th.col-source,
+  td.col-source {
+    width: 80px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
   .model-key {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .source-id {
-    margin-top: 0.125rem;
-    color: var(--text-secondary);
-    font-size: 0.6875rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    word-break: break-all;
   }
   .badge {
     display: inline-block;
-    font-family: var(--mono, monospace);
-    font-size: 0.625rem;
+    font-family: var(--mono);
+    font-size: 0.5625rem;
     font-weight: 600;
-    background: var(--surface);
-    color: var(--text-secondary);
-    padding: 0.125rem 0.35rem;
+    background: var(--raised);
+    color: var(--text-muted);
+    padding: 0.0625rem 0.3rem;
     border-radius: 3px;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+    margin-left: 0.375rem;
+    flex-shrink: 0;
   }
   .badge-custom {
     color: var(--accent);
     background: var(--accent-dim);
   }
-  .mono { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 0.8125rem; }
-  .text-muted { color: var(--text-secondary); }
+  .source-id {
+    margin-top: 0.125rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    word-break: break-all;
+  }
+
   .empty {
     text-align: center;
     padding: 3rem 1rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
+  @media (max-width: 768px) {
+    .pricing-page { padding: 1.5rem 1rem 2rem; }
+    .price-table { table-layout: auto; }
+    .col-model { min-width: 180px; }
   }
 </style>
