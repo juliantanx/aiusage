@@ -71,6 +71,16 @@ function insertTestSyncedRecord(db: Database.Database, overrides: Record<string,
   `).run(vals)
 }
 
+function insertTestPrice(db: Database.Database, modelKey = 'claude-sonnet-4-6') {
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO model_prices (
+      model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
+      source_url, origin, status, last_synced_at, created_at, updated_at
+    ) VALUES (?, 'anthropic', 3, 15, NULL, NULL, 'USD', 'litellm', ?, NULL, 'builtin', 'active', ?, ?, ?)
+  `).run(modelKey, modelKey, now, now, now)
+}
+
 describe('API Server', () => {
   let db: Database.Database
   let server: http.Server
@@ -190,6 +200,34 @@ describe('API Server', () => {
       localModels: 1,
       matchedLocalModels: 0,
       unresolvedLocalModels: ['claude-sonnet-4-6'],
+    })
+  })
+
+  it('binds a local model alias to a pricing model', async () => {
+    insertTestRecord(db, { model: 'provider/claude-sonnet-4-6', cost: 0, cost_source: 'unknown' })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const before = await fetch(`${baseUrl}/api/pricing`)
+    const beforeData = await before.json()
+    expect(beforeData.registry.unresolvedLocalModels).toContain('provider/claude-sonnet-4-6')
+    expect(beforeData.targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ model: 'claude-sonnet-4-6', origin: 'builtin' }),
+    ]))
+
+    const bind = await fetch(`${baseUrl}/api/pricing/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias: 'provider/claude-sonnet-4-6', modelKey: 'claude-sonnet-4-6' }),
+    })
+    expect(bind.ok).toBe(true)
+
+    const after = await fetch(`${baseUrl}/api/pricing`)
+    const afterData = await after.json()
+    expect(afterData.registry.unresolvedLocalModels).not.toContain('provider/claude-sonnet-4-6')
+    expect(afterData.models[0]).toMatchObject({
+      model: 'provider/claude-sonnet-4-6',
+      isBuiltin: true,
+      matchedBy: 'claude-sonnet-4-6',
     })
   })
 })

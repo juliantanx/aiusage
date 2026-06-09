@@ -29,7 +29,7 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
-import { getPricingRegistrySummary, listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, syncPricingFromLitellm } from '../pricing-registry.js'
+import { getPricingRegistrySummary, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPrice, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
@@ -1131,7 +1131,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       if (url.pathname === '/api/pricing') {
         // GET: list all prices from the local pricing registry plus models from DB.
         if (req.method === 'GET') {
-          json(res, { models: listPricingModels(db), registry: getPricingRegistrySummary(db) })
+          json(res, { models: listPricingModels(db), registry: getPricingRegistrySummary(db), targets: listPricingAliasTargets(db) })
           return
         }
         // PUT: set price override
@@ -1183,6 +1183,23 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, { ok: true, recalculated })
           return
         }
+      }
+
+      if (url.pathname === '/api/pricing/alias' && req.method === 'POST') {
+        try {
+          const data = await readJsonBody(req)
+          if (typeof data.alias !== 'string' || typeof data.modelKey !== 'string') {
+            json(res, { error: { code: 'INVALID_PARAM', message: 'alias and modelKey required' } }, 400)
+            return
+          }
+          setUserPricingAlias(db, data.alias, data.modelKey)
+          loadPricingRuntime(db, loadConfig())
+          const recalculated = recalcCosts(db)
+          json(res, { ok: true, recalculated })
+        } catch (error) {
+          json(res, { error: { code: 'INVALID_PARAM', message: error instanceof Error ? error.message : 'Invalid pricing alias' } }, 400)
+        }
+        return
       }
 
       if (url.pathname === '/api/pricing/sync' && req.method === 'POST') {

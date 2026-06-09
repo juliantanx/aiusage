@@ -89,6 +89,15 @@ export interface PricingRegistrySummary {
   unresolvedLocalModels: string[]
 }
 
+export interface PricingAliasTarget {
+  model: string
+  provider: string
+  origin: 'builtin' | 'user'
+  source: string
+  sourceModelId: string | null
+  currency: 'USD' | 'CNY'
+}
+
 function rowToPrice(row: Pick<ModelPriceRow, 'input' | 'output' | 'cache_read' | 'cache_write' | 'currency'>): PriceEntry {
   return {
     input: Number(row.input),
@@ -218,6 +227,34 @@ export function setUserPrice(db: Database.Database, modelKey: string, entry: Pri
   `).run(modelKey, modelKey, now, now)
 
   setPriceOverride(modelKey, entry)
+}
+
+export function setUserPricingAlias(db: Database.Database, alias: string, modelKey: string): void {
+  const aliasKey = alias.trim()
+  const targetKey = modelKey.trim()
+  if (!aliasKey || !targetKey) throw new Error('alias and modelKey required')
+
+  const target = db.prepare(`
+    SELECT provider
+    FROM model_prices
+    WHERE model_key = ? AND status = 'active'
+  `).get(targetKey) as ({ provider: string } | undefined)
+  if (!target) throw new Error('Pricing model not found')
+
+  const now = Date.now()
+  db.prepare(`
+    INSERT INTO model_price_aliases (alias, model_key, match_type, provider, priority, source, origin, enabled, created_at, updated_at)
+    VALUES (?, ?, 'exact', ?, 200, 'manual', 'user', 1, ?, ?)
+    ON CONFLICT(alias) DO UPDATE SET
+      model_key = excluded.model_key,
+      match_type = 'exact',
+      provider = excluded.provider,
+      priority = excluded.priority,
+      source = 'manual',
+      origin = 'user',
+      enabled = 1,
+      updated_at = excluded.updated_at
+  `).run(aliasKey, targetKey, target.provider ?? '', now, now)
 }
 
 export function removeUserPrice(db: Database.Database, modelKey: string): void {
@@ -351,7 +388,12 @@ function findMatch(db: Database.Database, model: string): { price: PriceEntry; r
     WHERE a.alias = ? AND a.enabled = 1 AND p.status = 'active'
     ORDER BY a.priority DESC LIMIT 1
   `).get(model) as (ModelPriceRow & { alias: string } | undefined)
-  if (aliasMatch) return { price: rowToPrice(aliasMatch), row: aliasMatch, matchedBy: aliasMatch.alias === model ? null : aliasMatch.alias }
+  if (aliasMatch) {
+    const matchedBy = aliasMatch.alias === model
+      ? (aliasMatch.model_key === model ? null : aliasMatch.model_key)
+      : aliasMatch.alias
+    return { price: rowToPrice(aliasMatch), row: aliasMatch, matchedBy }
+  }
 
   const rows = db.prepare(`
     SELECT model_key, provider, input, output, cache_read, cache_write, currency, source, source_model_id,
@@ -434,6 +476,24 @@ export function getPricingRegistrySummary(db: Database.Database): PricingRegistr
     matchedLocalModels: dryRun.matched,
     unresolvedLocalModels: dryRun.unresolved,
   }
+}
+
+export function listPricingAliasTargets(db: Database.Database): PricingAliasTarget[] {
+  const rows = db.prepare(`
+    SELECT model_key, provider, origin, source, source_model_id, currency
+    FROM model_prices
+    WHERE status = 'active'
+    ORDER BY origin DESC, provider ASC, model_key ASC
+  `).all() as Array<Pick<ModelPriceRow, 'model_key' | 'provider' | 'origin' | 'source' | 'source_model_id' | 'currency'>>
+
+  return rows.map((row) => ({
+    model: row.model_key,
+    provider: row.provider,
+    origin: row.origin,
+    source: row.source,
+    sourceModelId: row.source_model_id,
+    currency: row.currency,
+  }))
 }
 
 export function dryRunLocalModels(db: Database.Database): PricingSyncSummary['dryRun'] {

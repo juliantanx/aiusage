@@ -125,6 +125,19 @@ export async function deletePricing(model) {
   return response.json()
 }
 
+export async function bindPricingAlias(alias, modelKey) {
+  const response = await fetch('/api/pricing/alias', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alias, modelKey }),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: 'API error' } }))
+    throw new Error(error.error?.message || `HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
 export async function recalcPricing() {
   const response = await fetch('/api/pricing/recalc', { method: 'POST' })
   if (!response.ok) {

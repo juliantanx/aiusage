@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchPricing, updatePricing, deletePricing, syncPricing } from '$lib/api.js'
+  import { fetchPricing, updatePricing, deletePricing, syncPricing, bindPricingAlias } from '$lib/api.js'
   import { recalcStatus, displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let models = []
@@ -15,6 +15,9 @@
   let syncingPrices = false
   let syncSummary = null
   let registry = null
+  let targets = []
+  let aliasSelections = {}
+  let bindingAlias = null
 
   onDestroy(() => { if (doneTimer) clearTimeout(doneTimer) })
 
@@ -27,6 +30,7 @@
       const data = await fetchPricing()
       models = data.models || []
       registry = data.registry || null
+      targets = data.targets || []
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to load'
     } finally {
@@ -110,6 +114,24 @@
     }
   }
 
+  async function bindAlias(alias) {
+    const modelKey = aliasSelections[alias]
+    if (!modelKey) return
+    try {
+      bindingAlias = alias
+      recalcStatus.set('updating')
+      const r = await bindPricingAlias(alias, modelKey)
+      await loadData()
+      if (r.recalculated) markDone()
+      else recalcStatus.set('idle')
+    } catch (e) {
+      recalcStatus.set('idle')
+      alert(e.message)
+    } finally {
+      bindingAlias = null
+    }
+  }
+
   function fmt(n) {
     if (n == null) return '-'
     if (n === 0) return '0'
@@ -123,6 +145,11 @@
     return m.sourceModelId && m.sourceModelId !== m.model ? `${m.source}: ${m.sourceModelId}` : m.source
   }
 
+  function formatTarget(target) {
+    const provider = target.provider ? `${target.provider} / ` : ''
+    return `${provider}${target.model}`
+  }
+
   $: syncSummaryText = syncSummary
     ? $t('pricing.syncSummary')
       .replace('{added}', syncSummary.added ?? 0)
@@ -130,6 +157,8 @@
       .replace('{unresolved}', syncSummary.dryRun?.unresolved?.length ?? 0)
     : ''
   $: pricingRegistryEmpty = !loading && !error && registry?.totalPrices === 0
+  $: unresolvedModels = registry?.unresolvedLocalModels || []
+  $: showUnresolvedPanel = !pricingRegistryEmpty && unresolvedModels.length > 0 && targets.length > 0
 </script>
 
 <svelte:head>
@@ -173,6 +202,33 @@
     </button>
   </section>
 {:else}
+  {#if showUnresolvedPanel}
+    <section class="alias-panel">
+      <div class="alias-head">
+        <div>
+          <h2>{$t('pricing.unresolvedTitle')}</h2>
+          <p>{$t('pricing.unresolvedBody').replace('{count}', unresolvedModels.length)}</p>
+        </div>
+      </div>
+      <div class="alias-list">
+        {#each unresolvedModels as alias}
+          <div class="alias-row">
+            <span class="alias-model mono">{alias}</span>
+            <select class="alias-select" bind:value={aliasSelections[alias]} aria-label={$t('pricing.aliasTarget')}>
+              <option value="">{$t('pricing.aliasPlaceholder')}</option>
+              {#each targets as target}
+                <option value={target.model}>{formatTarget(target)}</option>
+              {/each}
+            </select>
+            <button class="btn-sm save" on:click={() => bindAlias(alias)} disabled={!aliasSelections[alias] || bindingAlias === alias}>
+              {bindingAlias === alias ? $t('pricing.bindingAlias') : $t('pricing.bindAlias')}
+            </button>
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   <div class="grid">
     {#each models as m, i}
       {@const editing = editingModel === m.model}
@@ -330,6 +386,66 @@
     border-radius: 8px;
     padding: 1rem 1.25rem;
   }
+
+  .alias-panel {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    padding: 1rem 1.25rem;
+  }
+  .alias-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .alias-head h2 {
+    margin: 0 0 0.25rem;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .alias-head p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .alias-list {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .alias-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(220px, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 44px;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .alias-row:last-child { border-bottom: none; }
+  .alias-model {
+    color: var(--text);
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+  .alias-select {
+    height: 32px;
+    min-width: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--raised);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0 0.5rem;
+  }
+  .alias-select:focus { outline: none; border-color: var(--accent); }
   .empty-copy {
     display: flex;
     flex-direction: column;
@@ -525,5 +641,11 @@
       flex-direction: column;
     }
     .header-right { flex-wrap: wrap; }
+    .alias-row {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+      gap: 0.5rem;
+      padding: 0.75rem 0;
+    }
   }
 </style>
