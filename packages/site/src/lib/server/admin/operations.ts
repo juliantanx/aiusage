@@ -102,7 +102,7 @@ export async function restoreLeaderboardEntry(adminUserId: string, entryId: stri
 
 export async function setCloudSync(adminUserId: string, targetUserId: string, enabled: boolean): Promise<void> {
   await sql`UPDATE users SET cloud_sync_enabled = ${enabled}, updated_at = NOW() WHERE id = ${targetUserId}`
-  await logAdminAction(adminUserId, 'set_cloud_sync', 'users', targetUserId, `Cloud sync ${enabled ? 'enabled' : 'disabled'}`)
+  await logAdminAction(adminUserId, 'set_cloud_sync', 'users', targetUserId, enabled ? 'Cloud sync disabled for user' : 'Cloud sync re-enabled for user')
 }
 
 export async function setUserRole(adminUserId: string, targetUserId: string, role: string): Promise<void> {
