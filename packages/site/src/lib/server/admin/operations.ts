@@ -244,11 +244,9 @@ export async function syncPricingFromLitellm(adminUserId: string): Promise<{ add
     }
   })
 
-  await logAdminAction(adminUserId, 'sync_pricing', 'model_prices', 'current', `Synced from LiteLLM: ${added} added, ${updated} updated, ${skipped} skipped, ${aliasesAdded} aliases added, ${aliasesUpdated} aliases updated`)
+  await logAdminAction(adminUserId, 'sync_pricing', 'model_prices', 'active', `Synced from LiteLLM: ${added} added, ${updated} updated, ${skipped} skipped, ${aliasesAdded} aliases added, ${aliasesUpdated} aliases updated`)
   return { added, updated, skipped, userPreserved, aliasesAdded, aliasesUpdated }
 }
-
-export const syncPricingFromCore = syncPricingFromLitellm
 
 export async function getPriceEntries(adminUserId: string) {
   const entries = await sql`
@@ -262,7 +260,7 @@ export async function getPriceEntries(adminUserId: string) {
     ) u ON u.model = p.model_key
     ORDER BY COALESCE(u.usage_count, 0) DESC, p.model_key ASC
   `
-  return { tableId: 'current', entries }
+  return { entries }
 }
 
 export async function updatePriceEntries(
@@ -316,17 +314,5 @@ export async function getPublicPriceEntries() {
     ORDER BY model_key ASC
   `
   if (entries.length > 0) return { entries }
-
-  const existing = await sql`SELECT id FROM official_price_tables WHERE status = 'published' LIMIT 1`
-  if (existing.length === 0) return { entries: [] }
-  const tableId = (existing[0] as { id: string }).id
-
-  const legacyEntries = await sql`
-    SELECT e.model_key, e.input, e.output, e.cache_read, e.cache_write, e.currency,
-           'legacy' AS source, e.model_key AS source_model_id, 'builtin' AS origin, NULL AS last_synced_at
-    FROM official_price_entries e
-    WHERE e.table_id = ${tableId}
-    ORDER BY e.model_key ASC
-  `
-  return { entries: legacyEntries }
+  return { entries: [] }
 }

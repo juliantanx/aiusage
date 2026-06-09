@@ -797,8 +797,8 @@
         <h2>{zh ? '定价' : 'Pricing'}</h2>
       </div>
       <p>{zh
-        ? '定价页面按模型显示卡片，可直接编辑 input / output / cache read / cache write 的每百万 Token 单价。状态标签可能是 Default、Override、自定义前缀匹配，或 No pricing；部分模型还会显示 CNY 标签。'
-        : 'The Pricing page shows one card per model and lets you edit per-million-token rates for input, output, cache read, and cache write. Status badges may indicate Default, Override, prefix match, or No pricing, and some models also carry a CNY badge.'
+        ? '定价页面按模型显示卡片，可直接编辑 input / output / cache read / cache write 的每百万 Token 单价。状态标签会区分内置价格、用户自定义价格、前缀匹配或无定价；部分模型还会显示 CNY 标签。'
+        : 'The Pricing page shows one card per model and lets you edit per-million-token rates for input, output, cache read, and cache write. Status badges distinguish builtin pricing, custom pricing, prefix matches, or missing pricing, and some models also carry a CNY badge.'
       }</p>
       <Callout type="warn">
         {zh
@@ -811,7 +811,7 @@
     <section>
       <figure class="doc-shot">
         <img src="/screenshots/pricing.png" alt={zh ? 'AIUsage 定价页面截图' : 'AIUsage pricing page screenshot'} loading="lazy" />
-        <figcaption>{zh ? '定价页支持逐模型编辑费率，并通过标签区分默认价、自定义价和无定价模型。' : 'Pricing page with editable per-model rates and badges for default, override, and missing pricing.'}</figcaption>
+        <figcaption>{zh ? '定价页支持逐模型编辑费率，并通过标签区分内置价、自定义价和无定价模型。' : 'Pricing page with editable per-model rates and badges for builtin, custom, and missing pricing.'}</figcaption>
       </figure>
     </section>
 
@@ -1359,7 +1359,7 @@ aiusage upload-status
       <ul>
         <li><strong>{zh ? '上传审核' : 'Uploads'}</strong> — {zh ? '查看 flagged 上传，执行 approve / reject / hide 操作' : 'Review flagged uploads with approve / reject / hide actions'}</li>
         <li><strong>{zh ? '用户管理' : 'Users'}</strong> — {zh ? '搜索用户、封禁 / 解封、设置角色（admin / user）' : 'Search users, ban / unban, set role (admin / user)'}</li>
-        <li><strong>{zh ? '定价表' : 'Pricing'}</strong> — {zh ? '从 core seed 定价表、发布 / 归档版本、触发榜单重算' : 'Seed pricing from core, publish / archive versions, trigger leaderboard recompute'}</li>
+        <li><strong>{zh ? '定价表' : 'Pricing'}</strong> — {zh ? '从 LiteLLM 同步价格、管理内置 / 自定义条目、触发榜单重算' : 'Sync pricing from LiteLLM, manage builtin / custom entries, trigger leaderboard recompute'}</li>
         <li><strong>{zh ? '审计日志' : 'Audit Logs'}</strong> — {zh ? '查看所有管理员操作记录' : 'View all admin action history'}</li>
         <li><strong>{zh ? '数据维护' : 'Maintenance'}</strong> — {zh ? '清理过期 nonces、旧批次、tombstone 记录、过期授权请求等' : 'Clean expired nonces, old batches, tombstoned records, expired auth requests, etc.'}</li>
       </ul>

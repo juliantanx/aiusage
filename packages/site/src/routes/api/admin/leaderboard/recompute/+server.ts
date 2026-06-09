@@ -5,8 +5,6 @@ import { requireAdmin } from '$lib/server/auth/session.js'
 import { calculateRegistryCost, loadPricingRegistry, resolvePriceFromRegistry } from '$lib/server/pricing/registry.js'
 import { nanoid } from 'nanoid'
 
-const CURRENT_PRICING_VERSION = 'current'
-
 /**
  * POST /api/admin/leaderboard/recompute
  *
@@ -27,8 +25,6 @@ export const POST: RequestHandler = async (event) => {
   const periodStart = body.period_start
   const periodEnd = body.period_end
   const userId = body.user_id
-
-  const pricingVersion = CURRENT_PRICING_VERSION
 
   const pricing = await loadPricingRegistry(sql)
 
@@ -85,7 +81,6 @@ export const POST: RequestHandler = async (event) => {
     await sql`
       UPDATE leaderboard_metrics
       SET total_cost_usd = ${costUsd},
-          pricing_version = ${pricingVersion},
           has_unknown_cost = ${hasUnknownCost},
           updated_at = NOW()
       WHERE id = ${metric.id}
@@ -129,7 +124,7 @@ export const POST: RequestHandler = async (event) => {
     const hasUnknownCost = children.some(child => Boolean((child as { has_unknown_cost: boolean }).has_unknown_cost))
     await sql`
       UPDATE leaderboard_metrics
-      SET total_cost_usd = ${totalCost}, pricing_version = ${pricingVersion}, has_unknown_cost = ${hasUnknownCost}, updated_at = NOW()
+      SET total_cost_usd = ${totalCost}, has_unknown_cost = ${hasUnknownCost}, updated_at = NOW()
       WHERE id = ${metric.id}
     `
   }
@@ -139,13 +134,12 @@ export const POST: RequestHandler = async (event) => {
   await sql`
     INSERT INTO admin_audit_logs (id, admin_user_id, action, target_type, target_id, reason, metadata)
     VALUES (${auditId}, ${admin.id}, 'recompute', 'leaderboard', 'batch',
-      ${body.reason || null}, ${JSON.stringify({ period_type: periodType, period_start: periodStart, period_end: periodEnd, user_id: userId, pricing_version: pricingVersion, recomputed, skipped })}::jsonb)
+      ${body.reason || null}, ${JSON.stringify({ period_type: periodType, period_start: periodStart, period_end: periodEnd, user_id: userId, recomputed, skipped })}::jsonb)
   `
 
   return json({
     status: 'completed',
     recomputed,
     skipped,
-    pricing_version: pricingVersion,
   })
 }

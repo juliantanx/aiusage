@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { requireAdmin } from '$lib/server/auth/session.js'
-import { getPriceEntries, updatePriceEntries, addPriceEntry, deletePriceEntry, syncPricingFromCore } from '$lib/server/admin/operations.js'
+import { getPriceEntries, updatePriceEntries, addPriceEntry, deletePriceEntry } from '$lib/server/admin/operations.js'
 
 export const GET: RequestHandler = async (event) => {
   const admin = await requireAdmin(event)

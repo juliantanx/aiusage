@@ -6,8 +6,6 @@ import { calculateRegistryCost, loadPricingRegistry, resolvePriceFromRegistry, t
 import { nanoid } from 'nanoid'
 import { createHmac, timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
 
-const CURRENT_PRICING_VERSION = 'current'
-
 const ALLOWED_PERIOD_TYPES = ['daily', 'weekly', 'monthly', 'yearly', 'all_time'] as const
 const ALLOWED_SCOPE_TYPES = ['all', 'tool', 'model', 'tool_model'] as const
 
@@ -612,7 +610,6 @@ export async function processUpload(
     `
 
     const pricing = await loadPricingRegistry(tx)
-    const pricingVersion = CURRENT_PRICING_VERSION
 
     for (const snapshot of request.snapshots) {
       // Run risk assessment
@@ -652,12 +649,12 @@ export async function processUpload(
           INSERT INTO leaderboard_metrics (
             id, upload_request_id, user_id, device_id, period_type, period_start, period_end,
             scope_type, tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-            thinking_tokens, total_tokens, total_cost_usd, visibility, pricing_version, has_unknown_cost
+            thinking_tokens, total_tokens, total_cost_usd, visibility, has_unknown_cost
           )
           VALUES (
             ${metricId}, ${requestId}, ${userId}, ${deviceId}, ${snapshot.period_type}, ${snapshot.period_start}, ${snapshot.period_end},
             ${row.scope_type}, ${row.tool}, ${row.model}, ${row.input_tokens}, ${row.output_tokens}, ${row.cache_read_tokens}, ${row.cache_write_tokens},
-            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, ${metricVisibility}, ${pricingVersion}, ${hasUnknownCost}
+            ${row.thinking_tokens}, ${row.total_tokens}, ${cost}, ${metricVisibility}, ${hasUnknownCost}
           )
           ON CONFLICT (user_id, period_type, period_start, scope_type, (COALESCE(tool, '')), (COALESCE(model, '')))
           DO UPDATE SET
@@ -672,7 +669,6 @@ export async function processUpload(
             total_tokens = ${row.total_tokens},
             total_cost_usd = ${cost},
             visibility = ${metricVisibility},
-            pricing_version = ${pricingVersion},
             has_unknown_cost = ${hasUnknownCost},
             updated_at = NOW()
         `

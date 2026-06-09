@@ -230,49 +230,13 @@ const migrations = [
   },
   {
     version: 4,
-    name: 'pricing_version_and_anonymous',
+    name: 'unknown_cost_and_anonymous',
     up: async (tx: ReturnType<typeof sql>) => {
-      // Add pricing_version to leaderboard_metrics so cost calculations are traceable
-      await tx`ALTER TABLE leaderboard_metrics ADD COLUMN IF NOT EXISTS pricing_version TEXT`
       // Add has_unknown_cost flag: true when model is not in official price table
       await tx`ALTER TABLE leaderboard_metrics ADD COLUMN IF NOT EXISTS has_unknown_cost BOOLEAN DEFAULT FALSE`
 
       // Add anonymous leaderboard support to users
       await tx`ALTER TABLE users ADD COLUMN IF NOT EXISTS leaderboard_anonymous BOOLEAN DEFAULT FALSE`
-
-      // Official price tables for versioned pricing
-      await tx`DO $$ BEGIN CREATE TYPE price_table_status AS ENUM ('draft', 'published', 'archived'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`
-
-      await tx`CREATE TABLE IF NOT EXISTS official_price_tables (
-        id TEXT PRIMARY KEY,
-        version TEXT NOT NULL UNIQUE,
-        status price_table_status NOT NULL DEFAULT 'draft',
-        source TEXT NOT NULL DEFAULT 'core_pricing',
-        source_commit TEXT,
-        notes TEXT,
-        created_by TEXT REFERENCES users(id),
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        published_by TEXT REFERENCES users(id),
-        published_at TIMESTAMPTZ,
-        archived_at TIMESTAMPTZ
-      )`
-
-      await tx`CREATE TABLE IF NOT EXISTS official_price_entries (
-        id TEXT PRIMARY KEY,
-        table_id TEXT NOT NULL REFERENCES official_price_tables(id) ON DELETE CASCADE,
-        model_key TEXT NOT NULL,
-        input NUMERIC(20, 8) NOT NULL,
-        output NUMERIC(20, 8) NOT NULL,
-        cache_read NUMERIC(20, 8),
-        cache_write NUMERIC(20, 8),
-        currency TEXT NOT NULL DEFAULT 'USD',
-        source_url TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(table_id, model_key)
-      )`
-
-      await tx`CREATE INDEX IF NOT EXISTS idx_price_tables_status ON official_price_tables(status)`
-      await tx`CREATE INDEX IF NOT EXISTS idx_price_entries_table ON official_price_entries(table_id)`
     }
   },
   {
@@ -532,6 +496,16 @@ const migrations = [
       await tx`CREATE INDEX IF NOT EXISTS idx_model_prices_origin ON model_prices(origin)`
       await tx`CREATE INDEX IF NOT EXISTS idx_model_prices_source ON model_prices(source)`
       await tx`CREATE INDEX IF NOT EXISTS idx_model_price_aliases_model ON model_price_aliases(model_key)`
+    }
+  },
+  {
+    version: 15,
+    name: 'remove_versioned_price_tables',
+    up: async (tx: ReturnType<typeof sql>) => {
+      await tx`ALTER TABLE leaderboard_metrics DROP COLUMN IF EXISTS pricing_version`
+      await tx`DROP TABLE IF EXISTS official_price_entries`
+      await tx`DROP TABLE IF EXISTS official_price_tables`
+      await tx`DROP TYPE IF EXISTS price_table_status`
     }
   }
 ]
