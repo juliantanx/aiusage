@@ -21,6 +21,7 @@
   let openAliasSearch = null
   let bindingAlias = null
   let needsRecalc = false
+  let recalcPanelDismissed = false
   let recalcProgress = { state: 'idle', total: 0, processed: 0, updated: 0, skipped: 0, error: null }
   let recalcTimer = null
 
@@ -82,12 +83,14 @@
 
   function markNeedsRecalc() {
     needsRecalc = true
+    recalcPanelDismissed = false
     recalcStatus.set('idle')
   }
 
   function applyRecalcStatus(status) {
     recalcProgress = status || { state: 'idle', total: 0, processed: 0, updated: 0, skipped: 0, error: null }
     if (recalcProgress.state === 'queued' || recalcProgress.state === 'running') {
+      recalcPanelDismissed = false
       recalcStatus.set('updating')
       startRecalcPolling()
       return
@@ -98,8 +101,21 @@
     }
     if (recalcProgress.state === 'done') {
       needsRecalc = false
+      recalcPanelDismissed = false
       markDone()
+    } else if (recalcProgress.state === 'error') {
+      recalcPanelDismissed = false
+      recalcStatus.set('idle')
     } else {
+      recalcStatus.set('idle')
+    }
+  }
+
+  function dismissRecalcPanel() {
+    needsRecalc = false
+    recalcPanelDismissed = true
+    if (recalcProgress.state === 'done' || recalcProgress.state === 'error') {
+      recalcProgress = { state: 'idle', total: 0, processed: 0, updated: 0, skipped: 0, error: null }
       recalcStatus.set('idle')
     }
   }
@@ -211,8 +227,23 @@
     return [target.model, target.provider, formatTarget(target)].some((value) => String(value || '').toLowerCase().includes(q))
   }
 
-  function filteredTargets(alias) {
-    return targets.filter((target) => targetMatches(target, aliasQueries[alias])).slice(0, 30)
+  function filteredTargets(query) {
+    return targets.filter((target) => targetMatches(target, query)).slice(0, 30)
+  }
+
+  function aliasSearchValue(alias) {
+    return aliasQueries[alias] ?? selectedAliasLabel(alias)
+  }
+
+  function openAliasOptions(alias) {
+    aliasQueries = { ...aliasQueries, [alias]: aliasSearchValue(alias) }
+    openAliasSearch = alias
+  }
+
+  function updateAliasQuery(alias, value) {
+    aliasQueries = { ...aliasQueries, [alias]: value }
+    aliasSelections = { ...aliasSelections, [alias]: '' }
+    openAliasSearch = alias
   }
 
   function selectAliasTarget(alias, target) {
@@ -249,7 +280,7 @@
   $: showUnresolvedPanel = !pricingRegistryEmpty && unresolvedModels.length > 0 && targets.length > 0
   $: recalcProgressPct = recalcProgress.total > 0 ? Math.min(100, Math.round((recalcProgress.processed / recalcProgress.total) * 100)) : 0
   $: recalcActive = recalcProgress.state === 'queued' || recalcProgress.state === 'running'
-  $: showRecalcPanel = needsRecalc || recalcActive || recalcProgress.state === 'done' || recalcProgress.state === 'error'
+  $: showRecalcPanel = !recalcPanelDismissed && (needsRecalc || recalcActive || recalcProgress.state === 'done' || recalcProgress.state === 'error')
   $: recalcSummaryText = recalcProgress.state === 'done'
     ? $t('pricing.recalcSummary')
       .replace('{updated}', recalcProgress.updated ?? 0)
@@ -283,10 +314,15 @@
 
 {#if showRecalcPanel}
   <div class="recalc-panel" class:error={recalcProgress.state === 'error'}>
-    <div class="recalc-copy">
-      <span class="recalc-label mono">{recalcProgressLabel()}</span>
-      {#if recalcSummaryText}
-        <span class="recalc-summary mono">{recalcSummaryText}</span>
+    <div class="recalc-head">
+      <div class="recalc-copy">
+        <span class="recalc-label mono">{recalcProgressLabel()}</span>
+        {#if recalcSummaryText}
+          <span class="recalc-summary mono">{recalcSummaryText}</span>
+        {/if}
+      </div>
+      {#if !recalcActive}
+        <button class="recalc-close" type="button" on:click={dismissRecalcPanel} aria-label="Close">×</button>
       {/if}
     </div>
     <div class="recalc-track" aria-hidden="true">
@@ -319,28 +355,25 @@
         </div>
       </div>
       <div class="alias-list">
-        {#each unresolvedModels as alias}
+        {#each unresolvedModels as alias (alias)}
+          {@const aliasQuery = aliasQueries[alias] ?? selectedAliasLabel(alias)}
           <div class="alias-row">
             <span class="alias-model mono">{alias}</span>
             <div class="alias-combobox">
               <input
                 class="alias-search"
-                value={aliasQueries[alias] ?? selectedAliasLabel(alias)}
+                value={aliasQuery}
                 placeholder={$t('pricing.aliasSearch')}
                 aria-label={$t('pricing.aliasTarget')}
-                on:focus={() => openAliasSearch = alias}
+                on:focus={() => openAliasOptions(alias)}
                 on:blur={() => setTimeout(() => {
                   if (openAliasSearch === alias) openAliasSearch = null
                 }, 100)}
-                on:input={(event) => {
-                  aliasQueries = { ...aliasQueries, [alias]: event.currentTarget.value }
-                  aliasSelections = { ...aliasSelections, [alias]: '' }
-                  openAliasSearch = alias
-                }}
+                on:input={(event) => updateAliasQuery(alias, event.currentTarget.value)}
               />
               {#if openAliasSearch === alias}
                 <div class="alias-options" role="listbox">
-                  {#each filteredTargets(alias) as target}
+                  {#each filteredTargets(aliasQuery) as target}
                     <button type="button" class="alias-option" on:mousedown|preventDefault={() => selectAliasTarget(alias, target)}>
                       <span class="alias-option-model mono">{target.model}</span>
                       {#if target.provider}
@@ -481,12 +514,41 @@
   .recalc-panel.error {
     border-color: var(--rose);
   }
+  .recalc-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
   .recalc-copy {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 0.5rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .recalc-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    margin: -0.25rem -0.35rem 0 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .recalc-close:hover,
+  .recalc-close:focus {
+    outline: none;
+    background: var(--raised);
+    color: var(--text);
   }
   .recalc-label {
     color: var(--text);
