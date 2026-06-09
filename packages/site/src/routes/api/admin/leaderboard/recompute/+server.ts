@@ -2,7 +2,9 @@ import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
 import { sql } from '$lib/server/db/pool.js'
 import { requireAdmin } from '$lib/server/auth/session.js'
-import { calculateRegistryCost, loadPricingRegistry, resolvePriceFromRegistry } from '$lib/server/pricing/registry.js'
+import { loadPricingRegistry } from '$lib/server/pricing/registry.js'
+import { invalidateLeaderboardCache } from '$lib/server/leaderboard/query.js'
+import { recomputeAggregateCost, recomputeToolModelCost, type CostMetricRow } from '$lib/server/leaderboard/recompute.js'
 import { nanoid } from 'nanoid'
 
 /**
@@ -33,12 +35,13 @@ export const POST: RequestHandler = async (event) => {
     SELECT lm.id, lm.upload_request_id, lm.user_id, lm.device_id,
            lm.period_type, lm.period_start, lm.period_end, lm.scope_type, lm.tool, lm.model,
            lm.input_tokens, lm.output_tokens, lm.cache_read_tokens, lm.cache_write_tokens,
-           lm.thinking_tokens, lm.total_tokens
+           lm.thinking_tokens, lm.total_tokens, lm.total_cost_usd, lm.has_unknown_cost
     FROM leaderboard_metrics lm
     JOIN users u ON u.id = lm.user_id
     WHERE lm.visibility != 'hidden'
       AND u.status = 'active'
       AND u.leaderboard_visibility = 'public'
+      AND lm.scope_type = 'tool_model'
   `
 
   if (periodType) {
@@ -54,34 +57,24 @@ export const POST: RequestHandler = async (event) => {
     query = sql`${query} AND lm.user_id = ${userId}`
   }
 
-  const metrics = await query
+  const metrics = await query as CostMetricRow[]
 
   let recomputed = 0
   let skipped = 0
+  let preserved = 0
+  const unresolvedModels = new Set<string>()
 
   for (const row of metrics) {
-    const metric = row as {
-      id: string; upload_request_id: string; user_id: string; device_id: string;
-      period_type: string; period_start: string; period_end: string; scope_type: string;
-      tool: string | null; model: string | null; input_tokens: number; output_tokens: number;
-      cache_read_tokens: number; cache_write_tokens: number; thinking_tokens: number; total_tokens: number
-    }
-
-    let costUsd = 0
-    let hasUnknownCost = false
-    if (metric.scope_type === 'tool_model' && metric.model && metric.model !== 'unknown') {
-      const price = resolvePriceFromRegistry(metric.model, pricing)
-      if (price) {
-        costUsd = calculateRegistryCost(price, metric)
-      } else if (metric.total_tokens > 0) {
-        hasUnknownCost = true
-      }
-    }
+    const metric = row
+    const update = recomputeToolModelCost(metric, pricing)
+    if (!update) { skipped++; continue }
+    if (update.unresolvedModel) unresolvedModels.add(update.unresolvedModel)
+    if (update.preserved) preserved++
 
     await sql`
       UPDATE leaderboard_metrics
-      SET total_cost_usd = ${costUsd},
-          has_unknown_cost = ${hasUnknownCost},
+      SET total_cost_usd = ${update.totalCostUsd},
+          has_unknown_cost = ${update.hasUnknownCost},
           updated_at = NOW()
       WHERE id = ${metric.id}
         AND visibility != 'hidden'
@@ -91,18 +84,24 @@ export const POST: RequestHandler = async (event) => {
   }
 
   const aggregateRows = await sql`
-    SELECT id, scope_type, tool, model, upload_request_id, user_id, period_type, period_start
-    FROM leaderboard_metrics
-    WHERE visibility != 'hidden'
-      AND scope_type IN ('all', 'tool', 'model')
-      ${periodType ? sql`AND period_type = ${periodType}` : sql``}
-      ${periodStart ? sql`AND period_start >= ${periodStart}` : sql``}
-      ${periodEnd ? sql`AND period_end <= ${periodEnd}` : sql``}
-      ${userId ? sql`AND user_id = ${userId}` : sql``}
+    SELECT lm.id, lm.scope_type, lm.tool, lm.model, lm.upload_request_id, lm.user_id,
+           lm.period_type, lm.period_start, lm.input_tokens, lm.output_tokens,
+           lm.cache_read_tokens, lm.cache_write_tokens, lm.thinking_tokens, lm.total_tokens,
+           lm.total_cost_usd, lm.has_unknown_cost
+    FROM leaderboard_metrics lm
+    JOIN users u ON u.id = lm.user_id
+    WHERE lm.visibility != 'hidden'
+      AND lm.scope_type IN ('all', 'tool', 'model')
+      AND u.status = 'active'
+      AND u.leaderboard_visibility = 'public'
+      ${periodType ? sql`AND lm.period_type = ${periodType}` : sql``}
+      ${periodStart ? sql`AND lm.period_start >= ${periodStart}` : sql``}
+      ${periodEnd ? sql`AND lm.period_end <= ${periodEnd}` : sql``}
+      ${userId ? sql`AND lm.user_id = ${userId}` : sql``}
   `
 
   for (const row of aggregateRows) {
-    const metric = row as { id: string; scope_type: string; tool: string | null; model: string | null; upload_request_id: string; user_id: string; period_type: string; period_start: string }
+    const metric = row as CostMetricRow & { upload_request_id: string; user_id: string; period_type: string; period_start: string }
     let children
     if (metric.scope_type === 'all') {
       children = await sql`
@@ -120,26 +119,37 @@ export const POST: RequestHandler = async (event) => {
         WHERE upload_request_id = ${metric.upload_request_id} AND scope_type = 'tool_model' AND model = ${metric.model} AND visibility != 'hidden'
       `
     }
-    const totalCost = children.reduce((sum, child) => sum + Number((child as { total_cost_usd: string | number }).total_cost_usd), 0)
-    const hasUnknownCost = children.some(child => Boolean((child as { has_unknown_cost: boolean }).has_unknown_cost))
+
+    const update = recomputeAggregateCost(metric, children as Array<{ total_cost_usd: string | number; has_unknown_cost: boolean | null }>, pricing)
+    if (!update) { skipped++; continue }
+    if (update.unresolvedModel) unresolvedModels.add(update.unresolvedModel)
+    if (update.preserved) preserved++
+
     await sql`
       UPDATE leaderboard_metrics
-      SET total_cost_usd = ${totalCost}, has_unknown_cost = ${hasUnknownCost}, updated_at = NOW()
+      SET total_cost_usd = ${update.totalCostUsd}, has_unknown_cost = ${update.hasUnknownCost}, updated_at = NOW()
       WHERE id = ${metric.id}
     `
+    recomputed++
   }
+
+  invalidateLeaderboardCache()
+
+  const unresolvedModelList = [...unresolvedModels].sort()
 
   // Audit log
   const auditId = nanoid()
   await sql`
     INSERT INTO admin_audit_logs (id, admin_user_id, action, target_type, target_id, reason, metadata)
     VALUES (${auditId}, ${admin.id}, 'recompute', 'leaderboard', 'batch',
-      ${body.reason || null}, ${JSON.stringify({ period_type: periodType, period_start: periodStart, period_end: periodEnd, user_id: userId, recomputed, skipped })}::jsonb)
+      ${body.reason || null}, ${JSON.stringify({ period_type: periodType, period_start: periodStart, period_end: periodEnd, user_id: userId, recomputed, skipped, preserved, unresolved_models: unresolvedModelList })}::jsonb)
   `
 
   return json({
     status: 'completed',
     recomputed,
     skipped,
+    preserved,
+    unresolved_models: unresolvedModelList,
   })
 }

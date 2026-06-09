@@ -500,7 +500,30 @@
   }
   async function recomputeLeaderboard() {
     if (!confirm(zh ? '确认使用当前价格表重算全部排行榜指标？' : 'Recompute all leaderboard metrics using the current price table?')) return
-    await doAction('/api/admin/leaderboard/recompute', {}, zh ? '排行榜已重算' : 'Leaderboard recomputed')
+    if (actionLoading) return
+    actionLoading = '/api/admin/leaderboard/recompute'
+    actionError = ''
+    actionFeedback = ''
+    try {
+      const res = await fetch('/api/admin/leaderboard/recompute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
+        body: JSON.stringify({})
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        const unresolved = data.unresolved_models?.length ?? 0
+        actionFeedback = zh
+          ? `排行榜已重算：更新 ${data.recomputed ?? 0}，保留 ${data.preserved ?? 0}，未匹配模型 ${unresolved}`
+          : `Leaderboard recomputed: ${data.recomputed ?? 0} updated, ${data.preserved ?? 0} preserved, ${unresolved} unresolved models`
+      } else {
+        actionError = data.error || (zh ? '重算失败' : 'Recompute failed')
+      }
+    } catch {
+      actionError = zh ? '网络错误' : 'Network error'
+    } finally {
+      actionLoading = ''
+    }
   }
 
   function formatTokens(n) {
