@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { t } from '$lib/i18n.js'
-  import { fetchPricing, updatePricing, deletePricing, syncPricing, bindPricingAlias } from '$lib/api.js'
+  import { fetchPricing, updatePricing, deletePricing, syncPricing, bindPricingAlias, recalcPricing, fetchPricingRecalcStatus } from '$lib/api.js'
   import { recalcStatus, displayCurrency, exchangeRate } from '$lib/stores.js'
 
   let models = []
@@ -17,11 +17,22 @@
   let registry = null
   let targets = []
   let aliasSelections = {}
+  let aliasQueries = {}
+  let openAliasSearch = null
   let bindingAlias = null
+  let needsRecalc = false
+  let recalcProgress = { state: 'idle', total: 0, processed: 0, updated: 0, skipped: 0, error: null }
+  let recalcTimer = null
 
-  onDestroy(() => { if (doneTimer) clearTimeout(doneTimer) })
+  onDestroy(() => {
+    if (doneTimer) clearTimeout(doneTimer)
+    if (recalcTimer) clearInterval(recalcTimer)
+  })
 
-  onMount(loadData)
+  onMount(async () => {
+    await loadData()
+    await refreshRecalcStatus()
+  })
 
   async function loadData() {
     loading = true
@@ -69,15 +80,65 @@
     doneTimer = setTimeout(() => { recalcStatus.set('idle') }, 3000)
   }
 
-  async function saveEdit(name) {
+  function markNeedsRecalc() {
+    needsRecalc = true
+    recalcStatus.set('idle')
+  }
+
+  function applyRecalcStatus(status) {
+    recalcProgress = status || { state: 'idle', total: 0, processed: 0, updated: 0, skipped: 0, error: null }
+    if (recalcProgress.state === 'queued' || recalcProgress.state === 'running') {
+      recalcStatus.set('updating')
+      startRecalcPolling()
+      return
+    }
+    if (recalcTimer) {
+      clearInterval(recalcTimer)
+      recalcTimer = null
+    }
+    if (recalcProgress.state === 'done') {
+      needsRecalc = false
+      markDone()
+    } else {
+      recalcStatus.set('idle')
+    }
+  }
+
+  async function refreshRecalcStatus() {
+    try {
+      applyRecalcStatus(await fetchPricingRecalcStatus())
+    } catch {
+      if (recalcTimer) {
+        clearInterval(recalcTimer)
+        recalcTimer = null
+      }
+      recalcStatus.set('idle')
+    }
+  }
+
+  function startRecalcPolling() {
+    if (recalcTimer) return
+    recalcTimer = setInterval(refreshRecalcStatus, 700)
+  }
+
+  async function startRecalcCosts() {
     try {
       recalcStatus.set('updating')
-      const r = await updatePricing(name, { ...editValues, currency: editingCurrency })
+      const r = await recalcPricing()
+      applyRecalcStatus(r.status || r)
+    } catch (e) {
+      recalcStatus.set('idle')
+      alert(e.message)
+    }
+  }
+
+  async function saveEdit(name) {
+    try {
+      await updatePricing(name, { ...editValues, currency: editingCurrency })
       editingModel = null
       editingCurrency = null
       await loadData()
-      if (r.recalculated) markDone()
-      else recalcStatus.set('idle')
+      markNeedsRecalc()
     } catch (e) {
       recalcStatus.set('idle')
       alert(e.message)
@@ -86,11 +147,9 @@
 
   async function resetModel(name) {
     try {
-      recalcStatus.set('updating')
-      const r = await deletePricing(name)
+      await deletePricing(name)
       await loadData()
-      if (r.recalculated) markDone()
-      else recalcStatus.set('idle')
+      markNeedsRecalc()
     } catch (e) {
       recalcStatus.set('idle')
       alert(e.message)
@@ -100,12 +159,10 @@
   async function syncPrices() {
     try {
       syncingPrices = true
-      recalcStatus.set('updating')
       const r = await syncPricing()
       syncSummary = r.summary || null
       await loadData()
-      if (r.recalculated) markDone()
-      else recalcStatus.set('idle')
+      markNeedsRecalc()
     } catch (e) {
       recalcStatus.set('idle')
       alert(e.message)
@@ -119,11 +176,9 @@
     if (!modelKey) return
     try {
       bindingAlias = alias
-      recalcStatus.set('updating')
-      const r = await bindPricingAlias(alias, modelKey)
+      await bindPricingAlias(alias, modelKey)
       await loadData()
-      if (r.recalculated) markDone()
-      else recalcStatus.set('idle')
+      markNeedsRecalc()
     } catch (e) {
       recalcStatus.set('idle')
       alert(e.message)
@@ -150,6 +205,39 @@
     return `${provider}${target.model}`
   }
 
+  function targetMatches(target, query) {
+    const q = (query || '').trim().toLowerCase()
+    if (!q) return true
+    return [target.model, target.provider, formatTarget(target)].some((value) => String(value || '').toLowerCase().includes(q))
+  }
+
+  function filteredTargets(alias) {
+    return targets.filter((target) => targetMatches(target, aliasQueries[alias])).slice(0, 30)
+  }
+
+  function selectAliasTarget(alias, target) {
+    aliasSelections = { ...aliasSelections, [alias]: target.model }
+    aliasQueries = { ...aliasQueries, [alias]: formatTarget(target) }
+    openAliasSearch = null
+  }
+
+  function selectedAliasLabel(alias) {
+    const selected = targets.find((target) => target.model === aliasSelections[alias])
+    return selected ? formatTarget(selected) : ''
+  }
+
+  function recalcProgressLabel() {
+    if (recalcProgress.state === 'queued') return $t('pricing.recalcQueued')
+    if (recalcProgress.state === 'running') {
+      return $t('pricing.recalcRunning')
+        .replace('{processed}', recalcProgress.processed ?? 0)
+        .replace('{total}', recalcProgress.total ?? 0)
+    }
+    if (recalcProgress.state === 'done') return $t('pricing.recalcDone')
+    if (recalcProgress.state === 'error') return $t('pricing.recalcFailed')
+    return needsRecalc ? $t('pricing.recalcNeeded') : ''
+  }
+
   $: syncSummaryText = syncSummary
     ? $t('pricing.syncSummary')
       .replace('{added}', syncSummary.added ?? 0)
@@ -159,6 +247,14 @@
   $: pricingRegistryEmpty = !loading && !error && registry?.totalPrices === 0
   $: unresolvedModels = registry?.unresolvedLocalModels || []
   $: showUnresolvedPanel = !pricingRegistryEmpty && unresolvedModels.length > 0 && targets.length > 0
+  $: recalcProgressPct = recalcProgress.total > 0 ? Math.min(100, Math.round((recalcProgress.processed / recalcProgress.total) * 100)) : 0
+  $: recalcActive = recalcProgress.state === 'queued' || recalcProgress.state === 'running'
+  $: showRecalcPanel = needsRecalc || recalcActive || recalcProgress.state === 'done' || recalcProgress.state === 'error'
+  $: recalcSummaryText = recalcProgress.state === 'done'
+    ? $t('pricing.recalcSummary')
+      .replace('{updated}', recalcProgress.updated ?? 0)
+      .replace('{skipped}', recalcProgress.skipped ?? 0)
+    : recalcProgress.error || ''
 </script>
 
 <svelte:head>
@@ -168,11 +264,9 @@
 <div class="header-row">
   <h1 class="page-title">{$t('pricing.title')}</h1>
   <div class="header-right">
-    {#if $recalcStatus === 'updating'}
-      <span class="toast updating">{$t('pricing.costsUpdating')}</span>
-    {:else if $recalcStatus === 'done'}
-      <span class="toast done">{$t('pricing.costsUpdated')}</span>
-    {/if}
+    <button class="btn-sm primary" on:click={startRecalcCosts} disabled={recalcActive || pricingRegistryEmpty}>
+      {recalcActive ? $t('pricing.costsUpdating') : $t('pricing.recalc')}
+    </button>
     <button class="btn-sm sync-btn" on:click={syncPrices} disabled={syncingPrices}>
       {syncingPrices ? $t('pricing.syncingPrices') : $t('pricing.syncPrices')}
     </button>
@@ -185,6 +279,20 @@
 
 {#if syncSummaryText}
   <div class="sync-summary mono">{syncSummaryText}</div>
+{/if}
+
+{#if showRecalcPanel}
+  <div class="recalc-panel" class:error={recalcProgress.state === 'error'}>
+    <div class="recalc-copy">
+      <span class="recalc-label mono">{recalcProgressLabel()}</span>
+      {#if recalcSummaryText}
+        <span class="recalc-summary mono">{recalcSummaryText}</span>
+      {/if}
+    </div>
+    <div class="recalc-track" aria-hidden="true">
+      <span class="recalc-bar" style="width: {recalcActive ? Math.max(4, recalcProgressPct) : recalcProgress.state === 'done' ? 100 : 0}%"></span>
+    </div>
+  </div>
 {/if}
 
 {#if loading}
@@ -214,12 +322,37 @@
         {#each unresolvedModels as alias}
           <div class="alias-row">
             <span class="alias-model mono">{alias}</span>
-            <select class="alias-select" bind:value={aliasSelections[alias]} aria-label={$t('pricing.aliasTarget')}>
-              <option value="">{$t('pricing.aliasPlaceholder')}</option>
-              {#each targets as target}
-                <option value={target.model}>{formatTarget(target)}</option>
-              {/each}
-            </select>
+            <div class="alias-combobox">
+              <input
+                class="alias-search"
+                value={aliasQueries[alias] ?? selectedAliasLabel(alias)}
+                placeholder={$t('pricing.aliasSearch')}
+                aria-label={$t('pricing.aliasTarget')}
+                on:focus={() => openAliasSearch = alias}
+                on:blur={() => setTimeout(() => {
+                  if (openAliasSearch === alias) openAliasSearch = null
+                }, 100)}
+                on:input={(event) => {
+                  aliasQueries = { ...aliasQueries, [alias]: event.currentTarget.value }
+                  aliasSelections = { ...aliasSelections, [alias]: '' }
+                  openAliasSearch = alias
+                }}
+              />
+              {#if openAliasSearch === alias}
+                <div class="alias-options" role="listbox">
+                  {#each filteredTargets(alias) as target}
+                    <button type="button" class="alias-option" on:mousedown|preventDefault={() => selectAliasTarget(alias, target)}>
+                      <span class="alias-option-model mono">{target.model}</span>
+                      {#if target.provider}
+                        <span class="alias-option-provider">{target.provider}</span>
+                      {/if}
+                    </button>
+                  {:else}
+                    <span class="alias-empty">{$t('pricing.aliasNoResults')}</span>
+                  {/each}
+                </div>
+              {/if}
+            </div>
             <button class="btn-sm save" on:click={() => bindAlias(alias)} disabled={!aliasSelections[alias] || bindingAlias === alias}>
               {bindingAlias === alias ? $t('pricing.bindingAlias') : $t('pricing.bindAlias')}
             </button>
@@ -333,17 +466,53 @@
     align-items: center;
     gap: 0.75rem;
   }
-  .toast {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-  .toast.updating { color: var(--text-muted); }
-  .toast.done { color: var(--accent); }
   .sync-summary {
     color: var(--text-muted);
     font-size: 0.75rem;
     margin: -0.75rem 0 1rem;
+  }
+  .recalc-panel {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    margin: -0.5rem 0 1rem;
+    padding: 0.75rem 1rem;
+  }
+  .recalc-panel.error {
+    border-color: var(--rose);
+  }
+  .recalc-copy {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .recalc-label {
+    color: var(--text);
+    font-size: 0.75rem;
+  }
+  .recalc-summary {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-align: right;
+  }
+  .recalc-panel.error .recalc-label,
+  .recalc-panel.error .recalc-summary {
+    color: var(--rose);
+  }
+  .recalc-track {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--raised);
+  }
+  .recalc-bar {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 0.2s ease-out;
   }
   .currency-toggle {
     display: flex;
@@ -434,8 +603,13 @@
     font-size: 0.8rem;
     overflow-wrap: anywhere;
   }
-  .alias-select {
+  .alias-combobox {
+    position: relative;
+    min-width: 0;
+  }
+  .alias-search {
     height: 32px;
+    width: 100%;
     min-width: 0;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
@@ -445,7 +619,59 @@
     font-size: 0.75rem;
     padding: 0 0.5rem;
   }
-  .alias-select:focus { outline: none; border-color: var(--accent); }
+  .alias-search:focus { outline: none; border-color: var(--accent); }
+  .alias-options {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0.25rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.08), 0 4px 12px oklch(0 0 0 / 0.04);
+  }
+  .alias-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 30px;
+    padding: 0.35rem 0.45rem;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+  }
+  .alias-option:hover,
+  .alias-option:focus {
+    outline: none;
+    background: var(--raised);
+  }
+  .alias-option-model {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+  }
+  .alias-option-provider {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+  }
+  .alias-empty {
+    display: block;
+    padding: 0.45rem 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
   .empty-copy {
     display: flex;
     flex-direction: column;
@@ -646,6 +872,17 @@
       align-items: stretch;
       gap: 0.5rem;
       padding: 0.75rem 0;
+    }
+    .alias-combobox {
+      width: 100%;
+    }
+    .recalc-copy {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .recalc-summary {
+      text-align: left;
     }
   }
 </style>

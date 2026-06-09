@@ -147,6 +147,10 @@ export async function recalcPricing() {
   return response.json()
 }
 
+export async function fetchPricingRecalcStatus() {
+  return apiFetch('/api/pricing/recalc')
+}
+
 export async function syncPricing() {
   const response = await fetch('/api/pricing/sync', { method: 'POST' })
   if (!response.ok) {

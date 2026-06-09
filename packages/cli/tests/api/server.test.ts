@@ -81,6 +81,18 @@ function insertTestPrice(db: Database.Database, modelKey = 'claude-sonnet-4-6') 
   `).run(modelKey, modelKey, now, now, now)
 }
 
+async function waitForPricingRecalcDone(baseUrl: string) {
+  for (let i = 0; i < 50; i++) {
+    const response = await fetch(`${baseUrl}/api/pricing/recalc`)
+    expect(response.ok).toBe(true)
+    const status = await response.json()
+    if (status.state === 'done') return status
+    if (status.state === 'error') throw new Error(status.error || 'pricing recalc failed')
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  throw new Error('pricing recalc did not finish')
+}
+
 describe('API Server', () => {
   let db: Database.Database
   let server: http.Server
@@ -220,6 +232,8 @@ describe('API Server', () => {
       body: JSON.stringify({ alias: 'provider/claude-sonnet-4-6', modelKey: 'claude-sonnet-4-6' }),
     })
     expect(bind.ok).toBe(true)
+    const bindData = await bind.json()
+    expect(bindData).toMatchObject({ ok: true, needsRecalc: true })
 
     const after = await fetch(`${baseUrl}/api/pricing`)
     const afterData = await after.json()
@@ -229,6 +243,45 @@ describe('API Server', () => {
       isBuiltin: true,
       matchedBy: 'claude-sonnet-4-6',
     })
+  })
+
+  it('recalculates pricing costs only after the explicit recalc endpoint is triggered', async () => {
+    insertTestRecord(db, {
+      model: 'provider/claude-sonnet-4-6',
+      provider: 'unknown',
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cost: 0,
+      cost_source: 'unknown',
+    })
+    insertTestPrice(db, 'claude-sonnet-4-6')
+
+    const bind = await fetch(`${baseUrl}/api/pricing/alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias: 'provider/claude-sonnet-4-6', modelKey: 'claude-sonnet-4-6' }),
+    })
+    expect(bind.ok).toBe(true)
+    expect(await bind.json()).toMatchObject({ ok: true, needsRecalc: true })
+
+    const unchanged = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
+    expect(unchanged.cost).toBe(0)
+    expect(unchanged.cost_source).toBe('unknown')
+
+    const start = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(start.status).toBe(202)
+    const startData = await start.json()
+    expect(startData.accepted).toBe(true)
+    expect(startData.status.state).toBe('queued')
+
+    const done = await waitForPricingRecalcDone(baseUrl)
+    expect(done.total).toBe(1)
+    expect(done.processed).toBe(1)
+    expect(done.updated).toBe(1)
+
+    const recalculated = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
+    expect(recalculated.cost_source).toBe('pricing')
+    expect(recalculated.cost).toBeCloseTo(10.5)
   })
 })
 

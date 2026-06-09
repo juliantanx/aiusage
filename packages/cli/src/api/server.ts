@@ -72,11 +72,43 @@ function countExistingRecordIds(db: Database.Database, ids: string[]): number {
   return count
 }
 
-function recalcCosts(db: Database.Database): number {
+type PricingRecalcState = 'idle' | 'queued' | 'running' | 'done' | 'error'
+
+interface PricingRecalcStatus {
+  state: PricingRecalcState
+  total: number
+  processed: number
+  updated: number
+  skipped: number
+  startedAt: number | null
+  finishedAt: number | null
+  error: string | null
+}
+
+function emptyPricingRecalcStatus(): PricingRecalcStatus {
+  return {
+    state: 'idle',
+    total: 0,
+    processed: 0,
+    updated: 0,
+    skipped: 0,
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+  }
+}
+
+async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<PricingRecalcStatus, 'total' | 'processed' | 'updated' | 'skipped'>) => void): Promise<number> {
   const BATCH_SIZE = 1000
   let updated = 0
+  let processed = 0
+  let skipped = 0
   let lastId = ''
   const exchangeRate = resolveExchangeRate(loadConfig() ?? {})
+  const totalRow = db.prepare('SELECT COUNT(*) AS total FROM records').get() as { total: number }
+  const total = totalRow.total
+  onProgress?.({ total, processed, updated, skipped })
+
   while (true) {
     const records = db.prepare(
       'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
@@ -85,7 +117,11 @@ function recalcCosts(db: Database.Database): number {
     const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
     const tx = db.transaction((batch: any[]) => {
       for (const r of batch) {
-        if (r.cost_source === 'log') continue
+        processed++
+        if (r.cost_source === 'log') {
+          skipped++
+          continue
+        }
 
         const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
         const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
@@ -107,6 +143,8 @@ function recalcCosts(db: Database.Database): number {
     })
     tx(records)
     lastId = records[records.length - 1].id
+    onProgress?.({ total, processed, updated, skipped })
+    await new Promise<void>((resolve) => setImmediate(resolve))
   }
   return updated
 }
@@ -376,6 +414,58 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
   const dashboardPassword = getDashboardPassword()
   const localWriteQueue = new AsyncTaskQueue()
   const runDbWrite = options?.runDbWrite ?? (<T>(task: () => T | Promise<T>) => localWriteQueue.run(task))
+  let pricingRecalcStatus = emptyPricingRecalcStatus()
+
+  const startPricingRecalc = (): { accepted: boolean; status: PricingRecalcStatus } => {
+    if (pricingRecalcStatus.state === 'queued' || pricingRecalcStatus.state === 'running') {
+      return { accepted: false, status: pricingRecalcStatus }
+    }
+
+    pricingRecalcStatus = {
+      ...emptyPricingRecalcStatus(),
+      state: 'queued',
+      startedAt: Date.now(),
+    }
+
+    void runDbWrite(async () => {
+      pricingRecalcStatus = {
+        ...pricingRecalcStatus,
+        state: 'running',
+        startedAt: pricingRecalcStatus.startedAt ?? Date.now(),
+      }
+      try {
+        await recalcCosts(db, (progress) => {
+          pricingRecalcStatus = {
+            ...pricingRecalcStatus,
+            ...progress,
+            state: 'running',
+          }
+        })
+        pricingRecalcStatus = {
+          ...pricingRecalcStatus,
+          state: 'done',
+          finishedAt: Date.now(),
+          error: null,
+        }
+      } catch (error) {
+        pricingRecalcStatus = {
+          ...pricingRecalcStatus,
+          state: 'error',
+          finishedAt: Date.now(),
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }).catch((error) => {
+      pricingRecalcStatus = {
+        ...pricingRecalcStatus,
+        state: 'error',
+        finishedAt: Date.now(),
+        error: error instanceof Error ? error.message : String(error),
+      }
+    })
+
+    return { accepted: true, status: pricingRecalcStatus }
+  }
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
@@ -1170,14 +1260,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             if (data.currency === 'CNY') {
               entry.currency = 'CNY'
             }
-            const recalculated = await runDbWrite(() => {
+            await runDbWrite(() => {
               setUserPrice(db, data.model, entry)
               const cfg = loadConfig() ?? {}
               cfg.priceOverrides = { ...cfg.priceOverrides, [data.model]: entry }
               saveConfig(cfg)
-              return recalcCosts(db)
+              loadPricingRuntime(db, cfg)
             })
-            json(res, { ok: true, recalculated })
+            json(res, { ok: true, needsRecalc: true })
           } catch (error) {
             if (isDatabaseLockedError(error)) {
               databaseBusy(res)
@@ -1195,7 +1285,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return
           }
           try {
-            const recalculated = await runDbWrite(() => {
+            await runDbWrite(() => {
               removeUserPrice(db, model)
               removePriceOverride(model)
               const cfg = loadConfig() ?? {}
@@ -1204,9 +1294,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                 saveConfig(cfg)
               }
               loadPricingRuntime(db, cfg)
-              return recalcCosts(db)
             })
-            json(res, { ok: true, recalculated })
+            json(res, { ok: true, needsRecalc: true })
           } catch (error) {
             if (isDatabaseLockedError(error)) {
               databaseBusy(res)
@@ -1225,12 +1314,11 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             json(res, { error: { code: 'INVALID_PARAM', message: 'alias and modelKey required' } }, 400)
             return
           }
-          const recalculated = await runDbWrite(() => {
+          await runDbWrite(() => {
             setUserPricingAlias(db, data.alias, data.modelKey)
             loadPricingRuntime(db, loadConfig())
-            return recalcCosts(db)
           })
-          json(res, { ok: true, recalculated })
+          json(res, { ok: true, needsRecalc: true })
         } catch (error) {
           if (isDatabaseLockedError(error)) {
             databaseBusy(res)
@@ -1243,13 +1331,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       if (url.pathname === '/api/pricing/sync' && req.method === 'POST') {
         try {
-          const { summary, recalculated } = await runDbWrite(async () => {
+          const summary = await runDbWrite(async () => {
             const summary = await syncPricingFromLitellm(db)
             loadPricingRuntime(db, loadConfig())
-            const recalculated = recalcCosts(db)
-            return { summary, recalculated }
+            return summary
           })
-          json(res, { ok: true, summary, recalculated })
+          json(res, { ok: true, summary, needsRecalc: true })
         } catch (error) {
           if (isDatabaseLockedError(error)) {
             databaseBusy(res)
@@ -1261,17 +1348,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
       }
 
       // ── /api/pricing/recalc ─────────────────────────────────────────
+      if (url.pathname === '/api/pricing/recalc' && req.method === 'GET') {
+        json(res, pricingRecalcStatus)
+        return
+      }
+
       if (url.pathname === '/api/pricing/recalc' && req.method === 'POST') {
-        try {
-          const updated = await runDbWrite(() => recalcCosts(db))
-          json(res, { updated })
-        } catch (error) {
-          if (isDatabaseLockedError(error)) {
-            databaseBusy(res)
-            return
-          }
-          throw error
-        }
+        const result = startPricingRecalc()
+        json(res, result, result.accepted ? 202 : 200)
         return
       }
 
