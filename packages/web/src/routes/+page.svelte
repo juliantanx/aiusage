@@ -143,7 +143,9 @@
     clearInterval(clockTimer)
     clearInterval(countdownTimer)
     clearTimeout(refreshTimeout)
-    window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
+    }
   })
 
   $: timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })

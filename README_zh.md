@@ -24,7 +24,7 @@
 在一个本地仪表盘里追踪 **20+ 款 AI 编程工具**的 token、费用、会话、模型、项目、工具调用和配额压力。本地使用无需账号、无遥测、无需云同步。
 
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@b179e5a37c92e7040a07b84a7b2048821d120aed/packages/site/static/screenshots/aiusage-demo.gif" alt="AIUsage 仪表盘演示" width="92%" />
+  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/packages/site/static/screenshots/aiusage-demo.gif" alt="AIUsage 仪表盘演示" width="92%" />
 </p>
 
 ## 功能亮点
