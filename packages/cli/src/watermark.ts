@@ -34,6 +34,11 @@ export interface TimestampIdCursor {
   lastId: string
 }
 
+export interface ZcodeCursor {
+  lastStartedAt: number  // Unix timestamp in milliseconds (model_usage.started_at)
+  lastId: string         // model_usage.id
+}
+
 export type FileWatermarkData = Record<Tool, Record<string, WatermarkEntry>>
 
 export interface WatermarkState {
@@ -45,6 +50,7 @@ export interface WatermarkState {
   goose?: TimestampIdCursor | null
   zed?: TimestampIdCursor | null
   kiro?: TimestampIdCursor | null
+  zcode?: ZcodeCursor | null
 }
 
 /** @deprecated Use FileWatermarkData instead */
@@ -75,6 +81,7 @@ function defaultFileData(): FileWatermarkData {
     'pi': {},
     'craft': {},
     'droid': {},
+    'zcode': {},
   }
 }
 
@@ -98,7 +105,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null }
+      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null, zcode: parsed.zcode ?? null }
     } catch {
       return { files: defaultFileData() }
     }
@@ -184,5 +191,13 @@ export class WatermarkManager {
 
   setKiroCursor(cursor: TimestampIdCursor): void {
     this.data.kiro = cursor
+  }
+
+  getZcodeCursor(): ZcodeCursor | null {
+    return this.data.zcode ?? null
+  }
+
+  setZcodeCursor(cursor: ZcodeCursor): void {
+    this.data.zcode = cursor
   }
 }
