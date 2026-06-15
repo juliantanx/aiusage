@@ -958,6 +958,7 @@
           ['Roo Code', '<code>AIUSAGE_ROOCODE_PATH</code>'],
           ['Zed', '<code>AIUSAGE_ZED_PATH</code>'],
           ['Goose', '<code>AIUSAGE_GOOSE_PATH</code>'],
+          ['ZCode', '<code>AIUSAGE_ZCODE_PATH</code>'],
           ['oh-my-pi / pi / Craft / Droid', '<code>AIUSAGE_OMP_PATH</code> / <code>AIUSAGE_PI_PATH</code> / <code>AIUSAGE_CRAFT_PATH</code> / <code>AIUSAGE_DROID_PATH</code>'],
         ]}
       />
@@ -972,8 +973,8 @@
       />
       <Callout type="info">
         {zh
-          ? '部分工具也支持它们自己的变量，例如 CLAUDE_CONFIG_DIR、CODEX_HOME、OPENCODE_DB、HERMES_HOME、KILO_DB、GEMINI_HOME、KIRO_HOME、GROK_HOME、GOOSE_PATH_ROOT、OMP_HOME、PI_CODING_AGENT_DIR 和 CRAFT_CONFIG_DIR。AIUSAGE_*_PATH 始终是 aiusage 侧最直接的覆盖方式。'
-          : 'Some tools also support their own variables, such as CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_DB, HERMES_HOME, KILO_DB, GEMINI_HOME, KIRO_HOME, GROK_HOME, GOOSE_PATH_ROOT, OMP_HOME, PI_CODING_AGENT_DIR, and CRAFT_CONFIG_DIR. AIUSAGE_*_PATH is the most direct aiusage-side override.'
+          ? '部分工具也支持它们自己的变量，例如 CLAUDE_CONFIG_DIR、CODEX_HOME、OPENCODE_DB、HERMES_HOME、KILO_DB、GEMINI_HOME、KIRO_HOME、GROK_HOME、GOOSE_PATH_ROOT、OMP_HOME、PI_CODING_AGENT_DIR、CRAFT_CONFIG_DIR 和 ZCODE_HOME。AIUSAGE_*_PATH 始终是 aiusage 侧最直接的覆盖方式。'
+          : 'Some tools also support their own variables, such as CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_DB, HERMES_HOME, KILO_DB, GEMINI_HOME, KIRO_HOME, GROK_HOME, GOOSE_PATH_ROOT, OMP_HOME, PI_CODING_AGENT_DIR, CRAFT_CONFIG_DIR, and ZCODE_HOME. AIUSAGE_*_PATH is the most direct aiusage-side override.'
         }
       </Callout>
     </section>
