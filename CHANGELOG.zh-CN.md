@@ -8,7 +8,7 @@
 ## [Unreleased]
 
 ### 新增
-- **ZCode 解析器** — 新增 ZCode CLI 的用量统计支持，解析其 SQLite 数据库（`~/.zcode/cli/db/db.sqlite`），从 `model_usage` 表读取每次请求的 token 用量（输入、输出、推理、缓存读/写），并关联 `session.directory` 作为工作目录。
+- **ZCode 解析器** — 新增 ZCode CLI 的用量统计支持，解析其 SQLite 数据库（`~/.zcode/cli/db/db.sqlite`）。从 `model_usage` 表读取每次请求的 token 用量（输入、输出、推理、缓存读/写），从 `tool_usage` 表读取工具调用记录。token 记录关联 `session.directory` 作为工作目录；工具调用作为孤儿记录入库（无父记录），因为 zcode 仅通过 `turn_id`（多对多）将它们与模型请求关联。两张表各有独立的增量游标。
 
 ---
 

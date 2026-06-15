@@ -768,7 +768,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
-  // ZCode: SQLite usage database (model_usage table).
+  // ZCode: SQLite usage database (model_usage + tool_usage tables).
   if (!filterTool || filterTool === 'zcode') {
     const zcodeDbPath = getDbPath('zcode') ?? ''
     if (existsSync(zcodeDbPath)) {
@@ -782,14 +782,22 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             platform: devicePlatform,
             now: Date.now(),
             cursor: wm.getZcodeCursor(),
+            toolCursor: wm.getZcodeToolCursor(),
             exchangeRate,
           })
           for (const record of result.records) insertRecord(db, record)
+          for (const tc of result.toolCalls) insertToolCall(db, tc)
           if (result.nextCursor) {
             wm.setZcodeCursor(result.nextCursor)
+          }
+          if (result.nextToolCursor) {
+            wm.setZcodeToolCursor(result.nextToolCursor)
+          }
+          if (result.nextCursor || result.nextToolCursor) {
             wm.save()
           }
           parsedCount += result.records.length
+          toolCallCount += result.toolCalls.length
           errors.push(...result.errors)
           onProgress({ phase: 'Parsing SQLite', tool: 'zcode', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
         } finally {

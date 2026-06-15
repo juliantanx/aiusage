@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **ZCode parser** — adds usage tracking for ZCode CLI by parsing its SQLite database (`~/.zcode/cli/db/db.sqlite`), reading the `model_usage` table for per-request token counts (input, output, reasoning, cache read/write) and joining `session.directory` as the working directory.
+- **ZCode parser** — adds usage tracking for ZCode CLI by parsing its SQLite database (`~/.zcode/cli/db/db.sqlite`). Reads the `model_usage` table for per-request token counts (input, output, reasoning, cache read/write) and the `tool_usage` table for tool-call invocations. Token records join `session.directory` as the working directory; tool calls are emitted as orphans (no parent record) because ZCode relates them to model requests only via `turn_id` (multi-to-multi). Each table has its own incremental cursor.
 
 ---
 

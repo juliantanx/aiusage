@@ -1,11 +1,9 @@
 import type Database from 'better-sqlite3'
-import type { StatsRecord } from '@aiusage/core'
-import { calculateCost, generateRecordId, inferProvider } from '@aiusage/core'
+import type { StatsRecord, ToolCallRecord } from '@aiusage/core'
+import { calculateCost, generateRecordId, generateOrphanToolCallId, inferProvider } from '@aiusage/core'
+import type { ZcodeCursor, ZcodeToolCursor } from '../watermark.js'
 
-export interface ZcodeCursor {
-  lastStartedAt: number  // Unix timestamp in milliseconds (model_usage.started_at)
-  lastId: string         // model_usage.id
-}
+export type { ZcodeCursor, ZcodeToolCursor }
 
 export interface ZcodeImportOptions {
   dbPath: string
@@ -14,12 +12,15 @@ export interface ZcodeImportOptions {
   platform?: string
   now: number
   cursor: ZcodeCursor | null
+  toolCursor: ZcodeToolCursor | null
   exchangeRate?: number
 }
 
 export interface ZcodeImportResult {
   records: StatsRecord[]
+  toolCalls: ToolCallRecord[]
   nextCursor: ZcodeCursor | null
+  nextToolCursor: ZcodeToolCursor | null
   errors: string[]
 }
 
@@ -34,6 +35,12 @@ interface ZcodeModelUsageRow {
   cache_creation_input_tokens: number
   cache_read_input_tokens: number
   directory?: string | null
+}
+
+interface ZcodeToolUsageRow {
+  id: string
+  tool_name: string
+  started_at: number
 }
 
 /**
@@ -54,20 +61,25 @@ function normalizeZcodeModel(value: unknown): string {
 /**
  * Parse ZCode CLI usage data from its SQLite database.
  *
- * ZCode stores per-request token usage in the `model_usage` table, which we
- * read incrementally using (started_at, id) as a stable ordering. The related
- * `session` table provides the working directory used as `cwd`.
+ * ZCode stores per-request token usage in the `model_usage` table and tool
+ * invocations in the `tool_usage` table. The two are related only through
+ * `turn_id` (a multi-to-multi link), so tool calls are emitted as orphans
+ * (recordId = null) — they carry no parent token record. Each table is read
+ * incrementally using its own (started_at, id) cursor.
  *
- * Only completed requests with non-zero token usage are emitted. Errors and
- * zero-token rows (e.g. failed title-generation calls) are skipped.
+ * Only completed model_usage rows with non-zero token usage are emitted.
+ * Tool calls from completed tool_usage rows are always emitted.
  */
 export function runParseZcode(db: Database.Database, options: ZcodeImportOptions): ZcodeImportResult {
-  const { dbPath, device, deviceInstanceId, platform, now, cursor, exchangeRate } = options
+  const { dbPath, device, deviceInstanceId, platform, now, cursor, toolCursor, exchangeRate } = options
   const records: StatsRecord[] = []
+  const toolCalls: ToolCallRecord[] = []
   const errors: string[] = []
   let nextCursor: ZcodeCursor | null = null
+  let nextToolCursor: ZcodeToolCursor | null = null
 
-  const rows = db.prepare(`
+  // --- Token records (model_usage) ---
+  const modelRows = db.prepare(`
     SELECT m.id, m.session_id, m.model_id, m.started_at,
            m.input_tokens, m.output_tokens, m.reasoning_tokens,
            m.cache_creation_input_tokens, m.cache_read_input_tokens,
@@ -83,7 +95,7 @@ export function runParseZcode(db: Database.Database, options: ZcodeImportOptions
     cursor?.lastId ?? '',
   ) as ZcodeModelUsageRow[]
 
-  for (const row of rows) {
+  for (const row of modelRows) {
     nextCursor = { lastStartedAt: Number(row.started_at), lastId: String(row.id) }
 
     const inputTokens = Number(row.input_tokens) || 0
@@ -127,5 +139,41 @@ export function runParseZcode(db: Database.Database, options: ZcodeImportOptions
     })
   }
 
-  return { records, nextCursor: records.length > 0 ? nextCursor : null, errors }
+  // --- Tool calls (tool_usage), emitted as orphans ---
+  const toolRows = db.prepare(`
+    SELECT id, tool_name, started_at
+    FROM tool_usage
+    WHERE status = 'completed'
+      AND (started_at > ? OR (started_at = ? AND id > ?))
+    ORDER BY started_at, id
+  `).all(
+    toolCursor?.lastStartedAt ?? 0,
+    toolCursor?.lastStartedAt ?? 0,
+    toolCursor?.lastId ?? '',
+  ) as ZcodeToolUsageRow[]
+
+  let callIndex = 0
+  for (const row of toolRows) {
+    nextToolCursor = { lastStartedAt: Number(row.started_at), lastId: String(row.id) }
+    const name = typeof row.tool_name === 'string' && row.tool_name.trim() ? row.tool_name.trim() : 'unknown'
+    const ts = Number(row.started_at) || now
+    toolCalls.push({
+      id: generateOrphanToolCallId('zcode', name, ts, callIndex),
+      recordId: null,
+      name,
+      ts,
+      callIndex,
+      // insertToolCall reads (tc as any).tool for orphan calls
+      tool: 'zcode',
+    } as ToolCallRecord)
+    callIndex++
+  }
+
+  return {
+    records,
+    toolCalls,
+    nextCursor: records.length > 0 ? nextCursor : null,
+    nextToolCursor: toolCalls.length > 0 ? nextToolCursor : null,
+    errors,
+  }
 }
