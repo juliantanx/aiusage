@@ -5,10 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.4] - 2026-06-15
 
 ### Added
-- **ZCode parser** — adds usage tracking for ZCode CLI by parsing its SQLite database (`~/.zcode/cli/db/db.sqlite`). Reads the `model_usage` table for per-request token counts (input, output, reasoning, cache read/write) and the `tool_usage` table for tool-call invocations. Token records join `session.directory` as the working directory; tool calls are emitted as orphans (no parent record) because ZCode relates them to model requests only via `turn_id` (multi-to-multi). Each table has its own incremental cursor.
+- **ZCode parser** ([#33](https://github.com/juliantanx/aiusage/pull/33) by @zhaolu83949426-hub) — adds usage tracking for ZCode CLI by parsing its SQLite database (`~/.zcode/cli/db/db.sqlite`). Reads the `model_usage` table for per-request token counts (input, output, reasoning, cache read/write) and the `tool_usage` table for tool-call invocations. Token records join `session.directory` as the working directory; tool calls are emitted as orphans (no parent record) because ZCode relates them to model requests only via `turn_id` (multi-to-multi). Each table has its own incremental cursor.
+- **ZCode env var in site docs** — documents the `ZCODE_DB` environment variable for custom ZCode database paths.
+
+### Fixed
+- **Claude Code message deduplication** ([#32](https://github.com/juliantanx/aiusage/pull/32) by @joyshan1986) — deduplicates Claude Code records by `message.id` to prevent duplicate entries.
+- **Orphan tool call counting** — counts orphan tool calls in tool-calls and dashboard stats.
 
 ---
 
@@ -357,6 +362,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.4]: https://github.com/juliantanx/aiusage/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/juliantanx/aiusage/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/juliantanx/aiusage/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/juliantanx/aiusage/compare/v1.5.0...v1.5.1

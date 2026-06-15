@@ -5,10 +5,15 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.5.4] - 2026-06-15
 
 ### 新增
-- **ZCode 解析器** — 新增 ZCode CLI 的用量统计支持，解析其 SQLite 数据库（`~/.zcode/cli/db/db.sqlite`）。从 `model_usage` 表读取每次请求的 token 用量（输入、输出、推理、缓存读/写），从 `tool_usage` 表读取工具调用记录。token 记录关联 `session.directory` 作为工作目录；工具调用作为孤儿记录入库（无父记录），因为 zcode 仅通过 `turn_id`（多对多）将它们与模型请求关联。两张表各有独立的增量游标。
+- **ZCode 解析器** ([#33](https://github.com/juliantanx/aiusage/pull/33)，@zhaolu83949426-hub 贡献) — 新增 ZCode CLI 的用量统计支持，解析其 SQLite 数据库（`~/.zcode/cli/db/db.sqlite`）。从 `model_usage` 表读取每次请求的 token 用量（输入、输出、推理、缓存读/写），从 `tool_usage` 表读取工具调用记录。token 记录关联 `session.directory` 作为工作目录；工具调用作为孤儿记录入库（无父记录），因为 zcode 仅通过 `turn_id`（多对多）将它们与模型请求关联。两张表各有独立的增量游标。
+- **ZCode 环境变量文档** — 在站点文档中记录 `ZCODE_DB` 环境变量，用于自定义 ZCode 数据库路径。
+
+### 修复
+- **Claude Code 消息去重** ([#32](https://github.com/juliantanx/aiusage/pull/32)，@joyshan1986 贡献) — 通过 `message.id` 对 Claude Code 记录去重，防止重复条目。
+- **孤儿工具调用计数** — 在工具调用统计和仪表盘中计入孤儿工具调用。
 
 ---
 
@@ -357,6 +362,7 @@
 
 ---
 
+[1.5.4]: https://github.com/juliantanx/aiusage/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/juliantanx/aiusage/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/juliantanx/aiusage/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/juliantanx/aiusage/compare/v1.5.0...v1.5.1
