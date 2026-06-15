@@ -44,8 +44,11 @@ export class ClaudeCodeParser implements Parser {
     const costSource = model === 'unknown' ? 'unknown' as const : 'pricing' as const
     const provider = inferProvider(model)
 
+    const messageId = parsed.message.id
     const record: StatsRecord = {
-      id: generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset),
+      id: messageId
+        ? generateRecordId(context.deviceInstanceId, messageId, 0)
+        : generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset),
       ts,
       ingestedAt: context.now,
       updatedAt: context.now,
