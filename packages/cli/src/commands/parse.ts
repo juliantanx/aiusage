@@ -19,6 +19,7 @@ import { runParseKelivo } from './parse-kelivo.js'
 import { runParseGoose } from './parse-goose.js'
 import { runParseZed } from './parse-zed.js'
 import { runParseKiro } from './parse-kiro.js'
+import { runParseZcode } from './parse-zcode.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -33,7 +34,7 @@ interface ToolPaths {
 }
 
 // Re-export for backward compatibility with other modules that import from here
-export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath, defaultGooseDbPath, defaultZedDbPath } from '../discovery.js'
+export { defaultOpenCodeDbPath, defaultHermesDbPath, defaultQoderDbPath, defaultCursorDbPath, defaultKiloDbPath, defaultGooseDbPath, defaultZedDbPath, defaultZcodeDbPath } from '../discovery.js'
 
 /**
  * Extract cwd from a parsed JSONL first-line object.
@@ -764,6 +765,47 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
       }
     } catch (e) {
       errors.push(`${zedDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  // ZCode: SQLite usage database (model_usage + tool_usage tables).
+  if (!filterTool || filterTool === 'zcode') {
+    const zcodeDbPath = getDbPath('zcode') ?? ''
+    if (existsSync(zcodeDbPath)) {
+      try {
+        const zcodeDb = new Database(zcodeDbPath, { readonly: true })
+        try {
+          const result = runParseZcode(zcodeDb, {
+            dbPath: zcodeDbPath,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            cursor: wm.getZcodeCursor(),
+            toolCursor: wm.getZcodeToolCursor(),
+            exchangeRate,
+          })
+          for (const record of result.records) insertRecord(db, record)
+          for (const tc of result.toolCalls) insertToolCall(db, tc)
+          if (result.nextCursor) {
+            wm.setZcodeCursor(result.nextCursor)
+          }
+          if (result.nextToolCursor) {
+            wm.setZcodeToolCursor(result.nextToolCursor)
+          }
+          if (result.nextCursor || result.nextToolCursor) {
+            wm.save()
+          }
+          parsedCount += result.records.length
+          toolCallCount += result.toolCalls.length
+          errors.push(...result.errors)
+          onProgress({ phase: 'Parsing SQLite', tool: 'zcode', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+        } finally {
+          zcodeDb.close()
+        }
+      } catch (e) {
+        errors.push(`${zcodeDbPath}: ${e instanceof Error ? e.message : e}`)
+      }
     }
   }
 

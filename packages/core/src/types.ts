@@ -22,6 +22,7 @@ export const TOOLS = [
   'pi',
   'craft',
   'droid',
+  'zcode',
 ] as const
 export type Tool = (typeof TOOLS)[number]
 

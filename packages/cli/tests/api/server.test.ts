@@ -958,6 +958,73 @@ describe('Device filtering', () => {
   })
 })
 
+describe('Tool calls API', () => {
+  let db: Database.Database
+  let server: http.Server
+  let baseUrl: string
+  const DEVICE_ID = 'local-uuid-0000'
+
+  beforeEach(async () => {
+    db = new Database(':memory:')
+    initializeDatabase(db)
+    server = createApiServer(db, { currentDeviceInstanceId: DEVICE_ID })
+    baseUrl = await new Promise<string>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        resolve(`http://127.0.0.1:${address.port}`)
+      })
+    })
+  })
+
+  afterEach(async () => {
+    if (server?.listening) {
+      server.closeIdleConnections?.()
+      server.closeAllConnections?.()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+    db.close()
+  })
+
+  it('/api/tool-calls counts orphan tool calls (record_id IS NULL)', async () => {
+    // A linked tool call (has a matching record)
+    insertTestRecord(db, { id: 'rec1' })
+    db.prepare(`INSERT INTO tool_calls (id, record_id, tool, name, ts, call_index) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run('tc_linked', 'rec1', 'claude-code', 'Bash', Date.now(), 0)
+
+    // Orphan tool calls (no record) — e.g. from ZCode, Codex backfill
+    db.prepare(`INSERT INTO tool_calls (id, record_id, tool, name, ts, call_index) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run('tc_orphan1', null, 'zcode', 'Bash', Date.now(), 0)
+    db.prepare(`INSERT INTO tool_calls (id, record_id, tool, name, ts, call_index) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run('tc_orphan2', null, 'zcode', 'Read', Date.now(), 1)
+
+    const res = await fetch(`${baseUrl}/api/tool-calls?range=all`)
+    const data = await res.json()
+
+    // All three should be counted, including orphans
+    const bashRow = data.toolCalls.find((r: any) => r.name === 'Bash')
+    const readRow = data.toolCalls.find((r: any) => r.name === 'Read')
+    expect(bashRow.count).toBe(2) // 1 linked + 1 orphan
+    expect(readRow.count).toBe(1) // 1 orphan
+  })
+
+  it('dashboard topToolCalls includes orphan calls', async () => {
+    insertTestRecord(db, { id: 'rec1' })
+    db.prepare(`INSERT INTO tool_calls (id, record_id, tool, name, ts, call_index) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run('tc_linked', 'rec1', 'claude-code', 'Edit', Date.now(), 0)
+    db.prepare(`INSERT INTO tool_calls (id, record_id, tool, name, ts, call_index) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run('tc_orphan1', null, 'zcode', 'Bash', Date.now(), 0)
+    db.prepare(`INSERT INTO tool_calls (id, record_id, tool, name, ts, call_index) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run('tc_orphan2', null, 'zcode', 'Bash', Date.now(), 1)
+
+    const res = await fetch(`${baseUrl}/api/summary?range=all`)
+    const data = await res.json()
+
+    const bashRow = data.topToolCalls.find((r: any) => r.name === 'Bash')
+    expect(bashRow).toBeDefined()
+    expect(bashRow.count).toBe(2) // both orphans
+  })
+})
+
 describe('Sync API', () => {
   let db: Database.Database
   let server: http.Server

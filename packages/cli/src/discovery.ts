@@ -182,6 +182,11 @@ export function defaultZedDbPath(): string {
   return join(xdgDataDir(home, 'zed'), 'threads', 'threads.db')
 }
 
+export function defaultZcodeDbPath(): string {
+  // ZCode CLI stores its usage database at <home>/.zcode/cli/db/db.sqlite
+  return join(homedir(), '.zcode', 'cli', 'db', 'db.sqlite')
+}
+
 // ── Per-tool probe functions ─────────────────────────────────────────
 // Each returns the resolved data path (or null if not installed).
 // Priority: env override → legacy config.sources → platform default + existence check
@@ -427,6 +432,16 @@ function probeZed(ctx: ProbeContext): string | null {
   return existsSync(dbPath) ? dbPath : null
 }
 
+function probeZcode(ctx: ProbeContext): string | null {
+  const override = envOverride('zcode', ctx.env)
+  if (override) return override
+  if (ctx.env.ZCODE_HOME) return join(ctx.env.ZCODE_HOME, 'cli', 'db', 'db.sqlite')
+  const legacy = ctx.legacySources?.['zcode']
+  if (legacy) return legacy
+  const dbPath = defaultZcodeDbPath()
+  return existsSync(dbPath) ? dbPath : null
+}
+
 function probeGoose(ctx: ProbeContext): string | null {
   const override = envOverride('goose', ctx.env)
   if (override) return override
@@ -531,6 +546,7 @@ const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'antigravity', sourceKey: 'antigravity', label: 'Antigravity', probe: probeAntigravity },
   { tool: 'roocode', sourceKey: 'roocode', label: 'Roo Code', probe: probeRooCode },
   { tool: 'zed', sourceKey: 'zed', label: 'Zed', probe: probeZed },
+  { tool: 'zcode', sourceKey: 'zcode', label: 'ZCode', probe: probeZcode },
   { tool: 'goose', sourceKey: 'goose', label: 'Goose', probe: probeGoose },
   { tool: 'omp', sourceKey: 'omp', label: 'oh-my-pi', probe: probeOmp },
   { tool: 'pi', sourceKey: 'pi', label: 'pi', probe: probePi },

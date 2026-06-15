@@ -694,24 +694,37 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           byTool[row.tool] = { tokens: row.tokens, cost: row.cost }
         }
 
+        // LEFT JOIN + COALESCE so orphan tool calls (record_id IS NULL) are still
+        // counted. Orphan calls have no records row; for device filtering we treat
+        // them as local (r.device_instance_id IS NULL), and for date/tool we fall
+        // back to tc.ts / tc.tool.
         const drJoin = getDateRangeFilter(range, from, to, 'r', weekStart)
-        const dfJoin = df.where ? df.where.replace(/device_instance_id/g, 'r.device_instance_id') : ''
+        const drJoinO = drJoin.where.replaceAll('r.ts', 'COALESCE(r.ts, tc.ts)')
+        const dfJoinRaw = df.where ? df.where.replace(/device_instance_id/g, 'r.device_instance_id') : ''
+        // Orphan tool calls (record_id IS NULL) are local by definition; include them
+        // when filtering to the current device. Use a word-boundary-safe replace so the
+        // @deviceId param name is not split.
+        const dfJoin = dfJoinRaw.replace(
+          /r\.device_instance_id\s*=\s*@\w+/,
+          '(r.device_instance_id IS NULL OR r.device_instance_id = @deviceId)',
+        )
         const tfJoin = getToolFilter(tool, 'r')
+        const tfJoinO = tfJoin.where.replaceAll('r.tool', 'COALESCE(r.tool, tc.tool)')
         const topToolCalls = db.prepare(`
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
-          JOIN records r ON r.id = tc.record_id
-          WHERE 1=1 ${dfJoin} ${drJoin.where} ${tfJoin.where}
+          LEFT JOIN records r ON r.id = tc.record_id
+          WHERE 1=1 ${dfJoin} ${drJoinO} ${tfJoinO}
           GROUP BY tc.name ORDER BY count DESC LIMIT 10
         `).all({ ...drJoin.params, ...df.params, ...tfJoin.params }) as any[]
 
         const topMcpServersRaw = db.prepare(`
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
-          JOIN records r ON r.id = tc.record_id
+          LEFT JOIN records r ON r.id = tc.record_id
           WHERE tc.name LIKE 'mcp\\_\\_%' ESCAPE '\\'
             AND INSTR(SUBSTR(tc.name, 6), '__') > 0
-            ${dfJoin} ${drJoin.where} ${tfJoin.where}
+            ${dfJoin} ${drJoinO} ${tfJoinO}
           GROUP BY tc.name ORDER BY count DESC
         `).all({ ...drJoin.params, ...df.params, ...tfJoin.params }) as any[]
 
@@ -1000,9 +1013,20 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           return
         }
 
-        const dr = getDateRangeFilter(range, from, to, 'r', weekStart)
+        // Use COALESCE so orphan tool calls (record_id IS NULL, e.g. from ZCode,
+        // Codex backfill) are still counted. They have no matching records row,
+        // so we fall back to tc.ts / tc.tool for filtering.
+        const drRaw = getDateRangeFilter(range, from, to, 'r', weekStart)
+        const dr = {
+          where: drRaw.where.replaceAll('r.ts', 'COALESCE(r.ts, tc.ts)'),
+          params: drRaw.params,
+        }
         const tool = url.searchParams.get('tool')
-        const tf = getToolFilter(tool, 'r')
+        const tfRaw = getToolFilter(tool, 'r')
+        const tf = {
+          where: tfRaw.where.replaceAll('r.tool', 'COALESCE(r.tool, tc.tool)'),
+          params: tfRaw.params,
+        }
         const toolType = url.searchParams.get('toolType')
         if (toolType && !['mcp', 'skill', 'builtin'].includes(toolType)) {
           json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid toolType' } }, 400)
@@ -1012,7 +1036,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
         const totalRow = db.prepare(`
           SELECT COUNT(*) AS total FROM tool_calls tc
-          JOIN records r ON r.id = tc.record_id
+          LEFT JOIN records r ON r.id = tc.record_id
           WHERE 1=1 ${dr.where} ${tf.where} ${ttf}
         `).get({ ...dr.params, ...tf.params }) as any
         const total = totalRow.total || 1
@@ -1020,7 +1044,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const rows = db.prepare(`
           SELECT tc.name, COUNT(*) AS count
           FROM tool_calls tc
-          JOIN records r ON r.id = tc.record_id
+          LEFT JOIN records r ON r.id = tc.record_id
           WHERE 1=1 ${dr.where} ${tf.where} ${ttf}
           GROUP BY tc.name ORDER BY count DESC
         `).all({ ...dr.params, ...tf.params }) as any[]

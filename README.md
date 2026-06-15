@@ -90,7 +90,7 @@ Full CLI reference: [aiusage.jtanx.com/docs#cli-reference](https://aiusage.jtanx
 | `Qoder` | `OpenClaw` | `KiloCode` | `Kelivo` | `Copilot` |
 | `Gemini CLI` | `Kimi Code` | `CodeBuddy` | `Kiro` | `Grok Build` |
 | `Antigravity` | `Roo Code` | `Zed` | `Goose` | `oh-my-pi` |
-| `pi` | `Craft` | `Droid` | | |
+| `pi` | `Craft` | `Droid` | `ZCode` | |
 
 Default paths and environment variable overrides are documented in [Data Sources](https://aiusage.jtanx.com/docs#settings-sources) and [Source Env Vars](https://aiusage.jtanx.com/docs#settings-env).
 
