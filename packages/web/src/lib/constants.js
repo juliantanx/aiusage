@@ -23,4 +23,5 @@ export const TOOLS = [
   'pi',
   'craft',
   'droid',
+  'zcode',
 ]

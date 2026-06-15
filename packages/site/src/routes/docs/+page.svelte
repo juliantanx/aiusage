@@ -323,8 +323,8 @@
       </div>
       <h1 class="hero-title">{zh ? '文档' : 'Documentation'}</h1>
       <p class="hero-sub">{zh
-        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid 共 20+ 种 AI 工具的 Token 和费用追踪。'
-        : 'AIUsage is a local-first usage analytics platform for AI tools — tracking tokens, costs, sessions and more across 20+ tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
+        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid、ZCode 共 20+ 种 AI 工具的 Token 和费用追踪。'
+        : 'AIUsage is a local-first usage analytics platform for AI tools — tracking tokens, costs, sessions and more across 20+ tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, Droid, and ZCode.'
       }</p>
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
@@ -871,6 +871,7 @@
         <li><strong>pi</strong> — <code>~/.pi/agent/sessions</code></li>
         <li><strong>Craft</strong> — <code>~/.craft-agent</code></li>
         <li><strong>Droid</strong> — <code>~/.droid/sessions</code></li>
+        <li><strong>ZCode</strong> — <code>~/.zcode/cli/db/db.sqlite</code></li>
       </ul>
       <Callout type="info">
         {zh

@@ -13,6 +13,7 @@ const RECORD_ID_SYNC_TOOLS = new Set<Tool>([
   'zed',
   'kiro',
   'roocode',
+  'zcode',
 ])
 
 export function mapStatsRecordToSyncRecord(record: StatsRecord): SyncRecord {
