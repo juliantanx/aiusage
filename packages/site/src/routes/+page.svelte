@@ -68,6 +68,7 @@
     { name: 'pi',          color: 'var(--rose)',    svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".12"/><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" d="M7 8h8"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 8v10M15 8c1 3 2 6 2 8"/></svg>' },
     { name: 'Craft',       color: 'var(--purple)',  svg: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2L2 7v10l10 5 10-5V7L12 2z" opacity=".12"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 2L2 7v10l10 5 10-5V7L12 2z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M2 7l10 5 10-5M12 12v10"/></svg>' },
     { name: 'Droid',       color: 'var(--green)',   svg: '<svg viewBox="0 0 24 24"><rect x="6" y="8" width="12" height="12" rx="2" fill="currentColor" opacity=".12"/><path fill="none" stroke="currentColor" stroke-width="2" d="M6 10h12M6 14h12M6 18h12M9 8V6a3 3 0 0 1 6 0v2"/><circle cx="9.5" cy="13" r="1" fill="currentColor"/><circle cx="14.5" cy="13" r="1" fill="currentColor"/></svg>' },
+    { name: 'ZCode',       color: 'var(--amber)',   svg: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 4h18v2H6.5L21 18v2H3v-2h14.5L3 6V4z" opacity=".8"/></svg>' },
   ]
 
   const features = [
@@ -170,8 +171,8 @@
         acceptedAnswer: {
           '@type': 'Answer',
           text: zh
-            ? 'AIUsage 支持 20+ 种 AI 工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid。'
-            : 'AIUsage supports 20+ AI tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, and Droid.'
+            ? 'AIUsage 支持 20+ 种 AI 工具：Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、ZCode、Goose、oh-my-pi、pi、Craft、Droid。'
+            : 'AIUsage supports 20+ AI tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, ZCode, Goose, oh-my-pi, pi, Craft, and Droid.'
         }
       },
       {
