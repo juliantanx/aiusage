@@ -4,6 +4,10 @@ A lightweight system tray widget for [AIUsage](https://github.com/juliantanx/aiu
 
 English | [中文](./README_zh.md)
 
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/packages/site/static/screenshots/widget.png" alt="AIUsage Widget screenshot" width="360" />
+</p>
+
 ## Features
 
 - **System tray integration** — lives in your system tray, click to toggle a compact stats panel.

@@ -4,6 +4,10 @@
 
 [English](./README.md) | 中文
 
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/juliantanx/aiusage@main/packages/site/static/screenshots/widget.png" alt="AIUsage Widget 截图" width="360" />
+</p>
+
 ## 功能
 
 - **系统托盘集成** — 常驻系统托盘，点击即可弹出简洁的统计面板。
