@@ -305,25 +305,21 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   const errors: string[] = []
 
   const onProgress = options?.onProgress ?? (() => {})
-  const totalFiles = toolPaths
-    .filter(({ tool }) => !filterTool || tool === filterTool)
-    .reduce((sum, { paths }) => sum + paths.length, 0)
-  let fileIndex = 0
-  let currentTool: string | undefined
 
   for (const { tool, paths } of toolPaths) {
     if (filterTool && tool !== filterTool) continue
-    currentTool = tool
+    const toolTotal = paths.length
+    let toolIndex = 0
 
     for (const filePath of paths) {
-      fileIndex++
+      toolIndex++
       try {
         const stat = statSync(filePath)
         const entry = wm.getEntry(tool, filePath)
         const offset = entry?.offset ?? 0
 
         if (offset >= stat.size) {
-          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
           continue // No new data
         }
 
@@ -348,7 +344,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             mtime: stat.mtimeMs,
           })
           wm.save()
-          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
           continue
         }
 
@@ -372,7 +368,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             mtime: stat.mtimeMs,
           })
           wm.save()
-          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
           continue
         }
 
@@ -396,7 +392,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             mtime: stat.mtimeMs,
           })
           wm.save()
-          onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
           continue
         }
 
@@ -487,7 +483,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           mtime: stat.mtimeMs,
         })
         wm.save()
-        onProgress({ phase: 'Parsing logs', tool, current: fileIndex, total: totalFiles, records: parsedCount, toolCalls: toolCallCount })
+        onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
       } catch (e) {
         errors.push(`${filePath}: ${e instanceof Error ? e.message : e}`)
       }

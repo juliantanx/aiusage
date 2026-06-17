@@ -20,9 +20,31 @@ export class ProgressReporter {
   private lastWrite = 0
   private lastLine = ''
   private lastInfo: ProgressInfo | null = null
+  private currentTool: string | undefined
+  private toolRecords: Map<string, number> = new Map()
+  private recordsAtToolStart = 0
 
   update(info: ProgressInfo): void {
     if (!isTTY) return
+
+    // When tool changes, finalize the previous tool's line and start a new one
+    if (info.tool && info.tool !== this.currentTool) {
+      if (this.currentTool && this.lastInfo) {
+        // Finalize previous tool line
+        const toolRecordCount = this.lastInfo.records - this.recordsAtToolStart
+        this.toolRecords.set(this.currentTool, toolRecordCount)
+        if (toolRecordCount > 0) {
+          this.writeLine(this.lastInfo)
+          process.stderr.write('\n')
+        } else {
+          // Clear the line for tools with 0 records
+          process.stderr.write('\r\x1b[K')
+        }
+        this.lastLine = ''
+      }
+      this.currentTool = info.tool
+      this.recordsAtToolStart = info.records
+    }
 
     this.lastInfo = info
 
@@ -38,7 +60,8 @@ export class ProgressReporter {
     const pct = info.total > 0 ? (info.current / info.total) * 100 : 0
     const bar = formatBar(info.total > 0 ? info.current / info.total : 0)
     const toolLabel = info.tool ? ` [${info.tool}]` : ''
-    const line = `\r${info.phase}${toolLabel} ${bar} ${pct.toFixed(1)}%  ${info.current}/${info.total}  records: ${info.records}  calls: ${info.toolCalls}  `
+    const toolRecordCount = info.records - this.recordsAtToolStart
+    const line = `\r${info.phase}${toolLabel} ${bar} ${pct.toFixed(1)}%  ${info.current}/${info.total}  records: ${toolRecordCount}  `
 
     if (line !== this.lastLine) {
       process.stderr.write(line)
@@ -48,11 +71,17 @@ export class ProgressReporter {
 
   done(): void {
     if (!isTTY) return
-    // Flush the last progress update to ensure 100% is shown
-    if (this.lastInfo) {
-      this.writeLine(this.lastInfo)
+    // Finalize the last tool's line
+    if (this.lastInfo && this.currentTool) {
+      const toolRecordCount = this.lastInfo.records - this.recordsAtToolStart
+      this.toolRecords.set(this.currentTool, toolRecordCount)
+      if (toolRecordCount > 0) {
+        this.writeLine(this.lastInfo)
+        process.stderr.write('\n')
+      } else {
+        process.stderr.write('\r\x1b[K')
+      }
     }
-    process.stderr.write('\n')
   }
 }
 
