@@ -131,8 +131,8 @@ export function defaultQoderDbPath(): string {
     return join(home, 'Library', 'Application Support', 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
   }
   if (plat === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
-    return join(localAppData, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
+    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    return join(appData, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
   }
   const xdgDataHome = process.env.XDG_DATA_HOME ?? join(home, '.local', 'share')
   return join(xdgDataHome, 'Qoder', 'SharedClientCache', 'cache', 'db', 'local.db')
