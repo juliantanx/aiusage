@@ -37,6 +37,11 @@ export interface Translations {
   installLaunching: string
   installDone: string
   installFailed: string
+  setupTitle: string
+  setupChecking: string
+  setupParsing: string
+  setupDone: string
+  setupFailed: string
 }
 
 const en: Translations = {
@@ -76,6 +81,11 @@ const en: Translations = {
   installLaunching: 'Starting dashboard...',
   installDone: 'Done! Opening...',
   installFailed: 'Installation failed',
+  setupTitle: 'First Time Setup',
+  setupChecking: 'Checking CLI...',
+  setupParsing: 'Parsing usage logs...',
+  setupDone: 'Ready!',
+  setupFailed: 'Setup failed',
 }
 
 const zh: Translations = {
@@ -115,6 +125,11 @@ const zh: Translations = {
   installLaunching: '正在启动仪表盘...',
   installDone: '完成！正在打开...',
   installFailed: '安装失败',
+  setupTitle: '首次配置',
+  setupChecking: '检测 CLI...',
+  setupParsing: '解析使用日志...',
+  setupDone: '就绪！',
+  setupFailed: '配置失败',
 }
 
 const translations: Record<Locale, Translations> = { en, zh }
