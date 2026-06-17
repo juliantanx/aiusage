@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.6] - 2026-06-17
+
+### Added
+- **Widget auto-setup** — automatically sets up CLI and runs first parse when `cache.db` is missing, with overlay UI showing setup phases, IPC status channel, and i18n support.
+
+### Fixed
+- **CLI per-tool progress** — shows per-tool progress instead of misleading global counter during parsing.
+- **CLI corrupted database recovery** — auto-recreates corrupted SQLite database on startup.
+
+---
+
 ## [1.5.5] - 2026-06-17
 
 ### Fixed
