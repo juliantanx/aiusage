@@ -52,6 +52,7 @@
   let lastReportedHeight = 0
   let installPhase: string | null = null
   let installError: string | null = null
+  let isSetup = false
 
   function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -123,6 +124,14 @@
         setTimeout(() => { installPhase = null; installError = null }, 3000)
       }
     })
+    ;(window as any).widget.onSetupStatus((status: { phase: string; error?: string }) => {
+      isSetup = true
+      installPhase = status.phase
+      installError = status.error ?? null
+      if (status.phase === 'done' || status.phase === 'failed') {
+        setTimeout(() => { installPhase = null; installError = null; isSetup = false }, 3000)
+      }
+    })
 
     const resizeObserver = new ResizeObserver(() => reportWindowHeight())
     resizeObserver.observe(panelEl)
@@ -146,10 +155,12 @@
   $: toolSubStr = data?.topTool ? `${data.topTool.share}%` : ''
   $: sessionStr = data ? String(data.sessionCountToday) : '--'
   $: updatedStr = data ? formatSyncTime(data.lastUpdated) : ''
-  $: installMessage = installPhase === 'installing' ? i18n.installInstalling
+  $: installMessage = installPhase === 'checking' ? i18n.setupChecking
+    : installPhase === 'parsing' ? i18n.setupParsing
+    : installPhase === 'installing' ? i18n.installInstalling
     : installPhase === 'launching' ? i18n.installLaunching
-    : installPhase === 'done' ? i18n.installDone
-    : installPhase === 'failed' ? i18n.installFailed
+    : installPhase === 'done' ? (isSetup ? i18n.setupDone : i18n.installDone)
+    : installPhase === 'failed' ? (isSetup ? i18n.setupFailed : i18n.installFailed)
     : i18n.installPreparing
 </script>
 
@@ -158,7 +169,7 @@
     <div class="install-overlay" class:failed={installPhase === 'failed'} class:done={installPhase === 'done'}>
       <div class="install-content">
         <div class="install-spinner" class:hidden={installPhase === 'done' || installPhase === 'failed'}></div>
-        <div class="install-title">{i18n.installTitle}</div>
+        <div class="install-title">{isSetup ? i18n.setupTitle : i18n.installTitle}</div>
         <div class="install-message">{installMessage}</div>
         {#if installError}
           <div class="install-error">{installError}</div>
