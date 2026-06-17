@@ -83,7 +83,10 @@ export function serve(options: ServeOptions): void {
   runtimeSettings.start()
 
   // Parse logs once on startup so the dashboard has data immediately
-  runDbWrite(() => runParse(options.db)).catch((err) => {
+  console.log('[serve] parsing logs...')
+  runDbWrite(() => runParse(options.db)).then((result) => {
+    console.log(`[serve] parsed ${result.parsedCount} records, ${result.toolCallCount} tool calls.`)
+  }).catch((err) => {
     console.error('[serve] initial parse failed:', err)
   })
 

@@ -19,14 +19,22 @@ export interface ProgressInfo {
 export class ProgressReporter {
   private lastWrite = 0
   private lastLine = ''
+  private lastInfo: ProgressInfo | null = null
 
   update(info: ProgressInfo): void {
     if (!isTTY) return
 
+    this.lastInfo = info
+
     const now = Date.now()
-    if (now - this.lastWrite < MIN_INTERVAL_MS) return
+    const isComplete = info.total > 0 && info.current >= info.total
+    if (!isComplete && now - this.lastWrite < MIN_INTERVAL_MS) return
     this.lastWrite = now
 
+    this.writeLine(info)
+  }
+
+  private writeLine(info: ProgressInfo): void {
     const pct = info.total > 0 ? (info.current / info.total) * 100 : 0
     const bar = formatBar(info.total > 0 ? info.current / info.total : 0)
     const toolLabel = info.tool ? ` [${info.tool}]` : ''
@@ -40,7 +48,11 @@ export class ProgressReporter {
 
   done(): void {
     if (!isTTY) return
-    process.stderr.write('\r\x1b[K')
+    // Flush the last progress update to ensure 100% is shown
+    if (this.lastInfo) {
+      this.writeLine(this.lastInfo)
+    }
+    process.stderr.write('\n')
   }
 }
 
