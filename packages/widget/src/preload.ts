@@ -15,6 +15,7 @@ export interface WidgetAPI {
   resizeWindow: (height: number) => void
   onDataUpdate: (callback: (data: WidgetData) => void) => void
   onInstallStatus: (callback: (status: InstallStatus) => void) => void
+  onSetupStatus: (callback: (status: InstallStatus) => void) => void
   getSettings: () => Promise<WidgetSettings>
   saveSettings: (settings: WidgetSettings) => Promise<WidgetSettings>
   getExchangeRate: () => Promise<ExchangeRateState>
@@ -32,6 +33,10 @@ contextBridge.exposeInMainWorld('widget', {
   onInstallStatus: (callback: (status: InstallStatus) => void) => {
     ipcRenderer.removeAllListeners('install:status')
     ipcRenderer.on('install:status', (_event, status) => callback(status))
+  },
+  onSetupStatus: (callback: (status: InstallStatus) => void) => {
+    ipcRenderer.removeAllListeners('setup:status')
+    ipcRenderer.on('setup:status', (_event, status) => callback(status))
   },
   getSettings: () => ipcRenderer.invoke('widget:get-settings'),
   saveSettings: (settings: WidgetSettings) => ipcRenderer.invoke('widget:save-settings', settings),
