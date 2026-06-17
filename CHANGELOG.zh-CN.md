@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [1.5.5] - 2026-06-17
+
+### 修复
+- **Qoder Windows 数据库路径** ([#34](https://github.com/juliantanx/aiusage/pull/34)，@Mnoisec 贡献) — 将 Windows 上 Qoder Desktop SQLite 数据库路径从 `LOCALAPPDATA`（Local）修正为 `APPDATA`（Roaming）。
+
+---
+
 ## [1.5.4] - 2026-06-15
 
 ### 新增
@@ -362,6 +369,7 @@
 
 ---
 
+[1.5.5]: https://github.com/juliantanx/aiusage/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/juliantanx/aiusage/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/juliantanx/aiusage/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/juliantanx/aiusage/compare/v1.5.1...v1.5.2
