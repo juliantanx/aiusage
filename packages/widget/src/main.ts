@@ -47,8 +47,10 @@ if (process.platform === 'darwin' && app.dock) {
   app.dock.hide()
 }
 
-app.whenReady().then(() => {
-  if (existsSync(DB_PATH)) {
+app.whenReady().then(async () => {
+  const dbExists = existsSync(DB_PATH)
+
+  if (dbExists) {
     db = new Database(DB_PATH, {
       readonly: true,
       nativeBinding: getWidgetNativeBindingPath(__dirname),
@@ -61,7 +63,9 @@ app.whenReady().then(() => {
   startAutoRefresh()
   void refreshExchangeRate()
 
-  if (shouldShowWindowOnLaunch(app.isPackaged)) {
+  if (!dbExists) {
+    await autoSetup()
+  } else if (shouldShowWindowOnLaunch(app.isPackaged)) {
     showWindowWhenTrayReady()
   }
 })
@@ -344,6 +348,63 @@ async function installAiusageCli(): Promise<{ success: boolean; error?: string }
   }
 
   return { success: false, error: 'No package manager (npm/pnpm/yarn) could install @juliantanx/aiusage.' }
+}
+
+function checkCliInstalled(): Promise<boolean> {
+  const { execFile } = nodeRequire('child_process') as typeof import('child_process')
+  return new Promise((resolve) => {
+    execFile('aiusage', ['--version'], { timeout: 10_000, shell: true }, (err) => {
+      resolve(!err)
+    })
+  })
+}
+
+function runFirstParse(): Promise<{ success: boolean; error?: string }> {
+  const { execFile } = nodeRequire('child_process') as typeof import('child_process')
+  return new Promise((resolve) => {
+    execFile('aiusage', ['parse'], { timeout: 120_000, shell: true }, (err, _stdout, stderr) => {
+      if (err) {
+        resolve({ success: false, error: stderr || err.message })
+      } else {
+        resolve({ success: true })
+      }
+    })
+  })
+}
+
+async function autoSetup(): Promise<void> {
+  // Show overlay
+  notifyRenderer('setup:status', { phase: 'checking' })
+  showWindow()
+
+  // Check if CLI is installed
+  const cliFound = await checkCliInstalled()
+
+  if (!cliFound) {
+    // Install CLI
+    notifyRenderer('setup:status', { phase: 'installing' })
+    const installResult = await installAiusageCli()
+    if (!installResult.success) {
+      notifyRenderer('setup:status', { phase: 'failed', error: installResult.error })
+      return
+    }
+  }
+
+  // Run first parse
+  notifyRenderer('setup:status', { phase: 'parsing' })
+  await runFirstParse()
+  // Parse failure is not fatal — user may have no logs yet
+
+  // Open database if it now exists
+  if (existsSync(DB_PATH)) {
+    db = new Database(DB_PATH, {
+      readonly: true,
+      nativeBinding: getWidgetNativeBindingPath(__dirname),
+    })
+  }
+
+  notifyRenderer('setup:status', { phase: 'done' })
+  pushDataUpdate()
 }
 
 // IPC handlers
