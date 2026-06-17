@@ -173,6 +173,33 @@ pnpm dev
 - [更新日志](./CHANGELOG.zh-CN.md)
 - [安全策略](./SECURITY.md)
 
+## 贡献者
+
+感谢以下贡献者（[表情符号说明](https://allcontributors.org/docs/en/emoji-key)）：
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/juliantanx"><img src="https://avatars.githubusercontent.com/u/59169896?v=4?s=100" width="100px;" alt="Julian"/><br /><sub><b>Julian</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=juliantanx" title="Code">💻</a> <a href="https://github.com/juliantanx/aiusage/commits?author=juliantanx" title="Documentation">📖</a> <a href="#infra-juliantanx" title="Infrastructure">🚇</a> <a href="#maintenance-juliantanx" title="Maintenance">🔧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Fiveo9"><img src="https://avatars.githubusercontent.com/u/57358895?v=4?s=100" width="100px;" alt="Fiveonine"/><br /><sub><b>Fiveonine</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=Fiveo9" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/joyshan1986"><img src="https://avatars.githubusercontent.com/u/105418356?v=4?s=100" width="100px;" alt="joyshan1986"/><br /><sub><b>joyshan1986</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=joyshan1986" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/zhaolu83949426-hub"><img src="https://avatars.githubusercontent.com/u/260552457?v=4?s=100" width="100px;" alt="zhaolu83949426-hub"/><br /><sub><b>zhaolu83949426-hub</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=zhaolu83949426-hub" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Mnoisec"><img src="https://avatars.githubusercontent.com/u/28181883?v=4?s=100" width="100px;" alt="Mnoisec"/><br /><sub><b>Mnoisec</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=Mnoisec" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jlxyfll"><img src="https://avatars.githubusercontent.com/u/16436887?v=4?s=100" width="100px;" alt="jlxyfll"/><br /><sub><b>jlxyfll</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=jlxyfll" title="Code">💻</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+本项目遵循 [all-contributors](https://allcontributors.org) 规范，欢迎任何形式的贡献！
+
 ## 社区
 
 - Bug 反馈：[GitHub Issues](https://github.com/juliantanx/aiusage/issues/new?template=bug_report.md)

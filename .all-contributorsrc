@@ -1,0 +1,75 @@
+{
+  "projectName": "aiusage",
+  "projectOwner": "juliantanx",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md",
+    "README_zh.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "none",
+  "contributors": [
+    {
+      "login": "juliantanx",
+      "name": "Julian",
+      "avatar_url": "https://avatars.githubusercontent.com/u/59169896?v=4",
+      "profile": "https://github.com/juliantanx",
+      "contributions": [
+        "code",
+        "doc",
+        "infra",
+        "maintenance"
+      ]
+    },
+    {
+      "login": "Fiveo9",
+      "name": "Fiveonine",
+      "avatar_url": "https://avatars.githubusercontent.com/u/57358895?v=4",
+      "profile": "https://github.com/Fiveo9",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "joyshan1986",
+      "name": "joyshan1986",
+      "avatar_url": "https://avatars.githubusercontent.com/u/105418356?v=4",
+      "profile": "https://github.com/joyshan1986",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "zhaolu83949426-hub",
+      "name": "zhaolu83949426-hub",
+      "avatar_url": "https://avatars.githubusercontent.com/u/260552457?v=4",
+      "profile": "https://github.com/zhaolu83949426-hub",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Mnoisec",
+      "name": "Mnoisec",
+      "avatar_url": "https://avatars.githubusercontent.com/u/28181883?v=4",
+      "profile": "https://github.com/Mnoisec",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "jlxyfll",
+      "name": "jlxyfll",
+      "avatar_url": "https://avatars.githubusercontent.com/u/16436887?v=4",
+      "profile": "https://github.com/jlxyfll",
+      "contributions": [
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "skipCi": true,
+  "commitType": "docs"
+}
