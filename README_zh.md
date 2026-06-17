@@ -210,4 +210,4 @@ pnpm dev
 
 ## 许可证
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) © [Julian](https://github.com/juliantanx)

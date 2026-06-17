@@ -210,4 +210,4 @@ This project follows the [all-contributors](https://allcontributors.org) specifi
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) © [Julian](https://github.com/juliantanx)
