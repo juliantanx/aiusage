@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.5.7] - 2026-06-25
 
+### Added
+- **Trae support** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — detect and parse Trae sessions, covering the Trae CN, TRAE SOLO CN, and international Trae variants.
+- **Cursor privacy-mode parsing** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — fall back to the agent-transcript JSONL logs when Cursor runs with `PRIVACY_MODE_NO_STORAGE`, so usage is still captured.
+
 ### Changed
 - **Session list shows full date and time** — the Sessions table Time column now shows the date and time (`toLocaleString`) instead of the date only, matching the session detail page.
 
 ### Fixed
+- **Kiro parser** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — support the `workspace-sessions` JSON format, add a `tokens_generated.jsonl` probe, and fix token estimation.
+- **Trae session id extraction** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — read the session id from the v2 subdirectory.
+- **Tool discovery audit** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — correctness fixes to Trae, Cursor, Kiro, and KiloCode log discovery (including the KiloCode Windows database path).
 - **OpenClaw zero-cost records stuck at $0** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — the OpenClaw parser stamped `cost_source = 'log'` whenever a `usage.cost` field was present, even when its `total` was `0`. Custom gateways (e.g. openclaw → `deepseek-v4-pro`) report `cost.total: 0` for models they don't price, so these records were treated as authoritative `$0` and could never be priced. The parser now requires a positive logged cost before using `'log'`, otherwise it falls through to pricing — matching the Cline and Hermes parsers.
 - **Recalc corrects log-sourced costs** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — recalc now recomputes a `cost_source = 'log'` record when its logged cost is non-positive (an unreliable gateway-reported `0`) or when the user has set a manual price for that model. This repairs already-imported records without a re-import. Genuinely positive logged costs are still preserved.
 - **Legacy config price overrides now apply** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — price overrides configured before the pricing registry existed lived only in `config.json` and were ignored by recalc, so a manually set price never affected recalculated costs. On startup the server now imports `config.priceOverrides` into the registry as user prices (existing UI-set prices are preserved) and clears them from config, making the registry the single source of truth. After upgrading, click **Recalculate** once to apply them to existing records.

@@ -7,10 +7,17 @@
 
 ## [1.5.7] - 2026-06-25
 
+### 新增
+- **Trae 支持** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — 检测并解析 Trae 会话，覆盖 Trae CN、TRAE SOLO CN 和国际版 Trae 三个变体。
+- **Cursor 隐私模式解析** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — 当 Cursor 以 `PRIVACY_MODE_NO_STORAGE` 运行时，回退到 agent-transcript JSONL 日志，仍可统计用量。
+
 ### 变更
 - **会话列表显示完整日期和时间** — Sessions 表格的「时间」列现在显示日期和时间（`toLocaleString`），不再只显示日期，与会话详情页保持一致。
 
 ### 修复
+- **Kiro 解析器** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — 支持 `workspace-sessions` JSON 格式，新增 `tokens_generated.jsonl` 探测，修复 token 估算。
+- **Trae 会话 ID 提取** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — 从 v2 子目录读取会话 ID。
+- **工具发现审计** ([#35](https://github.com/juliantanx/aiusage/pull/35)) — 修正 Trae、Cursor、Kiro、KiloCode 的日志发现逻辑（含 KiloCode 的 Windows 数据库路径）。
 - **OpenClaw 零成本记录卡在 $0** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 只要日志里存在 `usage.cost` 字段，OpenClaw 解析器就把 `cost_source` 标为 `'log'`，即使 `total` 是 `0`。自定义网关（如 openclaw → `deepseek-v4-pro`）对它们不计价的模型会上报 `cost.total: 0`，这些记录因此被当作权威的 `$0`、永远无法计价。现在解析器要求日志成本为正数才使用 `'log'`，否则回退到按价格表计算 —— 与 Cline、Hermes 解析器保持一致。
 - **重算修正日志来源费用** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 当 `cost_source = 'log'` 记录的日志成本为非正数（网关上报的不可靠 `0`），或用户为该模型设置了手动价格时，重算现在会重新计算费用。这样无需重新导入即可修复已入库的记录。真正为正的日志成本仍会保留。
 - **旧版 config 价格覆盖现已生效** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 在定价注册表出现之前配置的价格覆盖只存在于 `config.json`，重算时被忽略，导致手动设置的价格不影响重算后的费用。服务端现在会在启动时把 `config.priceOverrides` 导入注册表作为用户价格（已通过 UI 设置的价格会保留），并从 config 中清除，使注册表成为唯一数据源。升级后点击一次 **重算** 即可应用到存量记录。
