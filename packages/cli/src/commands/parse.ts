@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { hostname } from 'node:os'
 import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, generateRecordId, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
@@ -21,6 +21,7 @@ import { runParseGoose } from './parse-goose.js'
 import { runParseZed } from './parse-zed.js'
 import { runParseKiro } from './parse-kiro.js'
 import { runParseZcode } from './parse-zcode.js'
+import { runParseTrae } from './parse-trae.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -99,6 +100,8 @@ function extractSessionId(filePath: string, tool: Tool): string {
   }
   return 'unknown'
 }
+
+const CHARS_PER_TOKEN = 4
 
 function toNumber(value: unknown): number {
   const n = Number(value)
@@ -234,6 +237,11 @@ function parseKiroSessionFile(options: {
     return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
   }
 
+  // Try workspace-sessions format: history[].promptLogs[]
+  if (Array.isArray(parsed?.history) && !parsed?.session_state) {
+    return parseKiroWorkspaceSession({ filePath, parsed, device, deviceInstanceId, platform, now, exchangeRate })
+  }
+
   const turns = parsed?.session_state?.conversation_metadata?.user_turn_metadatas
   if (!Array.isArray(turns)) return { records, errors }
   const sessionId = typeof parsed?.session_id === 'string' && parsed.session_id
@@ -269,6 +277,109 @@ function parseKiroSessionFile(options: {
       tool: 'kiro',
       model,
       provider: inferProvider(model),
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      cost,
+      costSource: cost > 0 ? 'pricing' : 'unknown',
+      sessionId,
+      sourceFile: filePath,
+      device,
+      deviceInstanceId,
+      platform,
+    })
+  }
+
+  return { records, errors }
+}
+
+function parseKiroWorkspaceSession(options: {
+  filePath: string
+  parsed: any
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+  exchangeRate?: number
+}): { records: StatsRecord[]; errors: string[] } {
+  const { filePath, parsed, device, deviceInstanceId, platform, now, exchangeRate } = options
+  const records: StatsRecord[] = []
+  const errors: string[] = []
+
+  const sessionId = parsed?.sessionId ?? extractSessionId(filePath, 'kiro')
+
+  // Try to load dateCreated from sibling sessions.json
+  let sessionTs = now
+  try {
+    const dir = dirname(filePath)
+    const sessionsJson = readFileSync(join(dir, 'sessions.json'), 'utf-8')
+    const sessions = JSON.parse(sessionsJson)
+    const match = Array.isArray(sessions) && sessions.find((s: any) => s.sessionId === sessionId)
+    if (match?.dateCreated) {
+      const dc = Number(match.dateCreated)
+      if (Number.isFinite(dc) && dc > 0) sessionTs = dc < 1e12 ? dc * 1000 : dc
+    }
+  } catch {}
+
+  // Collect promptLogs from all history entries
+  const allLogs: Array<{ log: any; index: number }> = []
+  let logIndex = 0
+  for (const entry of parsed.history ?? []) {
+    for (const pl of entry?.promptLogs ?? []) {
+      allLogs.push({ log: pl, index: logIndex++ })
+    }
+  }
+
+  // Estimate tokens from context usage percentage if available
+  const contextLength = parsed?.config?.models?.[0]?.contextLength ?? 40000
+  const maxTokens = parsed?.config?.models?.[0]?.completionOptions?.maxTokens ?? 4000
+  const contextPct = Number(parsed?.contextUsagePercentageBySession?.[sessionId] ?? parsed?.contextUsagePercentage ?? 0) / 100
+  const totalInputEstimate = contextPct > 0 ? Math.floor(contextLength * contextPct) : 0
+  const hasNoTokenData = allLogs.every(({ log }) => {
+    const pl = typeof log.prompt === 'string' ? log.prompt.length : 0
+    const cl = typeof log.completion === 'string' ? log.completion.length : 0
+    return pl < 100 && cl === 0
+  })
+
+  for (const { log, index } of allLogs) {
+    const promptLen = typeof log.prompt === 'string' ? log.prompt.length : 0
+    const completionLen = typeof log.completion === 'string' ? log.completion.length : 0
+    let inputTokens: number
+    let outputTokens: number
+    if (hasNoTokenData) {
+      // Kiro does not record actual prompt/completion text; use heuristics
+      inputTokens = totalInputEstimate > 0 && allLogs.length > 0
+        ? Math.max(1, Math.floor(totalInputEstimate / allLogs.length))
+        : 200
+      outputTokens = Math.floor(maxTokens * 0.3)
+    } else {
+      inputTokens = totalInputEstimate > 0 && allLogs.length > 0
+        ? Math.max(1, Math.floor(totalInputEstimate / allLogs.length))
+        : Math.max(1, Math.floor(promptLen / CHARS_PER_TOKEN))
+      outputTokens = completionLen > 0
+        ? Math.floor(completionLen / CHARS_PER_TOKEN)
+        : Math.floor(maxTokens * 0.3)
+    }
+    if (inputTokens + outputTokens === 0) continue
+
+    const model = normalizeKiroModel(log.completionOptions?.model ?? log.modelTitle)
+    const provider = typeof log.provider === 'string' && log.provider.trim() ? log.provider.trim().toLowerCase() : inferProvider(model)
+    const recordTs = sessionTs + index
+    const tokenArgs = { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0 }
+    const cost = calculateCost(model, tokenArgs, exchangeRate)
+    const sourceId = `${sessionId}:${index}`
+
+    records.push({
+      id: generateRecordId(deviceInstanceId, `${filePath}:${sourceId}`, recordTs),
+      ts: recordTs,
+      ingestedAt: now,
+      updatedAt: now,
+      lineOffset: index,
+      tool: 'kiro',
+      model,
+      provider,
       inputTokens,
       outputTokens,
       cacheReadTokens: 0,
@@ -917,40 +1028,29 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   }
 
   // Trae: parse cursorDiskKV if present (Trae is a Cursor/VS Code fork).
-  // Trae may or may not have a cursorDiskKV table — probe returns state.vscdb path.
+  // Trae/Cursor CN stores chat data in encrypted database.db; token counts are unavailable.
+  // Fall back to reading git tags from snapshot directories for session metadata.
   const traeDbPath = getDbPath('trae') ?? ''
   if ((!filterTool || filterTool === 'trae') && pathIsFile(traeDbPath)) {
-    try {
-      const traeDb = new Database(traeDbPath, { readonly: true })
-      try {
-        const hasCursorDiskKV = traeDb.prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cursorDiskKV'"
-        ).get()
-        if (hasCursorDiskKV) {
-          const result = runParseCursor(traeDb, {
-            dbPath: traeDbPath,
-            device,
-            deviceInstanceId,
-            platform: devicePlatform,
-            now: Date.now(),
-            cursor: wm.getCursorCursor(),
-          })
-          for (const record of result.records) {
-            record.tool = 'trae' as any
-            insertRecord(db, record)
-          }
-          for (const tc of result.toolCalls) insertToolCall(db, tc)
-          parsedCount += result.records.length
-          toolCallCount += result.toolCalls.length
-          errors.push(...result.errors)
-          onProgress({ phase: 'Parsing SQLite', tool: 'trae', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
-        }
-      } finally {
-        traeDb.close()
-      }
-    } catch (e) {
-      errors.push(`${traeDbPath}: ${e instanceof Error ? e.message : e}`)
+    const traeLastImported = wm.getTraeLastImported?.() ?? 0
+    const result = runParseTrae({
+      dbPath: traeDbPath,
+      device,
+      deviceInstanceId,
+      platform: devicePlatform,
+      now: Date.now(),
+      lastImportedAt: traeLastImported,
+    })
+    for (const record of result.records) insertRecord(db, record)
+    for (const tc of result.toolCalls) insertToolCall(db, tc)
+    parsedCount += result.records.length
+    toolCallCount += result.toolCalls.length
+    errors.push(...result.errors)
+    if (result.lastImportedAt > traeLastImported) {
+      wm.setTraeLastImported?.(result.lastImportedAt)
+      wm.save()
     }
+    onProgress({ phase: 'Parsing SQLite', tool: 'trae', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
   }
 
   // Fix historical records that were parsed before init created state.json.
