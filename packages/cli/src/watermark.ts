@@ -85,6 +85,7 @@ function defaultFileData(): FileWatermarkData {
     'craft': {},
     'droid': {},
     'zcode': {},
+    'trae': {},
   }
 }
 

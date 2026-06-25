@@ -352,17 +352,11 @@ function probeKiro(ctx: ProbeContext): string | null {
   if (override) return override
   const legacy = ctx.legacySources?.['kiro']
   if (legacy) return legacy
-  const ideDb = join(
-    ctx.home,
-    'Library',
-    'Application Support',
-    'Kiro',
-    'User',
-    'globalStorage',
-    'kiro.kiroagent',
-    'dev_data',
-    'devdata.sqlite',
-  )
+  const devDataBase = platform() === 'darwin'
+    ? join(ctx.home, 'Library', 'Application Support', 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'dev_data')
+    : join(ctx.env.XDG_DATA_HOME ?? join(ctx.home, '.local', 'share'), 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'dev_data')
+  const ideDb = join(devDataBase, 'devdata.sqlite')
+  const tokensJsonl = join(devDataBase, 'tokens_generated.jsonl')
   const cliSessions = join(ctx.env.KIRO_HOME ?? join(ctx.home, '.kiro'), 'sessions', 'cli')
   const appSupport = platform() === 'darwin'
     ? join(ctx.home, 'Library', 'Application Support', 'kiro-cli', 'data.sqlite3')
@@ -370,6 +364,7 @@ function probeKiro(ctx: ProbeContext): string | null {
   if (existsSync(ideDb)) return ideDb
   if (existsSync(appSupport)) return appSupport
   if (existsSync(cliSessions)) return cliSessions
+  if (existsSync(tokensJsonl)) return devDataBase
   return null
 }
 
@@ -489,6 +484,25 @@ function probeDroid(ctx: ProbeContext): string | null {
   return existsSync(dir) ? dir : null
 }
 
+function probeTrae(ctx: ProbeContext): string | null {
+  const override = envOverride('trae', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['trae']
+  if (legacy) return legacy
+  if (platform() === 'darwin') {
+    const dbPath = join(ctx.home, 'Library', 'Application Support', 'Trae', 'User', 'globalStorage', 'state.vscdb')
+    return existsSync(dbPath) ? dbPath : null
+  }
+  if (platform() === 'win32') {
+    const appData = ctx.env.APPDATA ?? join(ctx.home, 'AppData', 'Roaming')
+    const dbPath = join(appData, 'Trae', 'User', 'globalStorage', 'state.vscdb')
+    return existsSync(dbPath) ? dbPath : null
+  }
+  const config = ctx.env.XDG_CONFIG_HOME ?? join(ctx.home, '.config')
+  const dbPath = join(config, 'Trae', 'User', 'globalStorage', 'state.vscdb')
+  return existsSync(dbPath) ? dbPath : null
+}
+
 // ── Qoder multi-dir helpers ──────────────────────────────────────────
 
 function defaultQoderSessionDirs(home: string): string[] {
@@ -552,6 +566,7 @@ const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'pi', sourceKey: 'pi', label: 'pi', probe: probePi },
   { tool: 'craft', sourceKey: 'craft', label: 'Craft', probe: probeCraft },
   { tool: 'droid', sourceKey: 'droid', label: 'Droid', probe: probeDroid },
+  { tool: 'trae', sourceKey: 'trae', label: 'Trae', probe: probeTrae },
 ] as const
 
 // ── Public API ───────────────────────────────────────────────────────

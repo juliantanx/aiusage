@@ -23,6 +23,7 @@ export const TOOLS = [
   'craft',
   'droid',
   'zcode',
+  'trae',
 ] as const
 export type Tool = (typeof TOOLS)[number]
 

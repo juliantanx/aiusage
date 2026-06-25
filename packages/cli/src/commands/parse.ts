@@ -372,6 +372,66 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           continue
         }
 
+        if (tool === 'kiro' && filePath.endsWith('.jsonl')) {
+          const content = readFileSync(filePath, 'utf-8')
+          const lines = content.split('\n')
+          let byteOffset = 0
+          for (const line of lines) {
+            if (!line.trim()) {
+              byteOffset += Buffer.byteLength(line, 'utf-8') + 1
+              continue
+            }
+            try {
+              const data = JSON.parse(line)
+              const inputTokens = toNumber(data.promptTokens ?? data.inputTokens ?? data.tokensIn)
+              const outputTokens = toNumber(data.generatedTokens ?? data.outputTokens ?? data.tokensOut)
+              if (inputTokens + outputTokens === 0) {
+                byteOffset += Buffer.byteLength(line, 'utf-8') + 1
+                continue
+              }
+              const model = normalizeKiroModel(data.model)
+              const provider = typeof data.provider === 'string' && data.provider.trim() ? data.provider.trim().toLowerCase() : inferProvider(model)
+              const recordTs = Date.now()
+              const tokenArgs = { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0 }
+              const cost = calculateCost(model, tokenArgs, exchangeRate)
+              const recordId = generateRecordId(deviceInstanceId, `${filePath}:${byteOffset}`, recordTs)
+              const record: StatsRecord = {
+                id: recordId,
+                ts: recordTs,
+                ingestedAt: Date.now(),
+                updatedAt: Date.now(),
+                lineOffset: byteOffset,
+                tool: 'kiro',
+                model,
+                provider,
+                inputTokens,
+                outputTokens,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+                thinkingTokens: 0,
+                cost,
+                costSource: cost > 0 ? 'pricing' : 'unknown',
+                sessionId: filePath,
+                sourceFile: filePath,
+                device,
+                deviceInstanceId,
+                platform: devicePlatform,
+              }
+              insertRecord(db, record)
+              parsedCount++
+            } catch {}
+            byteOffset += Buffer.byteLength(line, 'utf-8') + 1
+          }
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
+          continue
+        }
+
         if (tool === 'kelivo' && (filePath.endsWith('chats.json') || filePath.endsWith('.zip'))) {
           const result = await runParseKelivo({
             filePath,
@@ -805,6 +865,42 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     }
   }
 
+  // Trae: parse cursorDiskKV if present (Trae is a Cursor/VS Code fork).
+  // Trae may or may not have a cursorDiskKV table — probe returns state.vscdb path.
+  const traeDbPath = getDbPath('trae') ?? ''
+  if ((!filterTool || filterTool === 'trae') && pathIsFile(traeDbPath)) {
+    try {
+      const traeDb = new Database(traeDbPath, { readonly: true })
+      try {
+        const hasCursorDiskKV = traeDb.prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cursorDiskKV'"
+        ).get()
+        if (hasCursorDiskKV) {
+          const result = runParseCursor(traeDb, {
+            dbPath: traeDbPath,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            cursor: wm.getCursorCursor(),
+          })
+          for (const record of result.records) {
+            record.tool = 'trae' as any
+            insertRecord(db, record)
+          }
+          for (const tc of result.toolCalls) insertToolCall(db, tc)
+          parsedCount += result.records.length
+          toolCallCount += result.toolCalls.length
+          errors.push(...result.errors)
+          onProgress({ phase: 'Parsing SQLite', tool: 'trae', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+        }
+      } finally {
+        traeDb.close()
+      }
+    } catch (e) {
+      errors.push(`${traeDbPath}: ${e instanceof Error ? e.message : e}`)
+    }
+  }
 
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
