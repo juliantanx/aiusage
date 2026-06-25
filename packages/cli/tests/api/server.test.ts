@@ -415,6 +415,55 @@ describe('API Server', () => {
     expect(done.updated).toBe(1)
   })
 
+  it('shows corrected Sessions cost after a manual price overrides a log-sourced cost (issue #13)', async () => {
+    // Hermes record from a custom gateway: the gateway's self-reported cost is
+    // unreliable (≈0), stored as cost_source = 'log', so Sessions shows $0.00.
+    insertTestRecord(db, {
+      tool: 'hermes',
+      model: 'deepseek-v4-pro',
+      provider: 'openclaw',
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cost: 0,
+      cost_source: 'log',
+      session_id: 'hermes-session-1',
+    })
+
+    // Sessions menu before fix: cost is 0.
+    const before = await fetch(`${baseUrl}/api/sessions?range=all`)
+    expect(before.ok).toBe(true)
+    const beforeData = await before.json()
+    const beforeSession = beforeData.sessions.find((s: any) => s.sessionId === 'hermes-session-1')
+    expect(beforeSession.cost).toBe(0)
+
+    // User configures a price in the Pricing UI for this exact model.
+    const put = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'deepseek-v4-pro', input: 1, output: 2, currency: 'USD' }),
+    })
+    expect(put.ok).toBe(true)
+    expect(await put.json()).toMatchObject({ ok: true, needsRecalc: true })
+
+    // Trigger recalc and wait for completion.
+    const start = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(start.status).toBe(202)
+    const done = await waitForPricingRecalcDone(baseUrl)
+    expect(done.updated).toBe(1)
+
+    // The record itself is now priced.
+    const record = db.prepare('SELECT cost, cost_source FROM records WHERE id = ?').get('local00000001') as any
+    expect(record.cost_source).toBe('pricing')
+    // 1M input * $1 + 0.5M output * $2 = 2
+    expect(record.cost).toBeCloseTo(2)
+
+    // Sessions menu now shows the corrected cost.
+    const after = await fetch(`${baseUrl}/api/sessions?range=all`)
+    const afterData = await after.json()
+    const afterSession = afterData.sessions.find((s: any) => s.sessionId === 'hermes-session-1')
+    expect(afterSession.cost).toBeCloseTo(2)
+  })
+
   it('resets a modified synced price back to the synced baseline', async () => {
     insertTestRecord(db, {
       model: 'claude-sonnet-4-6',
