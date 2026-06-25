@@ -507,6 +507,20 @@ function priceTableFromDb(db: Database.Database): Record<string, PriceEntry> {
   return table
 }
 
+/**
+ * Whether the user has explicitly configured a manual price for this exact model.
+ * Used by recalc to let a user-defined price override a tool's logged cost
+ * (e.g. unreliable near-zero costs reported by custom gateways). See issue #13.
+ */
+export function hasUserPrice(db: Database.Database, model: string): boolean {
+  const row = db.prepare(`
+    SELECT 1 FROM model_prices
+    WHERE model_key = ? AND origin = 'user' AND status = 'active'
+    LIMIT 1
+  `).get(model)
+  return Boolean(row)
+}
+
 export function resolvePriceFromRegistry(db: Database.Database, model: string): PriceEntry | undefined {
   const directUserPrice = db.prepare(`
     SELECT input, output, cache_read, cache_write, currency

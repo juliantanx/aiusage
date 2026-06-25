@@ -3,6 +3,7 @@ import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
 import { insertRecord } from '../../src/db/records.js'
 import { recalcPricing } from '../../src/commands/recalc.js'
+import { setUserPrice } from '../../src/pricing-registry.js'
 import type { StatsRecord } from '@aiusage/core'
 
 describe('Recalc Command', () => {
@@ -85,6 +86,45 @@ describe('Recalc Command', () => {
     expect(record.provider).toBe('qoder')
     expect(record.cost_source).toBe('pricing')
     expect(record.cost).toBeGreaterThan(0)
+  })
+
+  it('skips log-sourced records that have no user price', () => {
+    insertRecord(db, {
+      id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
+      lineOffset: 100, tool: 'hermes', model: 'deepseek-v4-pro', provider: 'openclaw',
+      inputTokens: 1000000, outputTokens: 500000, cacheReadTokens: 0, cacheWriteTokens: 0,
+      thinkingTokens: 0, cost: 0, costSource: 'log', sessionId: 's1',
+      sourceFile: '/f1', device: 'd1', deviceInstanceId: 'di1',
+    })
+
+    const result = recalcPricing(db)
+    expect(result.skippedCount).toBe(1)
+
+    const record = db.prepare('SELECT * FROM records WHERE id = ?').get('r1') as any
+    expect(record.cost).toBe(0)
+    expect(record.cost_source).toBe('log')
+  })
+
+  it('overrides log-sourced cost when the user has set a manual price (issue #13)', () => {
+    insertRecord(db, {
+      id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
+      lineOffset: 100, tool: 'hermes', model: 'deepseek-v4-pro', provider: 'openclaw',
+      inputTokens: 1000000, outputTokens: 500000, cacheReadTokens: 0, cacheWriteTokens: 0,
+      thinkingTokens: 0, cost: 0, costSource: 'log', sessionId: 's1',
+      sourceFile: '/f1', device: 'd1', deviceInstanceId: 'di1',
+    })
+
+    // User configures a manual price via the Pricing UI for this exact model.
+    setUserPrice(db, 'deepseek-v4-pro', { input: 1, output: 2 })
+
+    const result = recalcPricing(db)
+    expect(result.updatedCount).toBe(1)
+    expect(result.skippedCount).toBe(0)
+
+    const record = db.prepare('SELECT * FROM records WHERE id = ?').get('r1') as any
+    // 1M input * $1 + 0.5M output * $2 = 1 + 1 = 2
+    expect(record.cost).toBe(2)
+    expect(record.cost_source).toBe('pricing')
   })
 
   it('recalculates cost for alias-only model ids from the pricing registry', () => {

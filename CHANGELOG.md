@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Manual price override for log-sourced costs** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — recalc now applies a user-configured price even to records whose cost came from the tool's own log (`cost_source = 'log'`). Previously these records were always skipped, so models reported by custom gateways (e.g. `deepseek-v4-pro` via openclaw, `mimo`/`gemini` via newapi/openrouter) with an unreliable near-zero logged cost stayed at `$0.0000` even after the user set a price and recalculated. Authoritative logged costs are still preserved when no manual price is set.
+
+---
+
 ## [1.5.6] - 2026-06-17
 
 ### Added

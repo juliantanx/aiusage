@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 修复
+- **手动价格覆盖日志来源费用** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 重算时，即使记录的费用来自工具自身日志（`cost_source = 'log'`），也会应用用户配置的价格。此前这类记录始终被跳过，导致通过自定义网关上报的模型（如 openclaw 的 `deepseek-v4-pro`、newapi/openrouter 的 `mimo`/`gemini`）在日志费用不可靠（接近 0）时，即便用户配置了价格并重算，Sessions 中仍显示为 `$0.0000`。当未设置手动价格时，仍保留可信的日志费用。
+
+---
+
 ## [1.5.6] - 2026-06-17
 
 ### 新增
