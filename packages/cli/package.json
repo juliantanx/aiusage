@@ -1,6 +1,6 @@
 {
   "name": "@juliantanx/aiusage",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "type": "module",
   "description": "Track and analyze AI coding assistant usage across Claude Code, Codex, and more",
   "keywords": [

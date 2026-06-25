@@ -5,7 +5,10 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [1.5.7] - 2026-06-25
+
+### 变更
+- **会话列表显示完整日期和时间** — Sessions 表格的「时间」列现在显示日期和时间（`toLocaleString`），不再只显示日期，与会话详情页保持一致。
 
 ### 修复
 - **OpenClaw 零成本记录卡在 $0** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 只要日志里存在 `usage.cost` 字段，OpenClaw 解析器就把 `cost_source` 标为 `'log'`，即使 `total` 是 `0`。自定义网关（如 openclaw → `deepseek-v4-pro`）对它们不计价的模型会上报 `cost.total: 0`，这些记录因此被当作权威的 `$0`、永远无法计价。现在解析器要求日志成本为正数才使用 `'log'`，否则回退到按价格表计算 —— 与 Cline、Hermes 解析器保持一致。
@@ -389,6 +392,8 @@
 
 ---
 
+[1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
+[1.5.6]: https://github.com/juliantanx/aiusage/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/juliantanx/aiusage/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/juliantanx/aiusage/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/juliantanx/aiusage/compare/v1.5.2...v1.5.3

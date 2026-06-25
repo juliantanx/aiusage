@@ -5,7 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.7] - 2026-06-25
+
+### Changed
+- **Session list shows full date and time** — the Sessions table Time column now shows the date and time (`toLocaleString`) instead of the date only, matching the session detail page.
 
 ### Fixed
 - **OpenClaw zero-cost records stuck at $0** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — the OpenClaw parser stamped `cost_source = 'log'` whenever a `usage.cost` field was present, even when its `total` was `0`. Custom gateways (e.g. openclaw → `deepseek-v4-pro`) report `cost.total: 0` for models they don't price, so these records were treated as authoritative `$0` and could never be priced. The parser now requires a positive logged cost before using `'log'`, otherwise it falls through to pricing — matching the Cline and Hermes parsers.
@@ -389,6 +392,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
+[1.5.6]: https://github.com/juliantanx/aiusage/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/juliantanx/aiusage/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/juliantanx/aiusage/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/juliantanx/aiusage/compare/v1.5.2...v1.5.3
