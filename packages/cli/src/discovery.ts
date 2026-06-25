@@ -357,6 +357,19 @@ function probeKiro(ctx: ProbeContext): string | null {
   if (override) return override
   const legacy = ctx.legacySources?.['kiro']
   if (legacy) return legacy
+  return probeKiroDefaultPath(ctx)
+}
+
+function probeKiroOverridePath(ctx: ProbeContext): string | null {
+  // Only return the env override or legacy config path (for discoverLogFiles)
+  const override = envOverride('kiro', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['kiro']
+  if (legacy) return legacy
+  return null
+}
+
+function probeKiroDefaultPath(ctx: ProbeContext): string | null {
   const devDataBase = kiroDevDataDir(ctx)
   const ideDb = join(devDataBase, 'devdata.sqlite')
   const tokensJsonl = join(devDataBase, 'tokens_generated.jsonl')
@@ -765,6 +778,7 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     { tool: 'kimi', path: probeKimi(ctx), filter: (p) => basename(p) === 'wire.jsonl' },
     { tool: 'codebuddy', path: probeCodeBuddy(ctx) },
     { tool: 'kiro', path: kiroDevDataDir(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
+    { tool: 'kiro', path: probeKiroOverridePath(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
     { tool: 'kiro', path: kiroWorkspaceSessionsDir(ctx), filter: (p) => extname(p) === '.json' && basename(p) !== 'sessions.json' },
     { tool: 'grok', path: probeGrok(ctx), filter: (p) => extname(p) === '.jsonl' },
     { tool: 'antigravity', path: probeAntigravity(ctx) },
