@@ -51,6 +51,10 @@ export function formatDate(ts) {
   return new Date(ts).toLocaleDateString()
 }
 
+export function formatDateTime(ts) {
+  return new Date(ts).toLocaleString()
+}
+
 export function formatNumber(n) {
   return n.toLocaleString()
 }
