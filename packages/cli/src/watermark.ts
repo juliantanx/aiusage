@@ -54,6 +54,7 @@ export interface WatermarkState {
   kiro?: TimestampIdCursor | null
   zcode?: ZcodeCursor | null
   zcodeTools?: ZcodeToolCursor | null
+  trae?: number | null
 }
 
 /** @deprecated Use FileWatermarkData instead */
@@ -109,7 +110,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null, zcode: parsed.zcode ?? null, zcodeTools: parsed.zcodeTools ?? null }
+      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null, zcode: parsed.zcode ?? null, zcodeTools: parsed.zcodeTools ?? null, trae: parsed.trae ?? null }
     } catch {
       return { files: defaultFileData() }
     }
@@ -211,5 +212,13 @@ export class WatermarkManager {
 
   setZcodeToolCursor(cursor: ZcodeToolCursor): void {
     this.data.zcodeTools = cursor
+  }
+
+  getTraeLastImported(): number {
+    return this.data.trae ?? 0
+  }
+
+  setTraeLastImported(ts: number): void {
+    this.data.trae = ts
   }
 }
