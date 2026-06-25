@@ -153,7 +153,12 @@ export function defaultCursorDbPath(): string {
 }
 
 export function defaultKiloDbPath(): string {
-  return join(xdgDataDir(homedir(), 'kilo'), 'kilo.db')
+  const home = homedir()
+  if (platform() === 'win32') {
+    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    return join(appData, 'kilo', 'kilo.db')
+  }
+  return join(xdgDataDir(home, 'kilo'), 'kilo.db')
 }
 
 export function defaultGooseDbPath(): string {
@@ -352,25 +357,55 @@ function probeKiro(ctx: ProbeContext): string | null {
   if (override) return override
   const legacy = ctx.legacySources?.['kiro']
   if (legacy) return legacy
-  const ideDb = join(
-    ctx.home,
-    'Library',
-    'Application Support',
-    'Kiro',
-    'User',
-    'globalStorage',
-    'kiro.kiroagent',
-    'dev_data',
-    'devdata.sqlite',
-  )
+  return probeKiroDefaultPath(ctx)
+}
+
+function probeKiroOverridePath(ctx: ProbeContext): string | null {
+  // Only return the env override or legacy config path (for discoverLogFiles)
+  const override = envOverride('kiro', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['kiro']
+  if (legacy) return legacy
+  return null
+}
+
+function probeKiroDefaultPath(ctx: ProbeContext): string | null {
+  const devDataBase = kiroDevDataDir(ctx)
+  const ideDb = join(devDataBase, 'devdata.sqlite')
+  const tokensJsonl = join(devDataBase, 'tokens_generated.jsonl')
   const cliSessions = join(ctx.env.KIRO_HOME ?? join(ctx.home, '.kiro'), 'sessions', 'cli')
   const appSupport = platform() === 'darwin'
     ? join(ctx.home, 'Library', 'Application Support', 'kiro-cli', 'data.sqlite3')
-    : join(ctx.env.XDG_DATA_HOME ?? join(ctx.home, '.local', 'share'), 'kiro-cli', 'data.sqlite3')
-  if (existsSync(ideDb)) return ideDb
+    : platform() === 'win32'
+      ? join(ctx.env.APPDATA ?? join(ctx.home, 'AppData', 'Roaming'), 'kiro-cli', 'data.sqlite3')
+      : join(ctx.env.XDG_DATA_HOME ?? join(ctx.home, '.local', 'share'), 'kiro-cli', 'data.sqlite3')
+  if (existsSync(ideDb) && statSync(ideDb).size > 0) return ideDb
   if (existsSync(appSupport)) return appSupport
   if (existsSync(cliSessions)) return cliSessions
+  if (existsSync(tokensJsonl)) return devDataBase
   return null
+}
+
+
+function kiroDevDataDir(ctx: ProbeContext): string {
+  if (platform() === 'darwin') {
+    return join(ctx.home, 'Library', 'Application Support', 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'dev_data')
+  }
+  if (platform() === 'win32') {
+    const appData = ctx.env.APPDATA ?? join(ctx.home, 'AppData', 'Roaming')
+    return join(appData, 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'dev_data')
+  }
+  return join(ctx.env.XDG_DATA_HOME ?? join(ctx.home, '.local', 'share'), 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'dev_data')
+}
+function kiroWorkspaceSessionsDir(ctx: ProbeContext): string {
+  if (platform() === 'darwin') {
+    return join(ctx.home, 'Library', 'Application Support', 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'workspace-sessions')
+  }
+  if (platform() === 'win32') {
+    const appData = ctx.env.APPDATA ?? join(ctx.home, 'AppData', 'Roaming')
+    return join(appData, 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'workspace-sessions')
+  }
+  return join(ctx.env.XDG_DATA_HOME ?? join(ctx.home, '.local', 'share'), 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'workspace-sessions')
 }
 
 function probeGrok(ctx: ProbeContext): string | null {
@@ -489,6 +524,37 @@ function probeDroid(ctx: ProbeContext): string | null {
   return existsSync(dir) ? dir : null
 }
 
+function probeTrae(ctx: ProbeContext): string | null {
+  const override = envOverride('trae', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['trae']
+  if (legacy) return legacy
+
+  // Detect the correct Trae variant by checking each data directory.
+  // Order: Trae CN > TRAE SOLO CN > Trae (international)
+  const appNames = platform() === 'darwin'
+    ? ['Trae CN', 'TRAE SOLO CN', 'Trae']
+    : platform() === 'win32'
+      ? ['Trae CN', 'TRAE SOLO CN', 'Trae']
+      : ['Trae CN', 'TRAE SOLO CN', 'Trae']
+
+  for (const appName of appNames) {
+    let dbPath: string
+    if (platform() === 'darwin') {
+      dbPath = join(ctx.home, 'Library', 'Application Support', appName, 'User', 'globalStorage', 'state.vscdb')
+    } else if (platform() === 'win32') {
+      const appData = ctx.env.APPDATA ?? join(ctx.home, 'AppData', 'Roaming')
+      dbPath = join(appData, appName, 'User', 'globalStorage', 'state.vscdb')
+    } else {
+      const config = ctx.env.XDG_CONFIG_HOME ?? join(ctx.home, '.config')
+      dbPath = join(config, appName, 'User', 'globalStorage', 'state.vscdb')
+    }
+    if (existsSync(dbPath)) return dbPath
+  }
+
+  return null
+}
+
 // ── Qoder multi-dir helpers ──────────────────────────────────────────
 
 function defaultQoderSessionDirs(home: string): string[] {
@@ -552,6 +618,7 @@ const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'pi', sourceKey: 'pi', label: 'pi', probe: probePi },
   { tool: 'craft', sourceKey: 'craft', label: 'Craft', probe: probeCraft },
   { tool: 'droid', sourceKey: 'droid', label: 'Droid', probe: probeDroid },
+  { tool: 'trae', sourceKey: 'trae', label: 'Trae', probe: probeTrae },
 ] as const
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -710,7 +777,9 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     { tool: 'gemini', path: probeGemini(ctx) },
     { tool: 'kimi', path: probeKimi(ctx), filter: (p) => basename(p) === 'wire.jsonl' },
     { tool: 'codebuddy', path: probeCodeBuddy(ctx) },
-    { tool: 'kiro', path: probeKiro(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
+    { tool: 'kiro', path: kiroDevDataDir(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
+    { tool: 'kiro', path: probeKiroOverridePath(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
+    { tool: 'kiro', path: kiroWorkspaceSessionsDir(ctx), filter: (p) => extname(p) === '.json' && basename(p) !== 'sessions.json' },
     { tool: 'grok', path: probeGrok(ctx), filter: (p) => extname(p) === '.jsonl' },
     { tool: 'antigravity', path: probeAntigravity(ctx) },
     { tool: 'omp', path: probeOmp(ctx) },
@@ -751,6 +820,51 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     if (paths.length > 0) results.push({ tool: 'kelivo', paths: unique(paths) })
   }
 
+  // Cursor agent-transcript JSONL files (fallback for privacy mode)
+  const cursorProjectDirs = cursorProjectRoots(ctx)
+  for (const cursorHome of cursorProjectDirs) {
+    if (!existsSync(cursorHome)) continue
+    const transcriptPaths = findCursorTranscriptFiles(cursorHome)
+    if (transcriptPaths.length > 0) {
+      const existing = results.find(r => r.tool === 'cursor')
+      if (existing) {
+        existing.paths = unique([...existing.paths, ...transcriptPaths])
+      } else {
+        results.push({ tool: 'cursor', paths: transcriptPaths })
+      }
+    }
+  }
+
+  return results
+}
+
+function cursorProjectRoots(ctx: ProbeContext): string[] {
+  const roots: string[] = [join(ctx.home, '.cursor', 'projects')]
+  if (platform() === 'win32') {
+    const userProfile = ctx.env.USERPROFILE ?? ctx.home
+    roots.push(join(userProfile, '.cursor', 'projects'))
+  }
+  return unique(roots)
+}
+
+function findCursorTranscriptFiles(dir: string): string[] {
+  const results: string[] = []
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const agentDir = join(dir, entry.name, 'agent-transcripts')
+      if (!existsSync(agentDir)) continue
+      try {
+        const sessions = readdirSync(agentDir, { withFileTypes: true })
+        for (const session of sessions) {
+          if (!session.isDirectory()) continue
+          const jsonlPath = join(agentDir, session.name, `${session.name}.jsonl`)
+          if (existsSync(jsonlPath)) results.push(jsonlPath)
+        }
+      } catch {}
+    }
+  } catch {}
   return results
 }
 

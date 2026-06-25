@@ -72,7 +72,11 @@ describe('discovery path resolution', () => {
     writeFileSync(join(legacyDir, 'kilo.db'), '')
     const { defaultKiloDbPath } = await loadDiscovery({ home, platform })
 
-    expect(defaultKiloDbPath()).toBe(join(home, '.local', 'share', 'kilo', 'kilo.db'))
+    if (platform === 'win32') {
+      expect(defaultKiloDbPath()).toBe(join(home, 'AppData', 'Roaming', 'kilo', 'kilo.db'))
+    } else {
+      expect(defaultKiloDbPath()).toBe(join(home, '.local', 'share', 'kilo', 'kilo.db'))
+    }
   })
 
   it('honors XDG_DATA_HOME for KiloCode', async () => {
@@ -165,8 +169,9 @@ describe('discovery path resolution', () => {
     writeFileSync(join(home, '.kimi-code', 'sessions', 'wd', 'sess', 'agents', 'main', 'wire.jsonl'), '{}\n')
     mkdirSync(join(home, '.codebuddy', 'projects', '-workspace'), { recursive: true })
     writeFileSync(join(home, '.codebuddy', 'projects', '-workspace', 'session.jsonl'), '{}\n')
-    mkdirSync(join(home, '.kiro', 'sessions', 'cli'), { recursive: true })
-    writeFileSync(join(home, '.kiro', 'sessions', 'cli', 'session-1.json'), '{}')
+    const kiroDataDir = join(home, '.local', 'share', 'Kiro', 'User', 'globalStorage', 'kiro.kiroagent', 'dev_data')
+    mkdirSync(kiroDataDir, { recursive: true })
+    writeFileSync(join(kiroDataDir, 'tokens_generated.jsonl'), '{"model":"agent","provider":"kiro","promptTokens":10,"generatedTokens":5}\n')
     const ideRoot = join(home, '.config', 'Code')
     mkdirSync(join(ideRoot, 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1'), { recursive: true })
     writeFileSync(join(ideRoot, 'User', 'globalStorage', 'rooveterinaryinc.roo-cline', 'tasks', 'task-1', 'ui_messages.json'), '[]')
