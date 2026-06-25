@@ -88,12 +88,12 @@ describe('Recalc Command', () => {
     expect(record.cost).toBeGreaterThan(0)
   })
 
-  it('skips log-sourced records that have no user price', () => {
+  it('preserves a positive log-sourced cost that has no user price', () => {
     insertRecord(db, {
       id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
       lineOffset: 100, tool: 'hermes', model: 'deepseek-v4-pro', provider: 'openclaw',
       inputTokens: 1000000, outputTokens: 500000, cacheReadTokens: 0, cacheWriteTokens: 0,
-      thinkingTokens: 0, cost: 0, costSource: 'log', sessionId: 's1',
+      thinkingTokens: 0, cost: 0.05, costSource: 'log', sessionId: 's1',
       sourceFile: '/f1', device: 'd1', deviceInstanceId: 'di1',
     })
 
@@ -101,8 +101,30 @@ describe('Recalc Command', () => {
     expect(result.skippedCount).toBe(1)
 
     const record = db.prepare('SELECT * FROM records WHERE id = ?').get('r1') as any
-    expect(record.cost).toBe(0)
+    expect(record.cost).toBe(0.05)
     expect(record.cost_source).toBe('log')
+  })
+
+  it('recomputes a zero log-sourced cost from the pricing registry (issue #13)', () => {
+    // Real openclaw scenario: gateway reports cost.total = 0, stored as cost_source='log'.
+    insertPrice('deepseek-v4-pro', { input: 0.435, output: 0.87, provider: 'deepseek' })
+
+    insertRecord(db, {
+      id: 'r1', ts: Date.now(), ingestedAt: Date.now(), updatedAt: Date.now(),
+      lineOffset: 100, tool: 'openclaw', model: 'deepseek-v4-pro', provider: 'deepseek',
+      inputTokens: 1000000, outputTokens: 500000, cacheReadTokens: 0, cacheWriteTokens: 0,
+      thinkingTokens: 0, cost: 0, costSource: 'log', sessionId: 's1',
+      sourceFile: '/f1', device: 'd1', deviceInstanceId: 'di1',
+    })
+
+    const result = recalcPricing(db)
+    expect(result.updatedCount).toBe(1)
+    expect(result.skippedCount).toBe(0)
+
+    const record = db.prepare('SELECT * FROM records WHERE id = ?').get('r1') as any
+    // 1M input * 0.435 + 0.5M output * 0.87 = 0.435 + 0.435 = 0.87
+    expect(record.cost).toBeCloseTo(0.87)
+    expect(record.cost_source).toBe('pricing')
   })
 
   it('overrides log-sourced cost when the user has set a manual price (issue #13)', () => {

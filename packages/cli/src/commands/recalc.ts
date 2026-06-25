@@ -28,10 +28,11 @@ export function recalcPricing(db: Database.Database): RecalcResult {
     for (const record of records) {
       const model = record.tool === 'qoder' ? normalizeQoderModel(record.model) : record.model
 
-      // Logged costs are treated as authoritative and left untouched — unless the
-      // user has explicitly configured a manual price for this model, in which case
-      // their override must win over an unreliable gateway-reported cost (issue #13).
-      if (record.cost_source === 'log' && !hasUserPrice(db, model)) {
+      // Logged costs are treated as authoritative and left untouched — EXCEPT when the
+      // logged cost is non-positive (custom gateways report 0 for models they don't
+      // price) or when the user has explicitly set a manual price for this model. In
+      // both cases the logged value must not block pricing/recalc (issue #13).
+      if (record.cost_source === 'log' && record.cost > 0 && !hasUserPrice(db, model)) {
         skippedCount++
         continue
       }

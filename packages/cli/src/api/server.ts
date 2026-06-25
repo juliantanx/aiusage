@@ -137,10 +137,11 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
         const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
         const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
 
-        // Logged costs are authoritative and left untouched, unless the user has
-        // explicitly set a manual price for this model — their override must win
-        // over an unreliable gateway-reported cost (issue #13).
-        if (r.cost_source === 'log' && !hasUserPrice(db, model)) {
+        // Logged costs are authoritative and left untouched — EXCEPT when the logged
+        // cost is non-positive (custom gateways report 0 for models they don't price)
+        // or when the user has set a manual price for this model. In both cases the
+        // logged value must not block pricing/recalc (issue #13).
+        if (r.cost_source === 'log' && r.cost > 0 && !hasUserPrice(db, model)) {
           skipped++
           continue
         }

@@ -8,7 +8,8 @@
 ## [未发布]
 
 ### 修复
-- **手动价格覆盖日志来源费用** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 重算时，即使记录的费用来自工具自身日志（`cost_source = 'log'`），也会应用用户配置的价格。此前这类记录始终被跳过，导致通过自定义网关上报的模型（如 openclaw 的 `deepseek-v4-pro`、newapi/openrouter 的 `mimo`/`gemini`）在日志费用不可靠（接近 0）时，即便用户配置了价格并重算，Sessions 中仍显示为 `$0.0000`。当未设置手动价格时，仍保留可信的日志费用。
+- **OpenClaw 零成本记录卡在 $0** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 只要日志里存在 `usage.cost` 字段，OpenClaw 解析器就把 `cost_source` 标为 `'log'`，即使 `total` 是 `0`。自定义网关（如 openclaw → `deepseek-v4-pro`）对它们不计价的模型会上报 `cost.total: 0`，这些记录因此被当作权威的 `$0`、永远无法计价。现在解析器要求日志成本为正数才使用 `'log'`，否则回退到按价格表计算 —— 与 Cline、Hermes 解析器保持一致。
+- **重算修正日志来源费用** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — 当 `cost_source = 'log'` 记录的日志成本为非正数（网关上报的不可靠 `0`），或用户为该模型设置了手动价格时，重算现在会重新计算费用。这样无需重新导入即可修复已入库的记录。真正为正的日志成本仍会保留。
 
 ---
 

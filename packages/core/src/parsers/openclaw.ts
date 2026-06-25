@@ -54,15 +54,20 @@ export class OpenClawParser implements Parser {
     const cacheWriteTokens = usage.cacheWrite ?? 0
     const thinkingTokens = 0 // OpenClaw doesn't provide thinking tokens
 
-    // Cost handling: usage.cost can be an object {total, input, output, ...} or a number
+    // Cost handling: usage.cost can be an object {total, input, output, ...} or a number.
+    // Only trust the logged cost as authoritative when it is actually positive — custom
+    // gateways (e.g. openclaw -> deepseek) report `cost.total: 0` for models they don't
+    // price, and a 0 logged cost must not block pricing/recalc (issue #13). This mirrors
+    // the Cline (parse.ts) and Hermes parsers, which both require cost > 0 for 'log'.
+    const loggedCost = (usage.cost != null && typeof usage.cost === 'object')
+      ? Number(usage.cost.total ?? 0)
+      : (typeof usage.cost === 'number' ? usage.cost : NaN)
+
     let cost: number
     let costSource: 'log' | 'pricing' | 'unknown'
 
-    if (usage.cost != null && typeof usage.cost === 'object') {
-      cost = usage.cost.total ?? 0
-      costSource = 'log'
-    } else if (typeof usage.cost === 'number') {
-      cost = usage.cost
+    if (Number.isFinite(loggedCost) && loggedCost > 0) {
+      cost = loggedCost
       costSource = 'log'
     } else if (model === 'unknown') {
       cost = 0
@@ -75,7 +80,7 @@ export class OpenClawParser implements Parser {
         cacheWriteTokens,
         thinkingTokens,
       }, context.exchangeRate)
-      costSource = 'pricing'
+      costSource = cost > 0 ? 'pricing' : 'unknown'
     }
 
     // Provider: use message.provider if available, otherwise infer

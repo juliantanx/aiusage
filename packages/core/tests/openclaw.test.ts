@@ -70,11 +70,30 @@ describe('OpenClawParser', () => {
     expect(result!.toolCalls[1].callIndex).toBe(1)
   })
 
-  it('handles cost = 0 as valid (costSource = log)', () => {
-    // This tests that cost=0 with cost field present is treated as 'log', not 'pricing'
+  it('does not treat a zero logged cost as authoritative (issue #13)', () => {
+    // Custom gateways report cost.total = 0 for models they do not price. A zero logged
+    // cost must NOT be stamped as 'log' (which would block pricing/recalc forever).
+    // 'test' has no entry in the pricing table, so it resolves to 'unknown'/0.
     const line = '{"message":{"role":"assistant","model":"test","usage":{"input":10,"output":10,"cost":0}}}'
     const result = parser.parseLine(line, { ...baseContext, lineOffset: 0 })
+    expect(result!.record.costSource).not.toBe('log')
+    expect(result!.record.costSource).toBe('unknown')
     expect(result!.record.cost).toBe(0)
+  })
+
+  it('prices a model when the logged cost object total is zero (issue #13)', () => {
+    // Same shape as the real openclaw deepseek logs: cost present but total = 0.
+    // A priced model must fall through to pricing instead of being stuck at 'log'/0.
+    const line = '{"message":{"role":"assistant","model":"claude-sonnet-4-6","usage":{"input":1000000,"output":0,"cost":{"input":0,"output":0,"total":0}}}}'
+    const result = parser.parseLine(line, { ...baseContext, lineOffset: 0 })
+    expect(result!.record.costSource).toBe('pricing')
+    expect(result!.record.cost).toBeGreaterThan(0)
+  })
+
+  it('still treats a positive logged cost as authoritative (costSource = log)', () => {
+    const line = '{"message":{"role":"assistant","model":"test","usage":{"input":10,"output":10,"cost":{"input":0.03,"output":0.02,"total":0.05}}}}'
+    const result = parser.parseLine(line, { ...baseContext, lineOffset: 0 })
+    expect(result!.record.cost).toBe(0.05)
     expect(result!.record.costSource).toBe('log')
   })
 

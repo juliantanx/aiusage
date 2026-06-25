@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **Manual price override for log-sourced costs** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — recalc now applies a user-configured price even to records whose cost came from the tool's own log (`cost_source = 'log'`). Previously these records were always skipped, so models reported by custom gateways (e.g. `deepseek-v4-pro` via openclaw, `mimo`/`gemini` via newapi/openrouter) with an unreliable near-zero logged cost stayed at `$0.0000` even after the user set a price and recalculated. Authoritative logged costs are still preserved when no manual price is set.
+- **OpenClaw zero-cost records stuck at $0** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — the OpenClaw parser stamped `cost_source = 'log'` whenever a `usage.cost` field was present, even when its `total` was `0`. Custom gateways (e.g. openclaw → `deepseek-v4-pro`) report `cost.total: 0` for models they don't price, so these records were treated as authoritative `$0` and could never be priced. The parser now requires a positive logged cost before using `'log'`, otherwise it falls through to pricing — matching the Cline and Hermes parsers.
+- **Recalc corrects log-sourced costs** ([#13](https://github.com/juliantanx/aiusage/issues/13)) — recalc now recomputes a `cost_source = 'log'` record when its logged cost is non-positive (an unreliable gateway-reported `0`) or when the user has set a manual price for that model. This repairs already-imported records without a re-import. Genuinely positive logged costs are still preserved.
 
 ---
 
