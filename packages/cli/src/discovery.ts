@@ -153,7 +153,12 @@ export function defaultCursorDbPath(): string {
 }
 
 export function defaultKiloDbPath(): string {
-  return join(xdgDataDir(homedir(), 'kilo'), 'kilo.db')
+  const home = homedir()
+  if (platform() === 'win32') {
+    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    return join(appData, 'kilo', 'kilo.db')
+  }
+  return join(xdgDataDir(home, 'kilo'), 'kilo.db')
 }
 
 export function defaultGooseDbPath(): string {
@@ -802,11 +807,11 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
   }
 
   // Cursor agent-transcript JSONL files (fallback for privacy mode)
-  const cursorHome = join(ctx.home, '.cursor', 'projects')
-  if (existsSync(cursorHome)) {
+  const cursorProjectDirs = cursorProjectRoots(ctx)
+  for (const cursorHome of cursorProjectDirs) {
+    if (!existsSync(cursorHome)) continue
     const transcriptPaths = findCursorTranscriptFiles(cursorHome)
     if (transcriptPaths.length > 0) {
-      // Merge with existing cursor paths if any, otherwise add new
       const existing = results.find(r => r.tool === 'cursor')
       if (existing) {
         existing.paths = unique([...existing.paths, ...transcriptPaths])
@@ -817,6 +822,15 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
   }
 
   return results
+}
+
+function cursorProjectRoots(ctx: ProbeContext): string[] {
+  const roots: string[] = [join(ctx.home, '.cursor', 'projects')]
+  if (platform() === 'win32') {
+    const userProfile = ctx.env.USERPROFILE ?? ctx.home
+    roots.push(join(userProfile, '.cursor', 'projects'))
+  }
+  return unique(roots)
 }
 
 function findCursorTranscriptFiles(dir: string): string[] {

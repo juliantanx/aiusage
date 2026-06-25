@@ -503,7 +503,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
               }
               const model = normalizeKiroModel(data.model)
               const provider = typeof data.provider === 'string' && data.provider.trim() ? data.provider.trim().toLowerCase() : inferProvider(model)
-              const recordTs = Date.now()
+              const recordTs = stat.mtimeMs
               const tokenArgs = { inputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0 }
               const cost = calculateCost(model, tokenArgs, exchangeRate)
               const recordId = generateRecordId(deviceInstanceId, `${filePath}:${byteOffset}`, recordTs)

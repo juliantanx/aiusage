@@ -1,6 +1,6 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
-import { execSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import type { StatsRecord, ToolCallRecord } from '@aiusage/core'
 import { generateRecordId } from '@aiusage/core'
 
@@ -53,8 +53,9 @@ function parseSessionTags(repoPath: string): SessionTag | null {
     const sessionId = basename(basename(repoPath) === 'v2' ? join(repoPath, '..') : repoPath)
     if (!/^[0-9a-f]{24,}$/.test(sessionId)) return null
 
-    const tags = execSync('git tag -l', { cwd: repoPath, encoding: 'utf-8', timeout: 5000 })
-    if (!tags.trim()) return null
+    const tagResult = spawnSync('git', ['tag', '-l'], { cwd: repoPath, encoding: 'utf-8', timeout: 5000 })
+    if (tagResult.status !== 0 || !tagResult.stdout?.trim()) return null
+    const tags = tagResult.stdout
 
     const lines = tags.trim().split('\n')
     let chatTurns = 0
@@ -68,21 +69,38 @@ function parseSessionTags(repoPath: string): SessionTag | null {
       // Get commit timestamp for this tag
       let tagTs = 0
       try {
-        const tsStr = execSync(`git log -1 --format=%at "${t}"`, {
+        const logResult = spawnSync('git', ['log', '-1', '--format=%at', t], {
           cwd: repoPath, encoding: 'utf-8', timeout: 3000,
-        }).trim()
+        })
+        if (logResult.status !== 0 || !logResult.stdout?.trim()) continue
+        const tsStr = logResult.stdout.trim()
         tagTs = parseInt(tsStr, 10) * 1000 // Convert to ms
       } catch { continue }
 
       if (t.startsWith('chain-start-')) {
         startTs = tagTs
-      } else if (t.startsWith('after-chat-turn-')) {
+      } else if (t.startsWith('before-chat-turn-')) {
+        // Count turns by before-chat-turn to avoid double-counting with after-chat-turn
         chatTurns++
       } else if (t.startsWith('toolcall-')) {
         toolCalls++
       }
-      // Track the earliest timestamp as session start
-      if (startTs === 0 || tagTs < startTs) startTs = tagTs
+    }
+
+    // Fallback: if no chain-start tag, use the earliest tag timestamp
+    if (startTs === 0) {
+      let earliest = Infinity
+      for (const tag of lines) {
+        const t = tag.trim()
+        if (!t) continue
+        const logResult = spawnSync('git', ['log', '-1', '--format=%at', t], {
+          cwd: repoPath, encoding: 'utf-8', timeout: 3000,
+        })
+        if (logResult.status !== 0 || !logResult.stdout?.trim()) continue
+        const ts = parseInt(logResult.stdout.trim(), 10) * 1000
+        if (ts > 0 && ts < earliest) earliest = ts
+      }
+      if (earliest < Infinity) startTs = earliest
     }
 
     if (chatTurns === 0 && toolCalls === 0) return null
@@ -120,7 +138,7 @@ export function runParseTrae(options: TraeImportOptions): TraeImportResult {
     if (!session) continue
 
     // Skip already-imported sessions
-    if (session.startTs <= latestTs) continue
+    if (session.startTs < latestTs) continue
 
     if (session.startTs > latestTs) latestTs = session.startTs
 
