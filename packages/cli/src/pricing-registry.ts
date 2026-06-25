@@ -237,6 +237,38 @@ export function loadPricingRuntime(db: Database.Database, config?: Config | null
   setRuntimePriceTable(builtin, overrides)
 }
 
+/**
+ * One-time migration of legacy `config.priceOverrides` into the pricing registry.
+ *
+ * Before the model_prices registry existed, user price overrides lived only in
+ * config.json and were applied at parse time. Recalc resolves prices from the
+ * registry (model_prices) and never consulted config, so those overrides were
+ * silently ignored — a manually configured price did not affect recalculated
+ * costs (issue #13). This imports each config override as a user price so the
+ * registry becomes the single source of truth.
+ *
+ * Existing user prices (e.g. set via the Pricing UI) are preserved, never
+ * clobbered. Returns the list of models that were imported.
+ */
+export function importConfigPriceOverrides(
+  db: Database.Database,
+  overrides: Record<string, PriceEntry>,
+): string[] {
+  const imported: string[] = []
+  for (const [modelKey, entry] of Object.entries(overrides)) {
+    if (!modelKey.trim()) continue
+    const existingUserPrice = db.prepare(`
+      SELECT 1 FROM model_prices
+      WHERE model_key = ? AND origin = 'user' AND status = 'active'
+      LIMIT 1
+    `).get(modelKey)
+    if (existingUserPrice) continue
+    setUserPrice(db, modelKey, entry)
+    imported.push(modelKey)
+  }
+  return imported
+}
+
 export function setUserPrice(db: Database.Database, modelKey: string, entry: PriceEntry): void {
   const now = Date.now()
   const baseline = db.prepare(`
