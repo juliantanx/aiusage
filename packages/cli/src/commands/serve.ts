@@ -3,6 +3,7 @@ import { readFileSync, existsSync, statSync, writeFileSync, unlinkSync } from 'n
 import { join, extname, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
+import { importConfigPriceOverrides, loadPricingRuntime } from '../pricing-registry.js'
 import { runParse } from './parse.js'
 import { runSync } from './sync.js'
 import { cleanOldData } from './clean.js'
@@ -41,6 +42,20 @@ export function serve(options: ServeOptions): void {
   const config = loadConfig()
   const dbWriteQueue = new AsyncTaskQueue()
   const runDbWrite = <T>(task: () => T | Promise<T>) => dbWriteQueue.run(task)
+
+  // One-time: migrate legacy config.priceOverrides into the pricing registry so
+  // recalc/Sessions actually use them (they were previously ignored — issue #13).
+  // After import, drop them from config so the registry is the single source of
+  // truth and this does not run again.
+  if (config?.priceOverrides && Object.keys(config.priceOverrides).length > 0) {
+    const imported = importConfigPriceOverrides(options.db, config.priceOverrides)
+    delete config.priceOverrides
+    saveConfig(config)
+    loadPricingRuntime(options.db, config)
+    if (imported.length > 0) {
+      console.log(`[serve] migrated ${imported.length} config price override(s) into the registry: ${imported.join(', ')}`)
+    }
+  }
 
   // Initialize exchange rate: fetch if cache missing or expired (non-blocking)
   if (config == null || config.exchangeRate == null) {

@@ -30,7 +30,7 @@ import { uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord } from '../db/records.js'
 import { AsyncTaskQueue, type AsyncTaskQueueStatus } from '../db/write-queue.js'
-import { getPricingRegistrySummary, getUserAliasBindings, listLocalModelBindings, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPricingAlias, resetUserPriceToSynced, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
+import { getPricingRegistrySummary, getUserAliasBindings, hasUserPrice, listLocalModelBindings, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPricingAlias, resetUserPriceToSynced, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
 
 const pendingLeaderboardAuth = new Map<string, { verifier: string; expiresAt: number }>()
@@ -133,13 +133,18 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
     const tx = db.transaction((batch: any[]) => {
       for (const r of batch) {
         processed++
-        if (r.cost_source === 'log') {
-          skipped++
-          continue
-        }
 
         const rawModel = r.tool === 'qoder' ? normalizeQoderModel(r.model) : r.model
         const model = rawModel === 'unknown' ? (r.tool === 'qoder' ? 'qoder-auto' : r.model) : rawModel
+
+        // Logged costs are authoritative and left untouched — EXCEPT when the logged
+        // cost is non-positive (custom gateways report 0 for models they don't price)
+        // or when the user has set a manual price for this model. In both cases the
+        // logged value must not block pricing/recalc (issue #13).
+        if (r.cost_source === 'log' && r.cost > 0 && !hasUserPrice(db, model)) {
+          skipped++
+          continue
+        }
         const provider = model !== r.model ? inferProvider(model) : r.provider
         const price = resolveCachedPrice(model)
         const cost = price ? calculateCostForPrice(price, {

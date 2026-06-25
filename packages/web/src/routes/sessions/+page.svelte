@@ -1,5 +1,5 @@
 <script>
-  import { dateRange, selectedDevice, selectedTool, formatTokens, formatCost, formatDate } from '$lib/stores.js'
+  import { dateRange, selectedDevice, selectedTool, formatTokens, formatCost, formatDateTime } from '$lib/stores.js'
   import { fetchSessions } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import DateRangeSelector from '$lib/components/DateRangeSelector.svelte'
@@ -103,7 +103,7 @@
           <!-- svelte-ignore a11y-click-events-have-key-events -->
           <!-- svelte-ignore a11y-no-interactive-element-to-noninteractive-role -->
           <tr class="clickable" on:click={() => goToDetail(session)}>
-            <td class="mono">{formatDate(session.ts)}</td>
+            <td class="mono">{formatDateTime(session.ts)}</td>
             <td>{session.tool}</td>
             <td class="mono model">{session.model}</td>
             <td class="mono muted">{formatDuration(session.duration)}</td>

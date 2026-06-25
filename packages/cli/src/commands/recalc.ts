@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import { calculateCostForPrice, inferProvider, normalizeQoderModel, resolveExchangeRate } from '@aiusage/core'
 import { loadConfig } from '../config.js'
-import { resolvePriceFromRegistry } from '../pricing-registry.js'
+import { hasUserPrice, resolvePriceFromRegistry } from '../pricing-registry.js'
 
 export interface RecalcResult {
   updatedCount: number
@@ -26,12 +26,17 @@ export function recalcPricing(db: Database.Database): RecalcResult {
     if (records.length === 0) break
 
     for (const record of records) {
-      if (record.cost_source === 'log') {
+      const model = record.tool === 'qoder' ? normalizeQoderModel(record.model) : record.model
+
+      // Logged costs are treated as authoritative and left untouched — EXCEPT when the
+      // logged cost is non-positive (custom gateways report 0 for models they don't
+      // price) or when the user has explicitly set a manual price for this model. In
+      // both cases the logged value must not block pricing/recalc (issue #13).
+      if (record.cost_source === 'log' && record.cost > 0 && !hasUserPrice(db, model)) {
         skippedCount++
         continue
       }
 
-      const model = record.tool === 'qoder' ? normalizeQoderModel(record.model) : record.model
       const provider = model !== record.model ? inferProvider(model) : record.provider
       const price = resolvePriceFromRegistry(db, model)
       const newCost = price ? calculateCostForPrice(price, {
