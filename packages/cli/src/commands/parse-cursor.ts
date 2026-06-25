@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { readFileSync } from 'node:fs'
 import type { StatsRecord, ToolCallRecord } from '@aiusage/core'
 import { generateRecordId } from '@aiusage/core'
 import type { CursorCursor } from '../watermark.js'
@@ -43,6 +44,58 @@ interface BubbleTokenCount {
 interface BubbleData {
   type: number          // 1 = user, 2 = assistant
   tokenCount?: BubbleTokenCount
+}
+
+// ── Cursor agent-transcript JSONL parsing (fallback for PRIVACY_MODE_NO_STORAGE) ──
+
+interface AgentTranscriptImportOptions {
+  jsonlPath: string
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+}
+
+/**
+ * Parse a Cursor agent-transcript JSONL file.
+ * In privacy mode (v3.8.23+) state.vscdb bubbles have no token data,
+ * but agent-transcript JSONL files contain visible text that we can estimate from.
+ * Only non-[REDACTED] text is counted; token estimation is char_count / CHARS_PER_TOKEN.
+ */
+export function runParseCursorTranscript(options: AgentTranscriptImportOptions): { inputTextChars: number; outputTextChars: number } {
+  const charsPerToken = 3
+  try {
+    const content = readFileSync(options.jsonlPath, 'utf-8')
+    const lines = content.split('\n')
+    let userChars = 0
+    let assistChars = 0
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      let data: any
+      try { data = JSON.parse(line) } catch { continue }
+      const role = data?.role ?? ''
+      const blocks = data?.message?.content ?? []
+      if (!Array.isArray(blocks)) continue
+
+      for (const block of blocks) {
+        if (typeof block !== 'object' || block === null || block.type !== 'text') continue
+        const text: string = block.text ?? ''
+        // Strip [REDACTED] markers and count remaining visible text
+        const clean = text.replace(/\[REDACTED\]/g, '').trim()
+        if (!clean) continue
+        if (role === 'user') userChars += clean.length
+        else if (role === 'assistant') assistChars += clean.length
+      }
+    }
+
+    return {
+      inputTextChars: Math.floor(userChars / charsPerToken),
+      outputTextChars: Math.floor(assistChars / charsPerToken),
+    }
+  } catch {
+    return { inputTextChars: 0, outputTextChars: 0 }
+  }
 }
 
 export function runParseCursor(

@@ -14,6 +14,7 @@ import { runParseOpenCode } from './parse-opencode.js'
 import { runParseHermes } from './parse-hermes.js'
 import { runParseQoder } from './parse-qoder.js'
 import { runParseCursor } from './parse-cursor.js'
+import { runParseCursorTranscript } from './parse-cursor.js'
 import { runParseKilo } from './parse-kilo.js'
 import { runParseKelivo } from './parse-kelivo.js'
 import { runParseGoose } from './parse-goose.js'
@@ -446,6 +447,56 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             parsedCount++
           }
           errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
+          continue
+        }
+
+        // Cursor agent-transcript JSONL (fallback for PRIVACY_MODE_NO_STORAGE)
+        if (tool === 'cursor' && filePath.endsWith('.jsonl') && filePath.includes('agent-transcripts')) {
+          const est = runParseCursorTranscript({
+            jsonlPath: filePath,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+          })
+          if (est.inputTextChars + est.outputTextChars > 0) {
+            const sessionId = filePath.split('/').slice(-2, -1)[0] || 'unknown'
+            const recordTs = stat.mtimeMs
+            const tokenArgs = { inputTokens: est.inputTextChars, outputTokens: est.outputTextChars, cacheReadTokens: 0, cacheWriteTokens: 0, thinkingTokens: 0 }
+            const cost = calculateCost('cursor-composer', tokenArgs, exchangeRate)
+            const recordId = generateRecordId(deviceInstanceId, filePath, recordTs)
+            const record: StatsRecord = {
+              id: recordId,
+              ts: recordTs,
+              ingestedAt: Date.now(),
+              updatedAt: Date.now(),
+              lineOffset: 0,
+              tool: 'cursor',
+              model: 'cursor-composer',
+              provider: 'cursor',
+              inputTokens: est.inputTextChars,
+              outputTokens: est.outputTextChars,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+              thinkingTokens: 0,
+              cost,
+              costSource: cost > 0 ? 'pricing' : 'unknown',
+              sessionId,
+              sourceFile: filePath,
+              device,
+              deviceInstanceId,
+              platform: devicePlatform,
+            }
+            insertRecord(db, record)
+            parsedCount++
+          }
           wm.setEntry(tool, filePath, {
             offset: stat.size,
             size: stat.size,

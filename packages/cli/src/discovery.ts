@@ -766,6 +766,42 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     if (paths.length > 0) results.push({ tool: 'kelivo', paths: unique(paths) })
   }
 
+  // Cursor agent-transcript JSONL files (fallback for privacy mode)
+  const cursorHome = join(ctx.home, '.cursor', 'projects')
+  if (existsSync(cursorHome)) {
+    const transcriptPaths = findCursorTranscriptFiles(cursorHome)
+    if (transcriptPaths.length > 0) {
+      // Merge with existing cursor paths if any, otherwise add new
+      const existing = results.find(r => r.tool === 'cursor')
+      if (existing) {
+        existing.paths = unique([...existing.paths, ...transcriptPaths])
+      } else {
+        results.push({ tool: 'cursor', paths: transcriptPaths })
+      }
+    }
+  }
+
+  return results
+}
+
+function findCursorTranscriptFiles(dir: string): string[] {
+  const results: string[] = []
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const agentDir = join(dir, entry.name, 'agent-transcripts')
+      if (!existsSync(agentDir)) continue
+      try {
+        const sessions = readdirSync(agentDir, { withFileTypes: true })
+        for (const session of sessions) {
+          if (!session.isDirectory()) continue
+          const jsonlPath = join(agentDir, session.name, `${session.name}.jsonl`)
+          if (existsSync(jsonlPath)) results.push(jsonlPath)
+        }
+      } catch {}
+    }
+  } catch {}
   return results
 }
 
