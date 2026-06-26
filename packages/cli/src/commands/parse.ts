@@ -694,9 +694,10 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           }
         }
 
-        // Write cwd for all records from this file that don't have it yet
+        // Write cwd for all records from this file that don't have it yet.
+        // Bump updated_at so a cwd added to already-synced records re-propagates.
         if (fileCwd) {
-          db.prepare(`UPDATE records SET cwd = ? WHERE source_file = ? AND cwd = ''`).run(fileCwd, filePath)
+          db.prepare(`UPDATE records SET cwd = ?, updated_at = ? WHERE source_file = ? AND cwd = ''`).run(fileCwd, Date.now(), filePath)
         }
 
         wm.setEntry(tool, filePath, {
@@ -1073,24 +1074,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   backfillHermesSourceFiles(db)
 
   // Backfill cwd for records parsed before this feature was added.
-  // Reads only the first 2 KB of each file — enough to find the cwd field.
-  const staleFiles = db.prepare(
-    `SELECT DISTINCT source_file FROM records WHERE cwd = '' AND source_file NOT LIKE 'synced/%'`
-  ).all() as { source_file: string }[]
-  for (const { source_file } of staleFiles) {
-    try {
-      const fd = openSync(source_file, 'r')
-      const buf = Buffer.alloc(2048)
-      const n = readSync(fd, buf, 0, 2048, 0)
-      closeSync(fd)
-      const firstLine = buf.subarray(0, n).toString('utf8').split('\n')[0]
-      const data = JSON.parse(firstLine)
-      const cwd = extractCwdFromJson(data)
-      if (cwd) {
-        db.prepare(`UPDATE records SET cwd = ? WHERE source_file = ? AND cwd = ''`).run(cwd, source_file)
-      }
-    } catch {}
-  }
+  backfillCwd(db)
 
   // Backfill legacy tool_calls with name='Skill' to extract the specific skill name.
   // Historical rows were stored before the parser learned to read block.input.skill.
@@ -1106,7 +1090,40 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   return { parsedCount, toolCallCount, errors }
 }
 
-function backfillHermesSourceFiles(db: Database.Database): void {
+/**
+ * Backfill cwd for records parsed before cwd extraction existed.
+ * Reads only the first 2 KB of each source file — enough to find the cwd field.
+ *
+ * Bumps updated_at on every changed record so the enriched cwd propagates to
+ * other devices on the next sync. getUnsyncedRecords selects records where
+ * updated_at > synced_at, and mergeRecords only overwrites a remote record when
+ * the incoming updatedAt is strictly newer — so without this bump, backfilled
+ * cwd never reaches peers and cross-device project stats stay broken (issue #12).
+ */
+export function backfillCwd(db: Database.Database): void {
+  const staleFiles = db.prepare(
+    `SELECT DISTINCT source_file FROM records WHERE cwd = '' AND source_file NOT LIKE 'synced/%'`
+  ).all() as { source_file: string }[]
+  const updateStmt = db.prepare(
+    `UPDATE records SET cwd = ?, updated_at = ? WHERE source_file = ? AND cwd = ''`
+  )
+  for (const { source_file } of staleFiles) {
+    try {
+      const fd = openSync(source_file, 'r')
+      const buf = Buffer.alloc(2048)
+      const n = readSync(fd, buf, 0, 2048, 0)
+      closeSync(fd)
+      const firstLine = buf.subarray(0, n).toString('utf8').split('\n')[0]
+      const data = JSON.parse(firstLine)
+      const cwd = extractCwdFromJson(data)
+      if (cwd) {
+        updateStmt.run(cwd, Date.now(), source_file)
+      }
+    } catch {}
+  }
+}
+
+export function backfillHermesSourceFiles(db: Database.Database): void {
   // Old hermes records used the bare dbPath as source_file.
   // Update them to "dbPath:session:<id>:<title>" for per-session project grouping.
   const rows = db.prepare(`
@@ -1136,13 +1153,15 @@ function backfillHermesSourceFiles(db: Database.Database): void {
     }
   } catch {}
 
-  const updateStmt = db.prepare(`UPDATE records SET source_file = ? WHERE tool = 'hermes' AND session_id = ? AND source_file = ?`)
+  // Bump updated_at so the rewritten source_file propagates cross-device on the
+  // next sync (see backfillCwd for why the bump is required).
+  const updateStmt = db.prepare(`UPDATE records SET source_file = ?, updated_at = ? WHERE tool = 'hermes' AND session_id = ? AND source_file = ?`)
   for (const row of rows) {
     const title = (titleMap.get(row.session_id) || '').replace(/[/\\:]/g, '_').slice(0, 80)
     const newSourceFile = title
       ? `${row.source_file}:session:${row.session_id}:${title}`
       : `${row.source_file}:session:${row.session_id}`
-    updateStmt.run(newSourceFile, row.session_id, row.source_file)
+    updateStmt.run(newSourceFile, Date.now(), row.session_id, row.source_file)
   }
 }
 
