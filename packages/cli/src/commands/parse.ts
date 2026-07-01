@@ -22,6 +22,7 @@ import { runParseZed } from './parse-zed.js'
 import { runParseKiro } from './parse-kiro.js'
 import { runParseZcode } from './parse-zcode.js'
 import { runParseTrae } from './parse-trae.js'
+import { runParseCodeBuddy } from './parse-codebuddy.js'
 import type { ProgressInfo } from '../progress.js'
 
 interface ParseResult {
@@ -1052,6 +1053,33 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
       wm.save()
     }
     onProgress({ phase: 'Parsing SQLite', tool: 'trae', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+  }
+
+  // CodeBuddy IDE: per-message JSON files under CodeBuddyExtension/Data.
+  const codeBuddyIdeDir = getDbPath('codebuddy-ide') ?? ''
+  if ((!filterTool || filterTool === 'codebuddy') && existsSync(codeBuddyIdeDir)) {
+    try {
+      const cbCursor = wm.getCodeBuddyIdeCursor()
+      const result = runParseCodeBuddy({
+        dataDir: codeBuddyIdeDir,
+        device,
+        deviceInstanceId,
+        platform: devicePlatform,
+        now: Date.now(),
+        cursor: cbCursor,
+        exchangeRate,
+      })
+      for (const record of result.records) insertRecord(db, record)
+      parsedCount += result.records.length
+      errors.push(...result.errors)
+      if (result.nextCursor > cbCursor) {
+        wm.setCodeBuddyIdeCursor(result.nextCursor)
+        wm.save()
+      }
+      onProgress({ phase: 'Parsing logs', tool: 'codebuddy', current: 1, total: 1, records: parsedCount, toolCalls: toolCallCount })
+    } catch (e) {
+      errors.push(`${codeBuddyIdeDir}: ${e instanceof Error ? e.message : e}`)
+    }
   }
 
   // Fix historical records that were parsed before init created state.json.
