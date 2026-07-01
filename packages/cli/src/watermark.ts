@@ -55,6 +55,7 @@ export interface WatermarkState {
   zcode?: ZcodeCursor | null
   zcodeTools?: ZcodeToolCursor | null
   trae?: number | null
+  codebuddyIde?: number | null
 }
 
 /** @deprecated Use FileWatermarkData instead */
@@ -110,7 +111,7 @@ export class WatermarkManager {
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
         return { files: { ...defaultFileData(), ...parsed } }
       }
-      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null, zcode: parsed.zcode ?? null, zcodeTools: parsed.zcodeTools ?? null, trae: parsed.trae ?? null }
+      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null, zcode: parsed.zcode ?? null, zcodeTools: parsed.zcodeTools ?? null, trae: parsed.trae ?? null, codebuddyIde: parsed.codebuddyIde ?? null }
     } catch {
       return { files: defaultFileData() }
     }
@@ -220,5 +221,13 @@ export class WatermarkManager {
 
   setTraeLastImported(ts: number): void {
     this.data.trae = ts
+  }
+
+  getCodeBuddyIdeCursor(): number {
+    return this.data.codebuddyIde ?? 0
+  }
+
+  setCodeBuddyIdeCursor(ts: number): void {
+    this.data.codebuddyIde = ts
   }
 }

@@ -352,6 +352,59 @@ function probeCodeBuddy(ctx: ProbeContext): string | null {
   return existsSync(dir) ? dir : null
 }
 
+/** CodeBuddy IDE (Tencent) stores per-message JSON under CodeBuddyExtension/Data. */
+function codeBuddyIdeRoots(ctx: ProbeContext): string[] {
+  const roots: string[] = []
+  if (platform() === 'darwin') {
+    roots.push(join(ctx.home, 'Library', 'Application Support', 'CodeBuddyExtension', 'Data'))
+  } else if (platform() === 'win32') {
+    const appData = ctx.env.APPDATA ?? join(ctx.home, 'AppData', 'Roaming')
+    roots.push(join(appData, 'CodeBuddyExtension', 'Data'))
+  } else {
+    const config = ctx.env.XDG_CONFIG_HOME ?? join(ctx.home, '.config')
+    roots.push(join(config, 'CodeBuddyExtension', 'Data'))
+  }
+  return unique(roots)
+}
+
+function probeCodeBuddyIde(ctx: ProbeContext): string | null {
+  const override = envOverride('codebuddy-ide', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['codebuddy-ide']
+  if (legacy) return legacy
+  for (const root of codeBuddyIdeRoots(ctx)) {
+    if (existsSync(root)) return root
+  }
+  return null
+}
+
+/** Count CodeBuddy IDE conversations that contain at least one message file. */
+function countCodeBuddyIdeConversations(dir: string): number {
+  let count = 0
+  const walk = (root: string, depth: number): void => {
+    if (depth > 12) return
+    let entries
+    try {
+      entries = readdirSync(root, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const full = join(root, entry.name)
+      if (entry.name === 'messages') {
+        try {
+          if (readdirSync(full).some((f) => f.endsWith('.json'))) count++
+        } catch {}
+        continue
+      }
+      walk(full, depth + 1)
+    }
+  }
+  walk(dir, 0)
+  return count
+}
+
 function probeKiro(ctx: ProbeContext): string | null {
   const override = envOverride('kiro', ctx.env)
   if (override) return override
@@ -607,6 +660,7 @@ const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'gemini', sourceKey: 'gemini', label: 'Gemini CLI', probe: probeGemini },
   { tool: 'kimi', sourceKey: 'kimi', label: 'Kimi Code', probe: probeKimi },
   { tool: 'codebuddy', sourceKey: 'codebuddy', label: 'CodeBuddy', probe: probeCodeBuddy },
+  { tool: 'codebuddy', sourceKey: 'codebuddy-ide', label: 'CodeBuddy (IDE)', probe: probeCodeBuddyIde },
   { tool: 'kiro', sourceKey: 'kiro', label: 'Kiro', probe: probeKiro },
   { tool: 'grok', sourceKey: 'grok', label: 'Grok Build', probe: probeGrok },
   { tool: 'antigravity', sourceKey: 'antigravity', label: 'Antigravity', probe: probeAntigravity },
@@ -654,7 +708,9 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
       try {
         const stat = statSync(detectedPath)
         if (stat.isDirectory()) {
-          if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
+          if (entry.sourceKey === 'codebuddy-ide') {
+            fileCount += countCodeBuddyIdeConversations(detectedPath)
+          } else if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
             fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'ui_messages.json').length
           } else if (entry.sourceKey === 'kelivo') {
             fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'chats.json').length
