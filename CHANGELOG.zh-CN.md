@@ -5,13 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [1.5.8] - 2026-07-01
 
 ### 新增
 - **CodeBuddy IDE 支持** — 检测并解析腾讯 CodeBuddy IDE（含 CN 变体）。其逐条消息的 JSON 日志位于 `CodeBuddyExtension/Data/**/CodeBuddyIDE/**/history/<会话>/<对话>/messages/`。原有的 `codebuddy` JSONL 解析器仅覆盖 `~/.codebuddy/projects`，因此 IDE 用量此前无法被检测到。用量数据取自每个对话累计的 `statsSnapshot`（未命中缓存的输入、缓存输入、输出）。归入现有的 **CodeBuddy** 工具，新增 `codebuddy-ide` 数据源；可用 `AIUSAGE_CODEBUDDY_IDE_PATH` 覆盖路径。
 
 ### 修复
 - **CodeBuddy CLI 缓存 token 重复计数** — CLI 同时把用量写在 `message.usage`（字段名是 Anthropic 风格，但语义是 OpenAI 风格——`input_tokens` 已包含缓存 token）和 `providerData.rawUsage` 里。通用解析器按 Anthropic 语义处理，在已含缓存的 `input_tokens` 之上又加了一遍 `cache_read_input_tokens`，导致输入被缓存量虚高（缓存密集的轮次可达约 100 倍）。现在 codebuddy 改为读取 `rawUsage` 中干净的 `prompt_cache_hit/miss` 分解（缺失时回退到 `message.usage` 并减去缓存读取部分）。
+- **回填的 cwd/source_file 现在可跨设备传播** ([#12](https://github.com/juliantanx/aiusage/issues/12)) — 在运行 `aiusage serve` 的设备上，跨设备项目统计会丢失 Codex（及其他依赖 cwd 的）项目：cwd 与 Hermes source_file 的回填虽然补全了本地记录，却没有更新 `updated_at`，而跨设备同步只会重新上传 `updated_at > synced_at` 的记录，因此补全后的字段从未传播到其他设备。现在这些回填会像 `backfillCodexModels` 一样更新 `updated_at`。迁移 v12 会修复已运行过 v1.5.0–v1.5.7 有缺陷回填的既有安装：重新将已补全的记录标记为已变更，强制重新上传一次。
 
 ## [1.5.7] - 2026-06-25
 
@@ -407,6 +408,7 @@
 
 ---
 
+[1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/juliantanx/aiusage/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/juliantanx/aiusage/compare/v1.5.4...v1.5.5

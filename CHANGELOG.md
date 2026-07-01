@@ -5,13 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.8] - 2026-07-01
 
 ### Added
 - **CodeBuddy IDE support** — detect and parse the Tencent CodeBuddy IDE (including the CN variant), whose per-message JSON logs live under `CodeBuddyExtension/Data/**/CodeBuddyIDE/**/history/<session>/<conversation>/messages/`. The existing `codebuddy` JSONL parser only covered `~/.codebuddy/projects`, so IDE usage went undetected. Token usage is read from each conversation's cumulative `statsSnapshot` (cache-miss input, cached input, output). Reported under the existing **CodeBuddy** tool via a new `codebuddy-ide` source; override the path with `AIUSAGE_CODEBUDDY_IDE_PATH`.
 
 ### Fixed
 - **CodeBuddy CLI double-counted cached tokens** — the CLI logs usage under both `message.usage` (Anthropic-shaped field names but OpenAI-style semantics, where `input_tokens` already includes cached tokens) and `providerData.rawUsage`. The generic parser assumed Anthropic semantics and added `cache_read_input_tokens` on top of the cache-inclusive `input_tokens`, inflating input by the cached amount (~100× on cache-heavy turns). CodeBuddy now reads the clean `prompt_cache_hit/miss` decomposition from `rawUsage` (falling back to `message.usage` with cache reads subtracted).
+- **Backfilled cwd/source_file now propagate across devices** ([#12](https://github.com/juliantanx/aiusage/issues/12)) — cross-device project stats lost Codex (and other cwd-dependent) projects on the device running `aiusage serve`: the cwd and Hermes source_file backfills enriched local records but did not bump `updated_at`, so cross-device sync (which only re-uploads records where `updated_at > synced_at`) never propagated the enriched fields. The backfills now bump `updated_at` to match `backfillCodexModels`. Migration v12 repairs existing installs that ran the buggy v1.5.0–v1.5.7 backfill by re-marking enriched records for one re-upload.
 
 ## [1.5.7] - 2026-06-25
 
@@ -407,6 +408,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/juliantanx/aiusage/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/juliantanx/aiusage/compare/v1.5.4...v1.5.5
