@@ -10,6 +10,9 @@
 ### 新增
 - **CodeBuddy IDE 支持** — 检测并解析腾讯 CodeBuddy IDE（含 CN 变体）。其逐条消息的 JSON 日志位于 `CodeBuddyExtension/Data/**/CodeBuddyIDE/**/history/<会话>/<对话>/messages/`。原有的 `codebuddy` JSONL 解析器仅覆盖 `~/.codebuddy/projects`，因此 IDE 用量此前无法被检测到。用量数据取自每个对话累计的 `statsSnapshot`（未命中缓存的输入、缓存输入、输出）。归入现有的 **CodeBuddy** 工具，新增 `codebuddy-ide` 数据源；可用 `AIUSAGE_CODEBUDDY_IDE_PATH` 覆盖路径。
 
+### 修复
+- **CodeBuddy CLI 缓存 token 重复计数** — CLI 同时把用量写在 `message.usage`（字段名是 Anthropic 风格，但语义是 OpenAI 风格——`input_tokens` 已包含缓存 token）和 `providerData.rawUsage` 里。通用解析器按 Anthropic 语义处理，在已含缓存的 `input_tokens` 之上又加了一遍 `cache_read_input_tokens`，导致输入被缓存量虚高（缓存密集的轮次可达约 100 倍）。现在 codebuddy 改为读取 `rawUsage` 中干净的 `prompt_cache_hit/miss` 分解（缺失时回退到 `message.usage` 并减去缓存读取部分）。
+
 ## [1.5.7] - 2026-06-25
 
 ### 新增

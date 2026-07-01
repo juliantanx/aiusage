@@ -30,13 +30,58 @@ function sanitizeModel(value: unknown, fallback: string): string {
   return model || fallback
 }
 
-function usageFromAny(parsed: any): {
+interface Usage {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
   thinkingTokens: number
-} | null {
+}
+
+/**
+ * CodeBuddy CLI logs usage under both `message.usage` (Anthropic-shaped field names
+ * but with OpenAI-style semantics — `input_tokens` INCLUDES cached tokens) and
+ * `providerData.rawUsage` (clean prompt_cache_hit/miss decomposition). The generic
+ * extractor assumes Anthropic semantics (input excludes cache), so it double-counts
+ * the cached tokens. Prefer rawUsage; otherwise subtract cache reads from input.
+ */
+function codeBuddyUsage(parsed: any): Usage | null {
+  const ru = parsed?.providerData?.rawUsage
+  if (ru && typeof ru === 'object') {
+    const hit = num(ru.prompt_cache_hit_tokens ?? ru.prompt_tokens_details?.cached_tokens)
+    const miss = ru.prompt_cache_miss_tokens
+    const prompt = num(ru.prompt_tokens ?? ru.input_tokens)
+    return {
+      inputTokens: miss != null ? num(miss) : Math.max(0, prompt - hit),
+      outputTokens: num(ru.completion_tokens ?? ru.output_tokens),
+      cacheReadTokens: hit,
+      cacheWriteTokens: num(ru.prompt_cache_write_tokens ?? ru.cache_creation_input_tokens),
+      thinkingTokens: num(ru.completion_thinking_tokens ?? ru.completion_tokens_details?.reasoning_tokens),
+    }
+  }
+
+  const mu = parsed?.message?.usage
+  if (mu && typeof mu === 'object') {
+    const cacheRead = num(mu.cache_read_input_tokens ?? mu.prompt_tokens_details?.cached_tokens)
+    const rawInput = num(mu.input_tokens ?? mu.prompt_tokens)
+    return {
+      inputTokens: Math.max(0, rawInput - cacheRead),
+      outputTokens: num(mu.output_tokens ?? mu.completion_tokens),
+      cacheReadTokens: cacheRead,
+      cacheWriteTokens: num(mu.cache_creation_input_tokens ?? mu.cache_write_input_tokens),
+      thinkingTokens: num(mu.thinking_tokens ?? mu.reasoning_tokens),
+    }
+  }
+
+  return null
+}
+
+function usageFromAny(parsed: any, tool?: Tool): Usage | null {
+  if (tool === 'codebuddy') {
+    const cb = codeBuddyUsage(parsed)
+    if (cb) return cb
+  }
+
   const usage =
     parsed?.message?.usage
     ?? parsed?.usage
@@ -144,7 +189,7 @@ export class GenericJsonlParser implements Parser {
     const normalized = parsed?.type === 'context.append_loop_event' && parsed.event ? { ...parsed.event, time: parsed.time } : parsed
     if (!shouldAccept(this.tool, normalized)) return null
 
-    const usage = usageFromAny(normalized)
+    const usage = usageFromAny(normalized, this.tool)
     if (!usage) return null
     const total = usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens + usage.thinkingTokens
     if (total === 0) return null

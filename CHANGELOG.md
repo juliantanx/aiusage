@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **CodeBuddy IDE support** — detect and parse the Tencent CodeBuddy IDE (including the CN variant), whose per-message JSON logs live under `CodeBuddyExtension/Data/**/CodeBuddyIDE/**/history/<session>/<conversation>/messages/`. The existing `codebuddy` JSONL parser only covered `~/.codebuddy/projects`, so IDE usage went undetected. Token usage is read from each conversation's cumulative `statsSnapshot` (cache-miss input, cached input, output). Reported under the existing **CodeBuddy** tool via a new `codebuddy-ide` source; override the path with `AIUSAGE_CODEBUDDY_IDE_PATH`.
 
+### Fixed
+- **CodeBuddy CLI double-counted cached tokens** — the CLI logs usage under both `message.usage` (Anthropic-shaped field names but OpenAI-style semantics, where `input_tokens` already includes cached tokens) and `providerData.rawUsage`. The generic parser assumed Anthropic semantics and added `cache_read_input_tokens` on top of the cache-inclusive `input_tokens`, inflating input by the cached amount (~100× on cache-heavy turns). CodeBuddy now reads the clean `prompt_cache_hit/miss` decomposition from `rawUsage` (falling back to `message.usage` with cache reads subtracted).
+
 ## [1.5.7] - 2026-06-25
 
 ### Added
