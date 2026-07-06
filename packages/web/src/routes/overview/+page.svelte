@@ -28,9 +28,11 @@
   }
 
   onMount(async () => {
-    await refreshData().catch(() => {})
+    // Show existing data first; don't block the page on log parsing (issue #40).
     initialized = true
     await loadData()
+    // Refresh logs in the background, then reload once it completes.
+    refreshData().then(() => loadData()).catch(() => {})
   })
 
   $: $dateRange, $selectedDevice, $selectedTool, loadData()
