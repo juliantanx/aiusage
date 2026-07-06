@@ -97,7 +97,7 @@
       '@type': 'Organization',
       name: 'AIUsage'
     },
-    softwareVersion: '1.5.8',
+    softwareVersion: '1.5.9',
     downloadUrl: 'https://www.npmjs.com/package/@juliantanx/aiusage',
     featureList: zh
       ? 'Token用量追踪,费用估算与分析,模型使用排名,工具调用分析,项目维度统计,配额监控,多设备同步,数据导出'

@@ -5,6 +5,11 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [1.5.9] - 2026-07-06
+
+### 修复
+- **Trae 解析不再阻塞 `serve` 启动和仪表盘** ([#40](https://github.com/juliantanx/aiusage/issues/40)) — Trae 解析器读取会话元数据时,对每个 git tag 都单独 spawn 一次 `git log`(没有 `chain-start` tag 时还会再全量扫一遍做回退)。在大型快照存储上(约 72 个仓库、696 个 tag),单次解析要产生数百个 git 子进程 —— Windows 上约 40 秒 —— 从而阻塞 `/api/refresh`,使仪表盘一直卡在加载状态。现在解析器改为每个仓库只用一次 `git for-each-ref` 取回所有 tag 名和时间戳(约 768 次 → 72 次),首页/概览页也改为先渲染已有数据、再后台触发刷新,首屏不再阻塞在日志解析上。
+
 ## [1.5.8] - 2026-07-01
 
 ### 新增
@@ -408,6 +413,7 @@
 
 ---
 
+[1.5.9]: https://github.com/juliantanx/aiusage/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/juliantanx/aiusage/compare/v1.5.5...v1.5.6

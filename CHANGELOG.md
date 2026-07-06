@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.9] - 2026-07-06
+
+### Fixed
+- **Trae parsing no longer blocks `serve` startup and the dashboard** ([#40](https://github.com/juliantanx/aiusage/issues/40)) — the Trae parser read session metadata by spawning one `git log` per tag (plus a second pass for the no-`chain-start` fallback). On large snapshot stores (~72 repos, ~696 tags) this meant hundreds of git subprocesses per parse — ~40s on Windows — which blocked `/api/refresh` and left the dashboard stuck on the loading state. The parser now reads all tag names and timestamps with a single `git for-each-ref` call per repo (~768 spawns → 72), and the home/overview pages render existing data before triggering a background refresh so first paint is never blocked on log parsing.
+
 ## [1.5.8] - 2026-07-01
 
 ### Added
@@ -408,6 +413,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.9]: https://github.com/juliantanx/aiusage/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/juliantanx/aiusage/compare/v1.5.5...v1.5.6
