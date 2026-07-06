@@ -53,55 +53,47 @@ function parseSessionTags(repoPath: string): SessionTag | null {
     const sessionId = basename(basename(repoPath) === 'v2' ? join(repoPath, '..') : repoPath)
     if (!/^[0-9a-f]{24,}$/.test(sessionId)) return null
 
-    const tagResult = spawnSync('git', ['tag', '-l'], { cwd: repoPath, encoding: 'utf-8', timeout: 5000 })
-    if (tagResult.status !== 0 || !tagResult.stdout?.trim()) return null
-    const tags = tagResult.stdout
+    // Read every tag name together with its commit/creator timestamp in a single
+    // git invocation. The previous implementation spawned one `git log` per tag
+    // (plus a second pass for the fallback), which meant hundreds of git
+    // subprocesses per repo — on Windows this took ~40s for large snapshot repos
+    // and blocked `serve` startup and `/api/refresh` (issue #40).
+    // `%(creatordate:unix)` yields the committer date for lightweight tags and
+    // the tagger date for annotated tags, both in Unix seconds.
+    const result = spawnSync(
+      'git',
+      ['for-each-ref', '--format=%(refname:short)%09%(creatordate:unix)', 'refs/tags'],
+      { cwd: repoPath, encoding: 'utf-8', timeout: 10000 },
+    )
+    if (result.status !== 0 || !result.stdout?.trim()) return null
 
-    const lines = tags.trim().split('\n')
     let chatTurns = 0
     let toolCalls = 0
     let startTs = 0
+    let earliest = Infinity
 
-    for (const tag of lines) {
-      const t = tag.trim()
-      if (!t) continue
+    for (const line of result.stdout.trim().split('\n')) {
+      const tab = line.indexOf('\t')
+      if (tab < 0) continue
+      const name = line.slice(0, tab).trim()
+      if (!name) continue
+      const tagTs = parseInt(line.slice(tab + 1).trim(), 10) * 1000 // Convert to ms
+      if (!Number.isFinite(tagTs) || tagTs <= 0) continue
 
-      // Get commit timestamp for this tag
-      let tagTs = 0
-      try {
-        const logResult = spawnSync('git', ['log', '-1', '--format=%at', t], {
-          cwd: repoPath, encoding: 'utf-8', timeout: 3000,
-        })
-        if (logResult.status !== 0 || !logResult.stdout?.trim()) continue
-        const tsStr = logResult.stdout.trim()
-        tagTs = parseInt(tsStr, 10) * 1000 // Convert to ms
-      } catch { continue }
+      if (tagTs < earliest) earliest = tagTs
 
-      if (t.startsWith('chain-start-')) {
+      if (name.startsWith('chain-start-')) {
         startTs = tagTs
-      } else if (t.startsWith('before-chat-turn-')) {
+      } else if (name.startsWith('before-chat-turn-')) {
         // Count turns by before-chat-turn to avoid double-counting with after-chat-turn
         chatTurns++
-      } else if (t.startsWith('toolcall-')) {
+      } else if (name.startsWith('toolcall-')) {
         toolCalls++
       }
     }
 
     // Fallback: if no chain-start tag, use the earliest tag timestamp
-    if (startTs === 0) {
-      let earliest = Infinity
-      for (const tag of lines) {
-        const t = tag.trim()
-        if (!t) continue
-        const logResult = spawnSync('git', ['log', '-1', '--format=%at', t], {
-          cwd: repoPath, encoding: 'utf-8', timeout: 3000,
-        })
-        if (logResult.status !== 0 || !logResult.stdout?.trim()) continue
-        const ts = parseInt(logResult.stdout.trim(), 10) * 1000
-        if (ts > 0 && ts < earliest) earliest = ts
-      }
-      if (earliest < Infinity) startTs = earliest
-    }
+    if (startTs === 0 && earliest < Infinity) startTs = earliest
 
     if (chatTurns === 0 && toolCalls === 0) return null
     if (startTs === 0) return null

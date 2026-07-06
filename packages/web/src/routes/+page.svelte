@@ -132,9 +132,16 @@
       if (cfg?.refreshInterval) globalRefreshMs = cfg.refreshInterval
     } catch {}
 
-    await triggerRefresh().catch(() => {})
+    // Render whatever is already in the database first so the landing page is
+    // never blocked on log parsing. Trae/large log sources can make /api/refresh
+    // take tens of seconds; awaiting it here left the page stuck loading (issue #40).
     await Promise.all([loadData(), loadQuotaWarnings()])
     startRefreshCycle()
+
+    // Kick off a fresh parse in the background, then quietly update once it lands.
+    triggerRefresh()
+      .then(() => Promise.all([silentRefresh(), loadQuotaWarnings()]))
+      .catch(() => {})
 
     window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
   })
