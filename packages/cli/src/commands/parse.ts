@@ -100,7 +100,7 @@ function extractSessionId(filePath: string, tool: Tool): string {
     return match ? match[1] : filename.replace('.jsonl', '')
   }
   if (tool === 'codefuse') {
-    const filename = filePath.split('/').pop() ?? ''
+    const filename = basename(filePath)
     const snapshotMatch = filename.match(/^ant_cc_(.+)\.json$/)
     if (snapshotMatch) return snapshotMatch[1]
     const rolloutMatch = filename.match(/rollout-(.+)\.jsonl$/)
