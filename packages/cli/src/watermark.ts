@@ -65,6 +65,7 @@ function defaultFileData(): FileWatermarkData {
   return {
     'claude-code': {},
     'codex': {},
+    'codefuse': {},
     'openclaw': {},
     'opencode': {},
     'hermes': {},

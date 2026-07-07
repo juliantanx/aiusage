@@ -58,6 +58,8 @@ const PROVIDER_PREFIXES = [
   'zai-org/',
   'frank/',
   'nvidia/',
+  'glink/',
+  'antchat/',
 ]
 
 /**

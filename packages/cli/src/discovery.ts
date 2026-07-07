@@ -92,6 +92,47 @@ function codexLogDirs(ctx: ProbeContext, sessionsDir: string): string[] {
   return [sessionsDir, join(root, 'archived_sessions')]
 }
 
+function codeFuseLogDirs(ctx: ProbeContext, rootPath: string): string[] {
+  const customPath = envOverride('codefuse', ctx.env) || ctx.legacySources?.['codefuse']
+  const normalized = rootPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  const rootDirs = [
+    join(rootPath, 'projects'),
+    join(rootPath, 'engine', 'cc', 'projects'),
+    join(rootPath, 'engine', 'codex', 'sessions'),
+  ]
+  if (customPath && !normalized.endsWith('/.codefuse') && !rootDirs.some((dir) => existsSync(dir))) {
+    return [rootPath]
+  }
+  return [
+    ...rootDirs,
+  ]
+}
+
+function findCodeFuseLogFiles(ctx: ProbeContext, rootPath: string): string[] {
+  const paths: string[] = []
+  const dirs = codeFuseLogDirs(ctx, rootPath)
+  const normalizedRoot = rootPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue
+    try {
+      const stat = statSync(dir)
+      if (stat.isFile()) {
+        if (extname(dir) === '.jsonl' || (basename(dir).startsWith('ant_cc_') && extname(dir) === '.json')) {
+          paths.push(dir)
+        }
+        continue
+      }
+      paths.push(...findJsonlFiles(dir))
+      const normalizedDir = dir.replace(/\\/g, '/').replace(/\/+$/, '')
+      const isCustomRoot = dirs.length === 1 && normalizedDir === normalizedRoot
+      if (normalizedDir.includes('/engine/cc/projects') || isCustomRoot) {
+        paths.push(...findJsonFiles(dir).filter((p) => basename(p).startsWith('ant_cc_')))
+      }
+    } catch {}
+  }
+  return unique(paths)
+}
+
 function windowsUserHomesFromWsl(): string[] {
   const homes: string[] = []
   if (!existsSync('/mnt')) return homes
@@ -350,6 +391,15 @@ function probeCodeBuddy(ctx: ProbeContext): string | null {
   if (legacy) return legacy
   const dir = join(ctx.env.CODEBUDDY_HOME ?? join(ctx.home, '.codebuddy'), 'projects')
   return existsSync(dir) ? dir : null
+}
+
+function probeCodeFuse(ctx: ProbeContext): string | null {
+  const override = envOverride('codefuse', ctx.env)
+  if (override) return override
+  const legacy = ctx.legacySources?.['codefuse']
+  if (legacy) return legacy
+  const root = ctx.env.CODEFUSE_HOME ?? join(ctx.home, '.codefuse')
+  return existsSync(root) ? root : null
 }
 
 /** CodeBuddy IDE (Tencent) stores per-message JSON under CodeBuddyExtension/Data. */
@@ -647,6 +697,7 @@ interface ToolEntry {
 const TOOL_REGISTRY: readonly ToolEntry[] = [
   { tool: 'claude-code', sourceKey: 'claude-code', label: 'Claude Code', probe: probeClaudeCode },
   { tool: 'codex', sourceKey: 'codex', label: 'Codex', probe: probeCodex },
+  { tool: 'codefuse', sourceKey: 'codefuse', label: 'CodeFuse', probe: probeCodeFuse },
   { tool: 'openclaw', sourceKey: 'openclaw', label: 'OpenClaw', probe: probeOpenClaw },
   { tool: 'opencode', sourceKey: 'opencode', label: 'OpenCode', probe: probeOpenCode },
   { tool: 'hermes', sourceKey: 'hermes', label: 'Hermes', probe: probeHermes },
@@ -702,32 +753,38 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
       ? existingOpenCodeDbs(env).filter((dbPath) => existsSync(dbPath))
       : entry.sourceKey === 'codex'
         ? codexLogDirs(ctx, path)
-        : [path]
+        : entry.sourceKey === 'codefuse'
+          ? codeFuseLogDirs(ctx, path)
+          : [path]
     let fileCount = 0
-    for (const detectedPath of detectedPaths) {
-      try {
-        const stat = statSync(detectedPath)
-        if (stat.isDirectory()) {
-          if (entry.sourceKey === 'codebuddy-ide') {
-            fileCount += countCodeBuddyIdeConversations(detectedPath)
-          } else if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
-            fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'ui_messages.json').length
-          } else if (entry.sourceKey === 'kelivo') {
-            fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'chats.json').length
-              + findZipFiles(detectedPath).length
-          } else if (entry.sourceKey === 'kiro') {
-            fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
-          } else {
-            fileCount += findJsonlFiles(detectedPath).length
+    if (entry.sourceKey === 'codefuse') {
+      fileCount = findCodeFuseLogFiles(ctx, path).length
+    } else {
+      for (const detectedPath of detectedPaths) {
+        try {
+          const stat = statSync(detectedPath)
+          if (stat.isDirectory()) {
+            if (entry.sourceKey === 'codebuddy-ide') {
+              fileCount += countCodeBuddyIdeConversations(detectedPath)
+            } else if (entry.sourceKey === 'roocode' || entry.sourceKey === 'kilocode') {
+              fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'ui_messages.json').length
+            } else if (entry.sourceKey === 'kelivo') {
+              fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'chats.json').length
+                + findZipFiles(detectedPath).length
+            } else if (entry.sourceKey === 'kiro') {
+              fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
+            } else {
+              fileCount += findJsonlFiles(detectedPath).length
+            }
+          } else if (stat.isFile()) {
+            fileCount += 1
           }
-        } else if (stat.isFile()) {
-          fileCount += 1
-        }
-      } catch {}
+        } catch {}
+      }
     }
 
     const status = fileCount > 0 ? 'found' as const : 'empty' as const
-    const visiblePaths = entry.sourceKey === 'codex'
+    const visiblePaths = entry.sourceKey === 'codex' || entry.sourceKey === 'codefuse'
       ? detectedPaths.filter((detectedPath) => existsSync(detectedPath))
       : detectedPaths
     return {
@@ -735,7 +792,7 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
       sourceKey: entry.sourceKey,
       label: entry.label,
       path,
-      paths: visiblePaths.length > 1 || (entry.sourceKey === 'codex' && visiblePaths.length > 0) ? visiblePaths : undefined,
+      paths: visiblePaths.length > 1 || ((entry.sourceKey === 'codex' || entry.sourceKey === 'codefuse') && visiblePaths.length > 0) ? visiblePaths : undefined,
       fileCount,
       status,
     }
@@ -770,6 +827,13 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
         .flatMap((dir) => findJsonlFiles(dir))
     )
     if (paths.length > 0) results.push({ tool: 'codex', paths })
+  }
+
+  // CodeFuse — native logs, embedded CC engine logs, and embedded Codex logs.
+  const codeFusePath = probeCodeFuse(ctx)
+  if (codeFusePath && existsSync(codeFusePath)) {
+    const paths = findCodeFuseLogFiles(ctx, codeFusePath)
+    if (paths.length > 0) results.push({ tool: 'codefuse', paths })
   }
 
   // OpenClaw — scan all agents under agents/*/sessions/

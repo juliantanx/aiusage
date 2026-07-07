@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { basename, join, dirname } from 'node:path'
 import { hostname } from 'node:os'
 import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, generateRecordId, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
@@ -98,6 +98,14 @@ function extractSessionId(filePath: string, tool: Tool): string {
     const filename = filePath.split('/').pop() ?? ''
     const match = filename.match(/_([^_]+)\.jsonl$/)
     return match ? match[1] : filename.replace('.jsonl', '')
+  }
+  if (tool === 'codefuse') {
+    const filename = filePath.split('/').pop() ?? ''
+    const snapshotMatch = filename.match(/^ant_cc_(.+)\.json$/)
+    if (snapshotMatch) return snapshotMatch[1]
+    const rolloutMatch = filename.match(/rollout-(.+)\.jsonl$/)
+    if (rolloutMatch) return rolloutMatch[1]
+    return filename.replace(/\.jsonl$/, '').replace(/\.json$/, '') || 'unknown'
   }
   return 'unknown'
 }
@@ -209,6 +217,119 @@ function parseTimestamp(value: unknown, fallback: number): number {
     if (Number.isFinite(parsed)) return parsed
   }
   return fallback
+}
+
+function normalizeCodeFuseModel(value: unknown): string {
+  let raw: unknown = value
+  if (raw && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>
+    raw = obj.id || obj.display_name || obj.displayName
+  }
+  if (typeof raw !== 'string') return 'unknown'
+  let model = raw.trim()
+  if (!model) return 'unknown'
+  model = model
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\[\d+m\]$/g, '')
+    .trim()
+  const slash = model.lastIndexOf('/')
+  if (slash >= 0) model = model.slice(slash + 1)
+  return model ? model.toLowerCase() : 'unknown'
+}
+
+function codeFuseSnapshotRecordId(deviceInstanceId: string, sessionId: string): string {
+  return generateRecordId(deviceInstanceId, `codefuse:snapshot:${sessionId}`, 0)
+}
+
+function deleteCodeFuseSnapshotFallback(db: Database.Database, deviceInstanceId: string, sessionId: string): void {
+  const recordId = codeFuseSnapshotRecordId(deviceInstanceId, sessionId)
+  db.prepare('DELETE FROM tool_calls WHERE record_id = ?').run(recordId)
+  db.prepare("DELETE FROM records WHERE id = ? AND tool = 'codefuse'").run(recordId)
+}
+
+function parseCodeFuseSnapshotFile(options: {
+  db: Database.Database
+  filePath: string
+  device: string
+  deviceInstanceId: string
+  platform?: string
+  now: number
+  exchangeRate?: number
+}): { records: StatsRecord[]; errors: string[] } {
+  const { db, filePath, device, deviceInstanceId, platform, now, exchangeRate } = options
+  const records: StatsRecord[] = []
+  const errors: string[] = []
+
+  let parsed: any
+  try {
+    parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+  } catch (e) {
+    return { records, errors: [`${filePath}: ${e instanceof Error ? e.message : e}`] }
+  }
+
+  const sessionId = typeof parsed?.session_id === 'string' && parsed.session_id
+    ? parsed.session_id
+    : extractSessionId(filePath, 'codefuse')
+  if (!sessionId || sessionId === 'unknown') return { records, errors }
+
+  const hasJsonlRecord = db.prepare(`
+    SELECT 1 FROM records
+    WHERE tool = 'codefuse' AND session_id = ? AND source_file LIKE '%.jsonl'
+    LIMIT 1
+  `).get(sessionId)
+  if (hasJsonlRecord) {
+    deleteCodeFuseSnapshotFallback(db, deviceInstanceId, sessionId)
+    return { records, errors }
+  }
+
+  const usage = parsed?.last_status_line?.context_window?.current_usage
+  if (!usage || typeof usage !== 'object') return { records, errors }
+
+  const inputTokens = toNumber(usage.input_tokens)
+  const outputTokens = toNumber(usage.output_tokens)
+  const cacheReadTokens = toNumber(usage.cache_read_input_tokens)
+  const cacheWriteTokens = toNumber(usage.cache_creation_input_tokens)
+  const thinkingTokens = toNumber(usage.thinking_tokens)
+  if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens + thinkingTokens === 0) {
+    return { records, errors }
+  }
+
+  const model = normalizeCodeFuseModel(parsed?.model_id ?? parsed?.model_name ?? parsed?.last_status_line?.model)
+  if (model === '<synthetic>') return { records, errors }
+
+  const provider = inferProvider(model)
+  const ts = parseTimestamp(
+    parsed?.last_status_line_time ?? parsed?.last_status_line?.update_time ?? parsed?.current_request_time,
+    now,
+  )
+  const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens }
+  const cost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
+
+  records.push({
+    id: codeFuseSnapshotRecordId(deviceInstanceId, sessionId),
+    ts,
+    ingestedAt: now,
+    updatedAt: now,
+    lineOffset: 0,
+    tool: 'codefuse',
+    model,
+    provider,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    thinkingTokens,
+    cost,
+    costSource: cost > 0 ? 'pricing' : 'unknown',
+    sessionId,
+    sourceFile: filePath,
+    cwd: typeof parsed?.cwd === 'string' ? parsed.cwd : undefined,
+    device,
+    deviceInstanceId,
+    platform,
+  })
+
+  return { records, errors }
 }
 
 function pathIsFile(filePath: string): boolean {
@@ -461,6 +582,31 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           continue
         }
 
+        if (tool === 'codefuse' && basename(filePath).startsWith('ant_cc_') && filePath.endsWith('.json')) {
+          const result = parseCodeFuseSnapshotFile({
+            db,
+            filePath,
+            device,
+            deviceInstanceId,
+            platform: devicePlatform,
+            now: Date.now(),
+            exchangeRate,
+          })
+          for (const record of result.records) {
+            insertRecord(db, record)
+            parsedCount++
+          }
+          errors.push(...result.errors)
+          wm.setEntry(tool, filePath, {
+            offset: stat.size,
+            size: stat.size,
+            mtime: stat.mtimeMs,
+          })
+          wm.save()
+          onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
+          continue
+        }
+
         if (tool === 'kiro' && filePath.endsWith('.json')) {
           const result = parseKiroSessionFile({
             filePath,
@@ -625,12 +771,18 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
         // Extract cwd from the first line (Claude Code: top-level, Codex: payload.cwd)
         let fileCwd: string | undefined
+        let firstData: any
         try {
-          const firstData = JSON.parse(lines[0])
+          firstData = JSON.parse(lines[0])
           fileCwd = extractCwdFromJson(firstData)
         } catch {}
 
-        const sessionId = extractSessionId(filePath, tool)
+        const sessionId = tool === 'codefuse' && typeof firstData?.sessionId === 'string' && firstData.sessionId
+          ? firstData.sessionId
+          : extractSessionId(filePath, tool)
+        if (tool === 'codefuse' && filePath.endsWith('.jsonl')) {
+          deleteCodeFuseSnapshotFallback(db, deviceInstanceId, sessionId)
+        }
 
         for (const line of lines) {
           if (!line.trim()) {

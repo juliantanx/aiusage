@@ -35,6 +35,8 @@ describe('discovery path resolution', () => {
     delete process.env.LOCALAPPDATA
     delete process.env.AIUSAGE_IDE_ROOTS
     delete process.env.AIUSAGE_KELIVO_PATH
+    delete process.env.AIUSAGE_CODEFUSE_PATH
+    delete process.env.CODEFUSE_HOME
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -143,6 +145,67 @@ describe('discovery path resolution', () => {
     expect(codex?.status).toBe('found')
     expect(codex?.fileCount).toBe(1)
     expect(codex?.paths).toEqual([join(home, '.codex', 'archived_sessions')])
+  })
+
+  it('discovers CodeFuse native, CC, embedded Codex, and snapshot fallback files', async () => {
+    const home = makeHome()
+    const nativeDir = join(home, '.codefuse', 'projects', '-workspace')
+    const ccDir = join(home, '.codefuse', 'engine', 'cc', 'projects', '-workspace')
+    const embeddedCodexDir = join(home, '.codefuse', 'engine', 'codex', 'sessions', '2026', '07', '06')
+    mkdirSync(nativeDir, { recursive: true })
+    mkdirSync(ccDir, { recursive: true })
+    mkdirSync(embeddedCodexDir, { recursive: true })
+    const nativeFile = join(nativeDir, 'native-session.jsonl')
+    const ccFile = join(ccDir, 'cc-session.jsonl')
+    const snapshotFile = join(ccDir, 'ant_cc_snapshot-only.json')
+    const ignoredJson = join(ccDir, 'prompt-cc-session.json')
+    const embeddedCodexFile = join(embeddedCodexDir, 'rollout-embedded.jsonl')
+    writeFileSync(nativeFile, '{}\n')
+    writeFileSync(ccFile, '{}\n')
+    writeFileSync(snapshotFile, '{}')
+    writeFileSync(ignoredJson, '{}')
+    writeFileSync(embeddedCodexFile, '{}\n')
+
+    const { discoverLogFiles, discoverTools } = await loadDiscovery({ home, platform: 'linux' })
+    const codefuse = discoverTools().find((tool) => tool.sourceKey === 'codefuse')
+    const logFiles = discoverLogFiles().find((result) => result.tool === 'codefuse')?.paths ?? []
+
+    expect(codefuse?.status).toBe('found')
+    expect(codefuse?.fileCount).toBe(4)
+    expect(codefuse?.paths).toEqual([
+      join(home, '.codefuse', 'projects'),
+      join(home, '.codefuse', 'engine', 'cc', 'projects'),
+      join(home, '.codefuse', 'engine', 'codex', 'sessions'),
+    ])
+    expect(logFiles).toEqual(expect.arrayContaining([
+      nativeFile,
+      ccFile,
+      snapshotFile,
+      embeddedCodexFile,
+    ]))
+    expect(logFiles).not.toContain(ignoredJson)
+  })
+
+  it('supports a custom CodeFuse path that points directly at CC projects', async () => {
+    const home = makeHome()
+    const ccRoot = join(home, 'custom-codefuse-cc')
+    const ccDir = join(ccRoot, '-workspace')
+    mkdirSync(ccDir, { recursive: true })
+    const ccFile = join(ccDir, 'cc-session.jsonl')
+    const snapshotFile = join(ccDir, 'ant_cc_cc-session.json')
+    writeFileSync(ccFile, '{}\n')
+    writeFileSync(snapshotFile, '{}')
+
+    const { discoverLogFiles, discoverTools } = await loadDiscovery({ home, platform: 'linux' })
+    const env = { AIUSAGE_CODEFUSE_PATH: ccRoot }
+    const codefuse = discoverTools(env).find((tool) => tool.sourceKey === 'codefuse')
+    const logFiles = discoverLogFiles(env).find((result) => result.tool === 'codefuse')?.paths ?? []
+
+    expect(codefuse?.status).toBe('found')
+    expect(codefuse?.fileCount).toBe(2)
+    expect(codefuse?.path).toBe(ccRoot)
+    expect(codefuse?.paths).toEqual([ccRoot])
+    expect(logFiles).toEqual(expect.arrayContaining([ccFile, snapshotFile]))
   })
 
   it('lists all detected OpenCode channel databases', async () => {
