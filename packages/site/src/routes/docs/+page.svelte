@@ -323,8 +323,8 @@
       </div>
       <h1 class="hero-title">{zh ? '文档' : 'Documentation'}</h1>
       <p class="hero-sub">{zh
-        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid、ZCode 共 20+ 种 AI 工具的 Token 和费用追踪。'
-        : 'AIUsage is a local-first usage analytics platform for AI tools — tracking tokens, costs, sessions and more across 20+ tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, Droid, and ZCode.'
+        ? 'AIUsage 是一款 AI 工具用量统计平台，支持 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Qoder、Cursor、Copilot、KiloCode、Kelivo、Gemini CLI、Kimi Code、CodeBuddy、Kiro、Grok Build、Antigravity、Roo Code、Zed、Goose、oh-my-pi、pi、Craft、Droid、ZCode、CodeFuse 共 20+ 种 AI 工具的 Token 和费用追踪。'
+        : 'AIUsage is a local-first usage analytics platform for AI tools — tracking tokens, costs, sessions and more across 20+ tools: Claude Code, Codex, OpenClaw, OpenCode, Hermes, Qoder, Cursor, Copilot, KiloCode, Kelivo, Gemini CLI, Kimi Code, CodeBuddy, Kiro, Grok Build, Antigravity, Roo Code, Zed, Goose, oh-my-pi, pi, Craft, Droid, ZCode, and CodeFuse.'
       }</p>
       <div class="hero-meta">
         <span class="meta-tag">{zh ? '开源' : 'Open Source'}</span>
@@ -872,6 +872,7 @@
         <li><strong>Craft</strong> — <code>~/.craft-agent</code></li>
         <li><strong>Droid</strong> — <code>~/.droid/sessions</code></li>
         <li><strong>ZCode</strong> — <code>~/.zcode/cli/db/db.sqlite</code></li>
+        <li><strong>CodeFuse</strong> — <code>~/.codefuse</code> {zh ? '（原生 projects、内嵌 engine/cc/projects 与 engine/codex/sessions 日志，及 ant_cc_*.json 快照）' : '(native projects, embedded engine/cc/projects and engine/codex/sessions logs, plus ant_cc_*.json snapshots)'}</li>
       </ul>
       <Callout type="info">
         {zh
@@ -960,6 +961,7 @@
           ['Goose', '<code>AIUSAGE_GOOSE_PATH</code>'],
           ['ZCode', '<code>AIUSAGE_ZCODE_PATH</code>'],
           ['oh-my-pi / pi / Craft / Droid', '<code>AIUSAGE_OMP_PATH</code> / <code>AIUSAGE_PI_PATH</code> / <code>AIUSAGE_CRAFT_PATH</code> / <code>AIUSAGE_DROID_PATH</code>'],
+          ['CodeFuse', '<code>AIUSAGE_CODEFUSE_PATH</code>'],
         ]}
       />
       <p>{zh ? '跨平台示例：' : 'Cross-platform examples:'}</p>
@@ -973,8 +975,8 @@
       />
       <Callout type="info">
         {zh
-          ? '部分工具也支持它们自己的变量，例如 CLAUDE_CONFIG_DIR、CODEX_HOME、OPENCODE_DB、HERMES_HOME、KILO_DB、GEMINI_HOME、KIRO_HOME、GROK_HOME、GOOSE_PATH_ROOT、OMP_HOME、PI_CODING_AGENT_DIR、CRAFT_CONFIG_DIR 和 ZCODE_HOME。AIUSAGE_*_PATH 始终是 aiusage 侧最直接的覆盖方式。'
-          : 'Some tools also support their own variables, such as CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_DB, HERMES_HOME, KILO_DB, GEMINI_HOME, KIRO_HOME, GROK_HOME, GOOSE_PATH_ROOT, OMP_HOME, PI_CODING_AGENT_DIR, CRAFT_CONFIG_DIR, and ZCODE_HOME. AIUSAGE_*_PATH is the most direct aiusage-side override.'
+          ? '部分工具也支持它们自己的变量，例如 CLAUDE_CONFIG_DIR、CODEX_HOME、OPENCODE_DB、HERMES_HOME、KILO_DB、GEMINI_HOME、KIRO_HOME、GROK_HOME、GOOSE_PATH_ROOT、OMP_HOME、PI_CODING_AGENT_DIR、CRAFT_CONFIG_DIR、ZCODE_HOME 和 CODEFUSE_HOME。AIUSAGE_*_PATH 始终是 aiusage 侧最直接的覆盖方式。'
+          : 'Some tools also support their own variables, such as CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_DB, HERMES_HOME, KILO_DB, GEMINI_HOME, KIRO_HOME, GROK_HOME, GOOSE_PATH_ROOT, OMP_HOME, PI_CODING_AGENT_DIR, CRAFT_CONFIG_DIR, ZCODE_HOME, and CODEFUSE_HOME. AIUSAGE_*_PATH is the most direct aiusage-side override.'
         }
       </Callout>
     </section>
@@ -1399,7 +1401,7 @@ aiusage upload-status
       <DocsTable
         headers={zh ? ['选项', '说明'] : ['Option', 'Description']}
         rows={[
-          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具；支持 claude-code、codex、openclaw、opencode、hermes、qoder、cursor、kilocode、copilot、kelivo、gemini、kimi、codebuddy、kiro、grok、antigravity、roocode、zed、goose、omp、pi、craft、droid' : 'Only parse a specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, kilocode, copilot, kelivo, gemini, kimi, codebuddy, kiro, grok, antigravity, roocode, zed, goose, omp, pi, craft, droid'],
+          ['<code>--tool &lt;tool&gt;</code>', zh ? '只解析指定工具；支持 claude-code、codex、openclaw、opencode、hermes、qoder、cursor、kilocode、copilot、kelivo、gemini、kimi、codebuddy、kiro、grok、antigravity、roocode、zed、goose、omp、pi、craft、droid、codefuse' : 'Only parse a specific tool: claude-code, codex, openclaw, opencode, hermes, qoder, cursor, kilocode, copilot, kelivo, gemini, kimi, codebuddy, kiro, grok, antigravity, roocode, zed, goose, omp, pi, craft, droid, codefuse'],
           ['<code>--no-progress</code>', zh ? '隐藏实时进度输出' : 'Hide real-time progress output'],
         ]}
       />
