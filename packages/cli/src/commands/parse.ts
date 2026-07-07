@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { basename, join, dirname } from 'node:path'
 import { hostname } from 'node:os'
-import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, generateRecordId, type StatsRecord, type Tool } from '@aiusage/core'
+import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, resolvePrice, generateRecordId, normalizeCodeFuseModel, parseTimestamp, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
 import { insertRecord } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
@@ -210,33 +210,6 @@ function normalizeKiroModel(value: unknown): string {
     .replace(/-\d{8}-v\d+(?:-\d+)?$/i, '')
 }
 
-function parseTimestamp(value: unknown, fallback: number): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value < 1e12 ? value * 1000 : value
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = new Date(value).getTime()
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return fallback
-}
-
-function normalizeCodeFuseModel(value: unknown): string {
-  let raw: unknown = value
-  if (raw && typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>
-    raw = obj.id || obj.display_name || obj.displayName
-  }
-  if (typeof raw !== 'string') return 'unknown'
-  let model = raw.trim()
-  if (!model) return 'unknown'
-  model = model
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/\[\d+m\]$/g, '')
-    .trim()
-  const slash = model.lastIndexOf('/')
-  if (slash >= 0) model = model.slice(slash + 1)
-  return model ? model.toLowerCase() : 'unknown'
-}
-
 function codeFuseSnapshotRecordId(deviceInstanceId: string, sessionId: string): string {
   return generateRecordId(deviceInstanceId, `codefuse:snapshot:${sessionId}`, 0)
 }
@@ -303,7 +276,8 @@ function parseCodeFuseSnapshotFile(options: {
     now,
   )
   const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens }
-  const cost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
+  const hasPrice = model !== 'unknown' && resolvePrice(model) != null
+  const cost = hasPrice ? calculateCost(model, tokenArgs, exchangeRate) : 0
 
   records.push({
     id: codeFuseSnapshotRecordId(deviceInstanceId, sessionId),
@@ -320,7 +294,7 @@ function parseCodeFuseSnapshotFile(options: {
     cacheWriteTokens,
     thinkingTokens,
     cost,
-    costSource: cost > 0 ? 'pricing' : 'unknown',
+    costSource: hasPrice ? 'pricing' : 'unknown',
     sessionId,
     sourceFile: filePath,
     cwd: typeof parsed?.cwd === 'string' ? parsed.cwd : undefined,

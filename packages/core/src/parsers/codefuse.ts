@@ -3,6 +3,8 @@ import type { StatsRecord, ToolCallRecord } from '../types.js'
 import { generateRecordId, generateToolCallId, generateOrphanToolCallId } from '../record-id.js'
 import { inferProvider } from '../provider.js'
 import { calculateCost, resolvePrice } from '../pricing.js'
+import { normalizeCodeFuseModel } from '../codefuse-model.js'
+import { parseTimestamp } from '../timestamp.js'
 
 interface PendingToolCall {
   name: string
@@ -20,35 +22,6 @@ interface UsageParts {
 function num(value: unknown): number {
   const n = Number(value)
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
-}
-
-function timestamp(value: unknown, fallback: number): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value < 1e12 ? value * 1000 : value
-  if (typeof value === 'string' && value.trim()) {
-    const asNumber = Number(value)
-    if (Number.isFinite(asNumber)) return asNumber < 1e12 ? asNumber * 1000 : asNumber
-    const parsed = new Date(value).getTime()
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return fallback
-}
-
-function normalizeModel(value: unknown): string {
-  let raw: unknown = value
-  if (raw && typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>
-    raw = obj.id || obj.display_name || obj.displayName
-  }
-  if (typeof raw !== 'string') return 'unknown'
-  let model = raw.trim()
-  if (!model) return 'unknown'
-  model = model
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/\[\d+m\]$/g, '')
-    .trim()
-  const slash = model.lastIndexOf('/')
-  if (slash >= 0) model = model.slice(slash + 1)
-  return model ? model.toLowerCase() : 'unknown'
 }
 
 function totalTokens(usage: UsageParts): number {
@@ -153,7 +126,7 @@ export class CodeFuseParser implements Parser {
       const rawTs = parsed.event_msg?.timestamp ?? parsed.timestamp ?? context.now
       this.pendingToolCalls.push({
         name: payload.name ?? payload.function?.name ?? 'unknown',
-        ts: timestamp(rawTs, context.now),
+        ts: parseTimestamp(rawTs, context.now),
       })
       return null
     }
@@ -168,7 +141,7 @@ export class CodeFuseParser implements Parser {
         parsed,
         context,
         usage: ccUsage,
-        model: normalizeModel(parsed.message?.model),
+        model: normalizeCodeFuseModel(parsed.message?.model),
         rawTs: parsed.message?.timestamp ?? parsed.timestamp,
         idSeed: typeof parsed.uuid === 'string' && parsed.uuid ? `codefuse:${parsed.uuid}` : null,
         sessionId: typeof parsed.sessionId === 'string' && parsed.sessionId ? parsed.sessionId : context.sessionId,
@@ -182,7 +155,7 @@ export class CodeFuseParser implements Parser {
         parsed,
         context,
         usage: nativeUsage,
-        model: normalizeModel(parsed.modelId ?? parsed.model),
+        model: normalizeCodeFuseModel(parsed.modelId ?? parsed.model),
         rawTs: parsed.startTime ?? parsed.timestamp,
         idSeed: typeof parsed.uuid === 'string' && parsed.uuid ? `codefuse:${parsed.uuid}` : null,
         sessionId: typeof parsed.sessionId === 'string' && parsed.sessionId ? parsed.sessionId : context.sessionId,
@@ -217,7 +190,7 @@ export class CodeFuseParser implements Parser {
       parsed,
       context,
       usage,
-      model: normalizeModel(payload.model ?? parsed.model ?? this.currentModel),
+      model: normalizeCodeFuseModel(payload.model ?? parsed.model ?? this.currentModel),
       rawTs: parsed.event_msg?.timestamp ?? parsed.timestamp,
       idSeed: null,
       sessionId: context.sessionId,
@@ -255,7 +228,7 @@ export class CodeFuseParser implements Parser {
     const provider = inferProvider(model)
     const hasPrice = model !== 'unknown' && resolvePrice(model) != null
     const cost = hasPrice ? calculateCost(model, usage, context.exchangeRate) : 0
-    const recordTs = timestamp(options.rawTs, context.now)
+    const recordTs = parseTimestamp(options.rawTs, context.now)
     const recordId = options.idSeed
       ? generateRecordId(context.deviceInstanceId, options.idSeed, 0)
       : generateRecordId(context.deviceInstanceId, context.sourceFile, context.lineOffset)
