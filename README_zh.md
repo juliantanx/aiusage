@@ -189,6 +189,7 @@ pnpm dev
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/zhaolu83949426-hub"><img src="https://avatars.githubusercontent.com/u/260552457?v=4?s=100" width="100px;" alt="zhaolu83949426-hub"/><br /><sub><b>zhaolu83949426-hub</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=zhaolu83949426-hub" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Mnoisec"><img src="https://avatars.githubusercontent.com/u/28181883?v=4?s=100" width="100px;" alt="Mnoisec"/><br /><sub><b>Mnoisec</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=Mnoisec" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/jlxyfll"><img src="https://avatars.githubusercontent.com/u/16436887?v=4?s=100" width="100px;" alt="jlxyfll"/><br /><sub><b>jlxyfll</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=jlxyfll" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Ed-Bg"><img src="https://avatars.githubusercontent.com/u/68063080?v=4?s=100" width="100px;" alt="Harlan Hu"/><br /><sub><b>Harlan Hu</b></sub></a><br /><a href="https://github.com/juliantanx/aiusage/commits?author=Ed-Bg" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>

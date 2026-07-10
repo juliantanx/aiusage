@@ -5,6 +5,11 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [1.5.10] - 2026-07-10
+
+### 新增
+- **CodeFuse 支持** ([#42](https://github.com/juliantanx/aiusage/pull/42) by [@Ed-Bg](https://github.com/Ed-Bg)) — 检测并解析 `~/.codefuse` 下的 [CodeFuse](https://github.com/codefuse-ai) 使用日志，覆盖其多种日志布局（`projects`、含 Claude Code 形态 `ant_cc_*.json` 的 `engine/cc/projects`、以及 `engine/codex/sessions`）。可从 Claude Code、原生和 Codex payload 三种结构中读取 token 用量，并一并提取工具调用。可用 `AIUSAGE_CODEFUSE_PATH` 覆盖路径。
+
 ## [1.5.9] - 2026-07-06
 
 ### 修复
@@ -413,6 +418,7 @@
 
 ---
 
+[1.5.10]: https://github.com/juliantanx/aiusage/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/juliantanx/aiusage/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/juliantanx/aiusage/compare/v1.5.6...v1.5.7
