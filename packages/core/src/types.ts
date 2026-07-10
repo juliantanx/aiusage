@@ -1,6 +1,7 @@
 export const TOOLS = [
   'claude-code',
   'codex',
+  'codefuse',
   'openclaw',
   'opencode',
   'hermes',

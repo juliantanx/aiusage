@@ -2,6 +2,7 @@ import type { Tool, ParseContext, ParseResult } from './types.js'
 import type { Parser } from './parsers/index.js'
 import { ClaudeCodeParser } from './parsers/claude-code.js'
 import { CodexParser } from './parsers/codex.js'
+import { CodeFuseParser } from './parsers/codefuse.js'
 import { OpenClawParser } from './parsers/openclaw.js'
 import { QoderParser } from './parsers/qoder.js'
 import { CopilotParser } from './parsers/copilot.js'
@@ -26,6 +27,7 @@ export class Aggregator {
     this.parsers = new Map([
       ['claude-code', new ClaudeCodeParser()],
       ['codex', new CodexParser()],
+      ['codefuse', new CodeFuseParser()],
       ['openclaw', new OpenClawParser()],
       ['qoder', new QoderParser()],
       ['copilot', new CopilotParser()],
