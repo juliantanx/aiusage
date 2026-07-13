@@ -37,6 +37,7 @@ describe('discovery path resolution', () => {
     delete process.env.AIUSAGE_KELIVO_PATH
     delete process.env.AIUSAGE_CODEFUSE_PATH
     delete process.env.CODEFUSE_HOME
+    delete process.env.GROK_HOME
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -130,6 +131,35 @@ describe('discovery path resolution', () => {
     const { discoverLogFiles } = await loadDiscovery({ home, platform: 'linux' })
 
     expect(discoverLogFiles().find((result) => result.tool === 'codex')?.paths).toEqual([archivedFile])
+  })
+
+  it('discovers only Grok Build updates.jsonl from the Windows default path', async () => {
+    const home = makeHome()
+    const sessionDir = join(home, '.grok', 'sessions', '%43%3A%5Cworkspace', 'session-1')
+    mkdirSync(sessionDir, { recursive: true })
+    const updatesPath = join(sessionDir, 'updates.jsonl')
+    writeFileSync(updatesPath, '{}\n')
+    writeFileSync(join(sessionDir, 'events.jsonl'), '{}\n')
+    writeFileSync(join(sessionDir, 'chat_history.jsonl'), '{}\n')
+
+    const { discoverLogFiles, discoverTools } = await loadDiscovery({ home, platform: 'win32' })
+
+    expect(discoverTools().find((tool) => tool.sourceKey === 'grok')?.status).toBe('found')
+    expect(discoverLogFiles().find((result) => result.tool === 'grok')?.paths).toEqual([updatesPath])
+  })
+
+  it('honors GROK_HOME when discovering Grok Build updates', async () => {
+    const home = makeHome()
+    const grokHome = join(home, 'custom-grok')
+    const sessionDir = join(grokHome, 'sessions', '%2Fworkspace', 'session-2')
+    mkdirSync(sessionDir, { recursive: true })
+    const updatesPath = join(sessionDir, 'updates.jsonl')
+    writeFileSync(updatesPath, '{}\n')
+    process.env.GROK_HOME = grokHome
+
+    const { discoverLogFiles } = await loadDiscovery({ home, platform: 'linux' })
+
+    expect(discoverLogFiles().find((result) => result.tool === 'grok')?.paths).toEqual([updatesPath])
   })
 
   it('counts Codex archived sessions when regular sessions are absent', async () => {

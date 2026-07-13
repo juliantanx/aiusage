@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import type { Tool } from '@aiusage/core'
 
+const CURRENT_GROK_PARSER_VERSION = 1
+
 export interface WatermarkEntry {
   offset: number
   size: number
@@ -45,6 +47,7 @@ export type FileWatermarkData = Record<Tool, Record<string, WatermarkEntry>>
 
 export interface WatermarkState {
   files: FileWatermarkData
+  grokParserVersion?: number
   opencode?: OpenCodeCursor | null
   hermes?: HermesCursor | null
   qoder?: QoderCursor | null
@@ -103,18 +106,40 @@ export class WatermarkManager {
 
   private load(): WatermarkState {
     if (!existsSync(this.path)) {
-      return { files: defaultFileData() }
+      return { files: defaultFileData(), grokParserVersion: CURRENT_GROK_PARSER_VERSION }
     }
     try {
       const content = readFileSync(this.path, 'utf-8')
       const parsed = JSON.parse(content)
+      let state: WatermarkState
       // Handle legacy format (flat Record<Tool, ...> without 'files' key)
       if (parsed && typeof parsed === 'object' && !('files' in parsed)) {
-        return { files: { ...defaultFileData(), ...parsed } }
+        state = { files: { ...defaultFileData(), ...parsed } }
+      } else {
+        state = {
+          files: { ...defaultFileData(), ...(parsed.files ?? {}) },
+          grokParserVersion: parsed.grokParserVersion,
+          opencode: parsed.opencode ?? null,
+          hermes: parsed.hermes ?? null,
+          qoder: parsed.qoder ?? null,
+          cursor: parsed.cursor ?? null,
+          goose: parsed.goose ?? null,
+          zed: parsed.zed ?? null,
+          kiro: parsed.kiro ?? null,
+          zcode: parsed.zcode ?? null,
+          zcodeTools: parsed.zcodeTools ?? null,
+          trae: parsed.trae ?? null,
+          codebuddyIde: parsed.codebuddyIde ?? null,
+        }
       }
-      return { files: { ...defaultFileData(), ...(parsed.files ?? {}) }, opencode: parsed.opencode ?? null, hermes: parsed.hermes ?? null, qoder: parsed.qoder ?? null, cursor: parsed.cursor ?? null, goose: parsed.goose ?? null, zed: parsed.zed ?? null, kiro: parsed.kiro ?? null, zcode: parsed.zcode ?? null, zcodeTools: parsed.zcodeTools ?? null, trae: parsed.trae ?? null, codebuddyIde: parsed.codebuddyIde ?? null }
+
+      if ((state.grokParserVersion ?? 0) < CURRENT_GROK_PARSER_VERSION) {
+        state.files.grok = {}
+        state.grokParserVersion = CURRENT_GROK_PARSER_VERSION
+      }
+      return state
     } catch {
-      return { files: defaultFileData() }
+      return { files: defaultFileData(), grokParserVersion: CURRENT_GROK_PARSER_VERSION }
     }
   }
 
