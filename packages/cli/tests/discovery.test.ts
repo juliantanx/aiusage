@@ -144,7 +144,9 @@ describe('discovery path resolution', () => {
 
     const { discoverLogFiles, discoverTools } = await loadDiscovery({ home, platform: 'win32' })
 
-    expect(discoverTools().find((tool) => tool.sourceKey === 'grok')?.status).toBe('found')
+    const detected = discoverTools().find((tool) => tool.sourceKey === 'grok')
+    expect(detected?.status).toBe('found')
+    expect(detected?.fileCount).toBe(1)
     expect(discoverLogFiles().find((result) => result.tool === 'grok')?.paths).toEqual([updatesPath])
   })
 

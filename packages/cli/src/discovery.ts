@@ -773,6 +773,8 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
                 + findZipFiles(detectedPath).length
             } else if (entry.sourceKey === 'kiro') {
               fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
+            } else if (entry.sourceKey === 'grok') {
+              fileCount += findJsonlFiles(detectedPath).filter((p) => basename(p) === 'updates.jsonl').length
             } else {
               fileCount += findJsonlFiles(detectedPath).length
             }
