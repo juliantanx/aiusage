@@ -5,6 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 并遵循 [语义化版本控制](https://semver.org/lang/zh-CN/)。
 
+## [1.5.11] - 2026-07-16
+
+### 修复
+- **Grok Build 用量解析** ([#45](https://github.com/juliantanx/aiusage/pull/45)) — 新增专用的有状态解析器，处理 Grok Build `updates.jsonl` 日志，将累计 token 计数器转换为每轮正增量，并将发现范围限定为真实用量日志。v1.5.10 跳过的历史日志会自动重放一次，重复或下降的计数器保持幂等，不会重复计量。
+
+---
+
 ## [1.5.10] - 2026-07-10
 
 ### 新增
@@ -418,6 +425,7 @@
 
 ---
 
+[1.5.11]: https://github.com/juliantanx/aiusage/compare/v1.5.10...v1.5.11
 [1.5.10]: https://github.com/juliantanx/aiusage/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/juliantanx/aiusage/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8

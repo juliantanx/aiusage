@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.11] - 2026-07-16
+
+### Fixed
+- **Grok Build usage parsing** ([#45](https://github.com/juliantanx/aiusage/pull/45)) — add a dedicated stateful parser for Grok Build `updates.jsonl` logs, convert cumulative token counters into positive per-turn deltas, and restrict discovery to actual usage logs. Historical logs skipped by v1.5.10 are replayed once, while repeated or decreasing counters remain idempotent and do not double-count usage.
+
+---
+
 ## [1.5.10] - 2026-07-10
 
 ### Added
@@ -418,6 +425,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.11]: https://github.com/juliantanx/aiusage/compare/v1.5.10...v1.5.11
 [1.5.10]: https://github.com/juliantanx/aiusage/compare/v1.5.9...v1.5.10
 [1.5.9]: https://github.com/juliantanx/aiusage/compare/v1.5.8...v1.5.9
 [1.5.8]: https://github.com/juliantanx/aiusage/compare/v1.5.7...v1.5.8
