@@ -51,6 +51,28 @@ describe('Aggregator', () => {
     expect(result).toBeNull()
   })
 
+  it('processes Grok Build updates through the Grok parser', () => {
+    const context = aggregator.createContext({
+      tool: 'grok',
+      sourceFile: '/tmp/project/session-1/updates.jsonl',
+      lineOffset: 0,
+      sessionId: 'session-1',
+      device: 'dev',
+      deviceInstanceId: 'dev-123',
+    })
+    aggregator.parseLine(JSON.stringify({
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        _meta: { totalTokens: 42, agentTimestampMs: 1_700_000_000_000 },
+      },
+    }), context)
+
+    const [result] = aggregator.finalize()
+    expect(result.record?.tool).toBe('grok')
+    expect(result.record?.inputTokens).toBe(42)
+  })
+
   it('finalizes Codex parser and returns orphan tool calls', () => {
     // Simulate Codex function_call without subsequent token_count
     const functionCallLine = '{"event_msg":{"type":"event","payload":{"type":"function_call","function":{"name":"Read"}},"timestamp":1234567890}}'

@@ -7,6 +7,7 @@ import { OpenClawParser } from './parsers/openclaw.js'
 import { QoderParser } from './parsers/qoder.js'
 import { CopilotParser } from './parsers/copilot.js'
 import { GenericJsonlParser } from './parsers/generic-jsonl.js'
+import { GrokParser } from './parsers/grok.js'
 
 export interface CreateContextOptions {
   tool: Tool
@@ -34,6 +35,7 @@ export class Aggregator {
       ['gemini', new GenericJsonlParser('gemini', 'gemini-unknown')],
       ['kimi', new GenericJsonlParser('kimi', 'kimi-for-coding')],
       ['codebuddy', new GenericJsonlParser('codebuddy', 'codebuddy-unknown')],
+      ['grok', new GrokParser()],
       ['antigravity', new GenericJsonlParser('antigravity', 'antigravity-unknown')],
       ['omp', new GenericJsonlParser('omp', 'omp-unknown')],
       ['pi', new GenericJsonlParser('pi', 'pi-unknown')],

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { WatermarkManager } from '../src/watermark.js'
 
 describe('WatermarkManager', () => {
@@ -111,6 +111,35 @@ describe('WatermarkManager', () => {
     wm.save()
     const wm2 = new WatermarkManager(watermarkPath)
     expect(wm2.getEntry('claude-code', '/path/file.jsonl')!.offset).toBe(500)
+  })
+
+  it('clears only stale Grok entries when upgrading the Grok parser', () => {
+    writeFileSync(watermarkPath, JSON.stringify({
+      files: {
+        grok: { '/old/updates.jsonl': { offset: 100, size: 100, mtime: 1 } },
+        'claude-code': { '/claude/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
+      },
+    }), 'utf-8')
+
+    const wm = new WatermarkManager(watermarkPath)
+    expect(wm.getEntry('grok', '/old/updates.jsonl')).toBeNull()
+    expect(wm.getEntry('claude-code', '/claude/session.jsonl')?.offset).toBe(200)
+
+    wm.save()
+    const saved = JSON.parse(readFileSync(watermarkPath, 'utf-8'))
+    expect(saved.grokParserVersion).toBe(1)
+  })
+
+  it('preserves Grok entries written by the current parser version', () => {
+    writeFileSync(watermarkPath, JSON.stringify({
+      files: {
+        grok: { '/current/updates.jsonl': { offset: 300, size: 300, mtime: 3 } },
+      },
+      grokParserVersion: 1,
+    }), 'utf-8')
+
+    const wm = new WatermarkManager(watermarkPath)
+    expect(wm.getEntry('grok', '/current/updates.jsonl')?.offset).toBe(300)
   })
 
   it('returns null when no opencode cursor has been set', () => {

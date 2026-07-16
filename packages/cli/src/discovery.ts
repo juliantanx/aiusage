@@ -773,6 +773,8 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
                 + findZipFiles(detectedPath).length
             } else if (entry.sourceKey === 'kiro') {
               fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
+            } else if (entry.sourceKey === 'grok') {
+              fileCount += findJsonlFiles(detectedPath).filter((p) => basename(p) === 'updates.jsonl').length
             } else {
               fileCount += findJsonlFiles(detectedPath).length
             }
@@ -900,7 +902,7 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
     { tool: 'kiro', path: kiroDevDataDir(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
     { tool: 'kiro', path: probeKiroOverridePath(ctx), filter: (p) => extname(p) === '.jsonl' || extname(p) === '.json' },
     { tool: 'kiro', path: kiroWorkspaceSessionsDir(ctx), filter: (p) => extname(p) === '.json' && basename(p) !== 'sessions.json' },
-    { tool: 'grok', path: probeGrok(ctx), filter: (p) => extname(p) === '.jsonl' },
+    { tool: 'grok', path: probeGrok(ctx), filter: (p) => basename(p) === 'updates.jsonl' },
     { tool: 'antigravity', path: probeAntigravity(ctx) },
     { tool: 'omp', path: probeOmp(ctx) },
     { tool: 'pi', path: probePi(ctx) },
