@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdirSync, rmSync, readFileSync } from 'node:fs'
+import { mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
+vi.mock('../../src/github/credentials.js', () => ({
+  saveGitHubCredentials: vi.fn(() => '11111111-1111-1111-1111-111111111111'),
+  loadGitHubCredentials: vi.fn(),
+}))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual('node:os')
@@ -23,6 +27,7 @@ describe('Init Command', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     rmSync(testDir, { recursive: true, force: true })
   })
 
@@ -60,7 +65,7 @@ describe('Init Command', () => {
     expect(result.message).toContain('GitHub sync configured')
   })
 
-  it('uses a GitHub credentialRef that matches the stored credential key', () => {
+  it('stores new PATs outside config with an explicit authentication method', () => {
     runInit({
       backend: 'github',
       repo: 'user/aiusage-data',
@@ -68,8 +73,20 @@ describe('Init Command', () => {
     })
 
     const config = JSON.parse(readFileSync(configPath, 'utf-8'))
-    expect(config.sync.credentialRef).toBe('github/user/aiusage-data/token')
-    expect(config.credentials['github/user/aiusage-data/token']).toBe('ghp_test123')
+    expect(config.sync.githubAuth).toEqual({ method: 'pat', credentialId: '11111111-1111-1111-1111-111111111111' })
+    expect(JSON.stringify(config)).not.toContain('ghp_test123')
+  })
+
+  it('preserves App authentication after explicit login even with a PAT environment variable', () => {
+    const githubAuth = { method: 'github-app', credentialId: 'id', login: 'owner', clientId: 'Iv1.test', installationId: 1 }
+    writeFileSync(configPath, JSON.stringify({ sync: { backend: 'github', repo: 'owner/data', githubAuth }, syncInterval: 300000, weekStart: 0 }))
+    vi.stubEnv('AIUSAGE_GITHUB_TOKEN', 'ci-pat')
+    runInit({ backend: 'github', repo: 'owner/data', githubAuth: 'github-app' })
+    const config = JSON.parse(readFileSync(configPath, 'utf8'))
+    expect(config.sync.githubAuth).toEqual(githubAuth)
+    expect(config.syncInterval).toBe(300000); expect(config.weekStart).toBe(0)
+    runInit({ backend: 'github', repo: 'owner/data' })
+    expect(JSON.parse(readFileSync(configPath, 'utf8')).sync.githubAuth).toEqual({ method: 'pat' })
   })
 
   it('fails when S3 bucket is missing', () => {

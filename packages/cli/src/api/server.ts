@@ -5,7 +5,11 @@ import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
 import { calculateCostForPrice, removePriceOverride, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
-import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../config.js'
+import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig } from '../config.js'
+import { browserProtocol, isTrustedApiRequest } from './trust.js'
+import { credentialStatus, publicSyncConfig, setSyncCredentials } from './credential-settings.js'
+import { createGitHubDeviceSessions } from '../github/device-sessions.js'
+import { safeGitHubError, validateRepo } from '../github/auth.js'
 import type { Config, SyncConfig } from '../config.js'
 import { setSyncConsent } from '../init.js'
 import { generateConsentFingerprint } from '../sync/consent.js'
@@ -430,7 +434,141 @@ function getDeviceFilter(
   }
 }
 
+type SummaryFilter = { where: string; params: Record<string, unknown> }
+
+interface SummaryTotals {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  thinkingTokens: number
+  totalTokens: number
+  totalCost: number
+  activeDays: number
+  totalSessions: number
+}
+
+const SUMMARY_RANGES = ['day', 'week', 'month', 'last30', 'all']
+
+/**
+ * Aggregate totals (and optionally the per-tool breakdown) for the summary
+ * endpoints. Shared by the authenticated /api/summary route and the public
+ * /api/home-summary route so both report identical numbers.
+ */
+function querySummaryTotals(
+  db: Database.Database,
+  df: DeviceFilter,
+  dr: SummaryFilter,
+  tf: SummaryFilter,
+  includeByTool: boolean,
+): { totals: SummaryTotals; byToolRows: any[] } {
+  let totals: any
+  let byToolRows: any[] = []
+
+  if (df.useUnion) {
+    // All devices: UNION records + synced_records (excluding current device's synced copy)
+    const unionSql = `
+      SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_id
+      FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+      UNION ALL
+      SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_key AS session_id
+      FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
+    `
+    totals = db.prepare(`
+      SELECT
+        COALESCE(SUM(input_tokens), 0) AS inputTokens,
+        COALESCE(SUM(output_tokens), 0) AS outputTokens,
+        COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+        COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+        COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+        COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
+        COALESCE(SUM(cost), 0) AS totalCost,
+        COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
+        COUNT(DISTINCT session_id) AS totalSessions
+      FROM (${unionSql})
+    `).get({ ...dr.params, ...df.params, ...tf.params }) as any
+
+    if (includeByTool) byToolRows = db.prepare(`
+      SELECT tool, SUM(tokens) AS tokens, SUM(cost) AS cost FROM (
+        SELECT tool,
+               SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+               SUM(cost) AS cost
+        FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+        GROUP BY tool
+        UNION ALL
+        SELECT tool,
+               SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+               SUM(cost) AS cost
+        FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
+        GROUP BY tool
+      ) GROUP BY tool ORDER BY cost DESC
+    `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
+  } else if (df.where) {
+    // Specific other device: query synced_records only
+    totals = db.prepare(`
+      SELECT
+        COALESCE(SUM(input_tokens), 0) AS inputTokens,
+        COALESCE(SUM(output_tokens), 0) AS outputTokens,
+        COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+        COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+        COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+        COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
+        COALESCE(SUM(cost), 0) AS totalCost,
+        COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
+        COUNT(DISTINCT session_key) AS totalSessions
+      FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
+    `).get({ ...dr.params, ...df.params, ...tf.params }) as any
+
+    if (includeByTool) byToolRows = db.prepare(`
+      SELECT tool,
+             SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+             SUM(cost) AS cost
+      FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
+      GROUP BY tool ORDER BY cost DESC
+    `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
+  } else {
+    // Current device or legacy: query records only
+    totals = db.prepare(`
+      SELECT
+        COALESCE(SUM(input_tokens), 0) AS inputTokens,
+        COALESCE(SUM(output_tokens), 0) AS outputTokens,
+        COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
+        COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
+        COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
+        COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
+        COALESCE(SUM(cost), 0) AS totalCost,
+        COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
+        COUNT(DISTINCT session_id) AS totalSessions
+      FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+    `).get({ ...dr.params, ...tf.params }) as any
+
+    if (includeByTool) byToolRows = db.prepare(`
+      SELECT tool,
+             SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
+             SUM(cost) AS cost
+      FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
+      GROUP BY tool ORDER BY cost DESC
+    `).all({ ...dr.params, ...tf.params }) as any[]
+  }
+  return { totals, byToolRows }
+}
+
+function summaryTotalsPayload(totals: SummaryTotals): SummaryTotals {
+  return {
+    inputTokens: totals.inputTokens,
+    outputTokens: totals.outputTokens,
+    cacheReadTokens: totals.cacheReadTokens,
+    cacheWriteTokens: totals.cacheWriteTokens,
+    thinkingTokens: totals.thinkingTokens,
+    totalTokens: totals.totalTokens,
+    totalCost: totals.totalCost,
+    activeDays: totals.activeDays,
+    totalSessions: totals.totalSessions,
+  }
+}
+
 export function createApiServer(db: Database.Database, options?: ApiServerOptions): http.Server {
+  const githubDeviceAction = createGitHubDeviceSessions()
   const cfg = loadConfig()
   let weekStart: 0 | 1 = (cfg?.weekStart ?? 1) as 0 | 1
   const dashboardPassword = getDashboardPassword()
@@ -528,11 +666,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
   }
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
-
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    if (!isTrustedApiRequest(req, dashboardPassword)) {
+      json(res, { error: { code: 'FORBIDDEN', message: 'Untrusted API origin or host' } }, 403)
+      return
+    }
+    const url = new URL(req.url ?? '/', 'http://localhost')
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204)
@@ -557,7 +697,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         }
 
         if (dashboardPassword) {
-          res.setHeader('Set-Cookie', buildAuthCookie(dashboardPassword))
+          res.setHeader('Set-Cookie', buildAuthCookie(dashboardPassword, browserProtocol(req) === 'https:'))
         }
         json(res, { ok: true })
       } catch {
@@ -567,18 +707,18 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     }
 
     if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
-      res.setHeader('Set-Cookie', buildClearAuthCookie())
+      res.setHeader('Set-Cookie', buildClearAuthCookie(browserProtocol(req) === 'https:'))
       json(res, { ok: true })
-      return
-    }
-
-    if (url.pathname === '/api/cli/sync/status' && req.method === 'GET') {
-      await proxyCloudSyncStatus(res)
       return
     }
 
     if (dashboardPassword && shouldProtectApiPath(url.pathname) && !isAuthenticated(dashboardPassword, req.headers.cookie)) {
       json(res, { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, 401)
+      return
+    }
+
+    if (url.pathname === '/api/cli/sync/status' && req.method === 'GET') {
+      await proxyCloudSyncStatus(res)
       return
     }
 
@@ -594,9 +734,26 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
     }
 
     try {
+      // ── /api/home-summary ─────────────────────────────────────────
+      // Deliberately public when a dashboard password is set (see auth.ts).
+      // Only aggregate totals across all devices and tools are returned; the
+      // device/tool filters and per-tool, tool-call, and MCP breakdowns are
+      // reserved for the authenticated /api/summary route.
+      if (url.pathname === '/api/home-summary') {
+        if (range && !SUMMARY_RANGES.includes(range)) {
+          json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid range' } }, 400)
+          return
+        }
+        const df = getDeviceFilter(null, options?.currentDeviceInstanceId)
+        const dr = getDateRangeFilter(range, null, null, '', weekStart)
+        const { totals } = querySummaryTotals(db, df, dr, getToolFilter(null), false)
+        json(res, summaryTotalsPayload(totals))
+        return
+      }
+
       // ── /api/summary ──────────────────────────────────────────────
       if (url.pathname === '/api/summary') {
-        if (range && !['day', 'week', 'month', 'last30', 'all'].includes(range)) {
+        if (range && !SUMMARY_RANGES.includes(range)) {
           json(res, { error: { code: 'INVALID_PARAM', message: 'Invalid range' } }, 400)
           return
         }
@@ -606,94 +763,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         const tool = url.searchParams.get('tool')
         const tf = getToolFilter(tool)
 
-        let totals: any
-        let byToolRows: any[]
-
-        if (df.useUnion) {
-          // All devices: UNION records + synced_records (excluding current device's synced copy)
-          const unionSql = `
-            SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_id
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-            UNION ALL
-            SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, ts, session_key AS session_id
-            FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
-          `
-          totals = db.prepare(`
-            SELECT
-              COALESCE(SUM(input_tokens), 0) AS inputTokens,
-              COALESCE(SUM(output_tokens), 0) AS outputTokens,
-              COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
-              COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
-              COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
-              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
-              COALESCE(SUM(cost), 0) AS totalCost,
-              COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
-              COUNT(DISTINCT session_id) AS totalSessions
-            FROM (${unionSql})
-          `).get({ ...dr.params, ...df.params, ...tf.params }) as any
-
-          byToolRows = db.prepare(`
-            SELECT tool, SUM(tokens) AS tokens, SUM(cost) AS cost FROM (
-              SELECT tool,
-                     SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
-                     SUM(cost) AS cost
-              FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-              GROUP BY tool
-              UNION ALL
-              SELECT tool,
-                     SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
-                     SUM(cost) AS cost
-              FROM synced_records WHERE device_instance_id != @currentDeviceId ${dr.where} ${tf.where}
-              GROUP BY tool
-            ) GROUP BY tool ORDER BY cost DESC
-          `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
-        } else if (df.where) {
-          // Specific other device: query synced_records only
-          totals = db.prepare(`
-            SELECT
-              COALESCE(SUM(input_tokens), 0) AS inputTokens,
-              COALESCE(SUM(output_tokens), 0) AS outputTokens,
-              COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
-              COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
-              COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
-              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
-              COALESCE(SUM(cost), 0) AS totalCost,
-              COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
-              COUNT(DISTINCT session_key) AS totalSessions
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
-          `).get({ ...dr.params, ...df.params, ...tf.params }) as any
-
-          byToolRows = db.prepare(`
-            SELECT tool,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
-                   SUM(cost) AS cost
-            FROM synced_records WHERE 1=1 ${df.where} ${dr.where} ${tf.where}
-            GROUP BY tool ORDER BY cost DESC
-          `).all({ ...dr.params, ...df.params, ...tf.params }) as any[]
-        } else {
-          // Current device or legacy: query records only
-          totals = db.prepare(`
-            SELECT
-              COALESCE(SUM(input_tokens), 0) AS inputTokens,
-              COALESCE(SUM(output_tokens), 0) AS outputTokens,
-              COALESCE(SUM(cache_read_tokens), 0) AS cacheReadTokens,
-              COALESCE(SUM(cache_write_tokens), 0) AS cacheWriteTokens,
-              COALESCE(SUM(thinking_tokens), 0) AS thinkingTokens,
-              COALESCE(SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens), 0) AS totalTokens,
-              COALESCE(SUM(cost), 0) AS totalCost,
-              COUNT(DISTINCT strftime('%Y-%m-%d', ts/1000, 'unixepoch')) AS activeDays,
-              COUNT(DISTINCT session_id) AS totalSessions
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-          `).get({ ...dr.params, ...tf.params }) as any
-
-          byToolRows = db.prepare(`
-            SELECT tool,
-                   SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens + thinking_tokens) AS tokens,
-                   SUM(cost) AS cost
-            FROM records WHERE 1=1 ${dr.where} ${df.localOnly ? LOCAL_ONLY_FILTER : ''} ${tf.where}
-            GROUP BY tool ORDER BY cost DESC
-          `).all({ ...dr.params, ...tf.params }) as any[]
-        }
+        const { totals, byToolRows } = querySummaryTotals(db, df, dr, tf, true)
 
         const byTool: Record<string, { tokens: number; cost: number }> = {}
         for (const row of byToolRows) {
@@ -746,15 +816,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           .map(([server, count]) => ({ server, count }))
 
         json(res, {
-          inputTokens: totals.inputTokens,
-          outputTokens: totals.outputTokens,
-          cacheReadTokens: totals.cacheReadTokens,
-          cacheWriteTokens: totals.cacheWriteTokens,
-          thinkingTokens: totals.thinkingTokens,
-          totalTokens: totals.totalTokens,
-          totalCost: totals.totalCost,
-          activeDays: totals.activeDays,
-          totalSessions: totals.totalSessions,
+          ...summaryTotalsPayload(totals),
           byTool,
           topToolCalls,
           topMcpServers,
@@ -1490,6 +1552,11 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
       // ── /api/refresh ────────────────────────────────────────────────
       if (url.pathname === '/api/refresh') {
+        if (req.method !== 'POST') {
+          res.setHeader('Allow', 'POST')
+          json(res, { error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST to refresh' } }, 405)
+          return
+        }
         if (!options?.onRefresh) {
           json(res, { error: { code: 'NOT_AVAILABLE', message: 'Refresh not available' } }, 501)
           return
@@ -1757,21 +1824,30 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         return
       }
 
-      // ── /api/config/credential ──────────────────────────────────────
-      if (url.pathname === '/api/config/credential' && req.method === 'GET') {
-        const ref = url.searchParams.get('ref')?.trim()
-        if (!ref) {
-          json(res, { error: { code: 'MISSING_CREDENTIAL_REF', message: 'credential ref is required' } }, 400)
-          return
+      // Only configured state for a sync target is exposed, never keys or values.
+      if (url.pathname.startsWith('/api/github/') && req.method === 'POST') {
+        try {
+          let body = ''
+          for await (const chunk of req) {
+            body += chunk
+            if (body.length > 4096) throw new Error('Body too large')
+          }
+          const action = url.pathname.slice('/api/github/'.length)
+          const result = await githubDeviceAction(action, JSON.parse(body || '{}'))
+          if (action === 'connect' && result.ok) options?.onConfigUpdated?.()
+          json(res, result)
+        } catch (error) {
+          json(res, { error: { code: 'GITHUB_AUTH_FAILED', message: safeGitHubError(error) } }, 400)
         }
+        return
+      }
 
-        const value = loadCredential(ref)
-        if (!value) {
-          json(res, { error: { code: 'CREDENTIAL_NOT_FOUND', message: 'Credential not found' } }, 404)
-          return
-        }
-
-        json(res, { value })
+      if (url.pathname === '/api/config/credentials/status' && req.method === 'GET') {
+        const backend = url.searchParams.get('backend')
+        const sync = backend === 'github' || backend === 's3'
+          ? { backend, repo: url.searchParams.get('repo') ?? '', bucket: url.searchParams.get('bucket') ?? '' } as SyncConfig
+          : undefined
+        json(res, sync ? credentialStatus(loadConfig() ?? {}, sync) : {})
         return
       }
 
@@ -1788,14 +1864,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             retentionDays: rest.retentionDays ?? null,
             leaderboardAutoUpload: rest.leaderboardAutoUpload ?? false,
             leaderboardUploadInterval: rest.leaderboardUploadInterval ?? null,
-            sync: rest.sync ?? null,
+            sync: publicSyncConfig(rest.sync),
             syncInterval: rest.syncInterval ?? null,
             loggedIn: hasCredentials(),
             displayCurrency: rest.displayCurrency ?? 'USD',
             exchangeRate: rest.exchangeRate ?? null,
             exchangeRateCache: rest.exchangeRateCache ?? null,
             siteUrl: getSiteUrl(),
-            credentialKeys: credentials ? Object.keys(credentials) : [],
+            credentialStatus: credentialStatus(currentCfg),
             hostname: hostname(),
             platform: osPlatform,
           })
@@ -1889,6 +1965,12 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
                 for (const f of ['repo', 'bucket', 'prefix', 'endpoint', 'region', 'credentialRef'] as const) {
                   if (syncUpdate[f] != null && syncUpdate[f] !== '') (newSync as any)[f] = String(syncUpdate[f])
                 }
+                if (newSync.repo !== existing.sync?.repo) {
+                  delete newSync.githubAuth
+                  delete newSync.branch
+                  delete newSync.credentialRef
+                }
+                if (newSync.backend === 'github' && newSync.repo) validateRepo(newSync.repo)
                 if (newSync.backend === 'github' && !newSync.repo) {
                   json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.repo is required for GitHub sync' } }, 400)
                   return
@@ -1911,6 +1993,10 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
               }
               if (Object.keys(c).length) existing.credentials = c
               else delete existing.credentials
+            }
+
+            if (update.syncCredentials && typeof update.syncCredentials === 'object') {
+              setSyncCredentials(existing, update.syncCredentials as Record<string, unknown>)
             }
 
             saveConfig(existing)

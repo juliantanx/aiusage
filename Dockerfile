@@ -26,4 +26,4 @@ RUN pnpm --filter @aiusage/core build && pnpm --filter @aiusage/web build && pnp
 VOLUME /root/.aiusage
 EXPOSE 3847
 
-CMD ["node", "packages/cli/dist/index.js", "serve", "--port", "3847"]
+CMD ["node", "packages/cli/dist/index.js", "serve", "--host", "0.0.0.0", "--port", "3847"]

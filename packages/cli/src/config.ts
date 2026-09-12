@@ -21,6 +21,10 @@ export interface SyncConfig {
   endpoint?: string
   region?: string
   credentialRef?: string
+  /** Missing means legacy PAT authentication. Secrets live outside this config. */
+  githubAuth?: { method: 'github-app'; credentialId: string; login: string; installationId: number; clientId: string }
+    | { method: 'pat'; credentialId?: string }
+  branch?: string
 }
 
 export interface Config {

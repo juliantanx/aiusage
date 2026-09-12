@@ -45,7 +45,7 @@ npm install -g @juliantanx/aiusage
 aiusage serve
 ```
 
-Open `http://localhost:3847` to use the dashboard. `serve` parses once on startup and then serves the local web UI.
+Open `http://127.0.0.1:3847` to use the dashboard. `serve` parses once on startup and then serves the local web UI.
 
 Prefer pnpm:
 
@@ -58,11 +58,12 @@ Use Docker:
 ```bash
 docker run -d \
   -p 3847:3847 \
+  -e AIUSAGE_DASHBOARD_PASSWORD=change-me \
   -v ~/.aiusage:/root/.aiusage \
   juliantanx/aiusage
 ```
 
-Docker persists AIUsage data with the `~/.aiusage` mount. To parse AI tool logs from the host, also mount each source log directory and configure the matching `AIUSAGE_*_PATH` variable. See the [Docker docs](https://aiusage.jtanx.com/docs#docker).
+The container binds to `0.0.0.0` so it is reachable from outside Docker, and startup is refused unless `AIUSAGE_DASHBOARD_PASSWORD` is set to a non-empty value; replace `change-me` with your own password. Docker persists AIUsage data with the `~/.aiusage` mount. To parse AI tool logs from the host, also mount each source log directory and configure the matching `AIUSAGE_*_PATH` variable. See the [Docker docs](https://aiusage.jtanx.com/docs#docker).
 
 ## Common Commands
 
@@ -97,13 +98,17 @@ Default paths and environment variable overrides are documented in [Data Sources
 
 ## Dashboard Password
 
-The local dashboard is open on localhost by default. Set `AIUSAGE_DASHBOARD_PASSWORD` to protect dashboard APIs.
+The dashboard binds to `127.0.0.1` by default. Use `aiusage serve --host ::1` for IPv6 loopback. Local access can remain passwordless; set `AIUSAGE_DASHBOARD_PASSWORD` to require authentication for detailed APIs, including the detailed summary, quotas, and settings. Only the aggregate totals shown on the home page stay public, through the minimal `/api/home-summary` endpoint.
 
 | Shell | Command |
 |---|---|
 | macOS / Linux | `AIUSAGE_DASHBOARD_PASSWORD="change-me" aiusage serve` |
 | Windows PowerShell | `$env:AIUSAGE_DASHBOARD_PASSWORD="change-me"; aiusage serve` |
 | Windows CMD | `set AIUSAGE_DASHBOARD_PASSWORD=change-me && aiusage serve` |
+
+To allow network access, explicitly use `aiusage serve --host 0.0.0.0` (or `--host ::` for IPv6) and set a non-empty `AIUSAGE_DASHBOARD_PASSWORD`; startup is refused without it. The Docker image uses this explicit network binding, so the password is mandatory there. For remote access, use HTTPS through a trusted reverse proxy that preserves the browser-facing Host header and replaces `X-Forwarded-Proto` with the browser-facing scheme.
+
+The API accepts same-origin browser requests only; cross-origin integrations are no longer supported. Native local clients can omit Origin. Credential settings show configured state and accept replacements; existing secret values and credential references are never returned. Blank credential fields keep the saved value. See [local API security and compatibility](docs/dashboard-security.md).
 
 For PM2 background services, pass the same variable when starting `aiusage pm2-start`, and use `pm2 restart aiusage-server --update-env` after changing it. Details: [Dashboard Password](https://aiusage.jtanx.com/docs#dashboard-password) and [PM2](https://aiusage.jtanx.com/docs#pm2).
 
@@ -125,6 +130,7 @@ Security issues should be reported privately when possible. See [SECURITY.md](./
 Sync and leaderboard are independent optional features.
 
 - **Sync** keeps your own devices aligned through GitHub, S3, R2, or MinIO. Configure it with `aiusage init`, then run `aiusage sync`.
+  GitHub sync prefers `aiusage github login --repo OWNER/REPO` or **Connect GitHub** in local settings, using a least-privilege GitHub App without an AIUsage account. Fine-grained PATs remain an advanced fallback. See [GitHub App setup and migration](docs/github-sync.md).
 - If versions up to 1.5.13 caused duplicate cross-device records, use `aiusage sync --repair` to inspect them before applying cleanup. See the [sync repair guide](./docs/sync-repair.md).
 - **Leaderboard** is public ranking for users who explicitly upload aggregate totals. Authorize a device with `aiusage login`, then run `aiusage upload`.
 - Anonymous mode is available in [site settings](https://aiusage.jtanx.com/settings) for leaderboard participation.

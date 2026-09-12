@@ -45,7 +45,7 @@ npm install -g @juliantanx/aiusage
 aiusage serve
 ```
 
-打开 `http://localhost:3847` 即可使用仪表盘。`serve` 会在启动时解析一次本地日志，然后启动本地 Web UI。
+打开 `http://127.0.0.1:3847` 即可使用仪表盘。`serve` 会在启动时解析一次本地日志，然后启动本地 Web UI。
 
 使用 pnpm：
 
@@ -58,11 +58,12 @@ pnpm add -g @juliantanx/aiusage
 ```bash
 docker run -d \
   -p 3847:3847 \
+  -e AIUSAGE_DASHBOARD_PASSWORD=change-me \
   -v ~/.aiusage:/root/.aiusage \
   juliantanx/aiusage
 ```
 
-Docker 示例中的 `~/.aiusage` 挂载只会持久化 AIUsage 自己的数据。若要解析宿主机上的 AI 工具日志，还需要额外挂载对应日志目录，并配置相应的 `AIUSAGE_*_PATH`。详见 [Docker 文档](https://aiusage.jtanx.com/docs#docker)。
+容器内的仪表盘监听 `0.0.0.0`，以便从 Docker 外部访问，因此必须设置非空的 `AIUSAGE_DASHBOARD_PASSWORD`，否则启动会被拒绝；请将 `change-me` 换成你自己的密码。Docker 示例中的 `~/.aiusage` 挂载只会持久化 AIUsage 自己的数据。若要解析宿主机上的 AI 工具日志，还需要额外挂载对应日志目录，并配置相应的 `AIUSAGE_*_PATH`。详见 [Docker 文档](https://aiusage.jtanx.com/docs#docker)。
 
 ## 常用命令
 
@@ -97,13 +98,17 @@ Docker 示例中的 `~/.aiusage` 挂载只会持久化 AIUsage 自己的数据�
 
 ## 仪表盘密码
 
-本地仪表盘默认在 localhost 上开放。设置 `AIUSAGE_DASHBOARD_PASSWORD` 后，可以保护仪表盘 API。
+仪表盘默认只监听 `127.0.0.1`。IPv6 回环地址可使用 `aiusage serve --host ::1`。本地访问可以不设置密码；设置 `AIUSAGE_DASHBOARD_PASSWORD` 后，详细汇总、配额、设置等详细 API 均需要登录；只有首页展示的合计数据通过精简的 `/api/home-summary` 接口保持公开。
 
 | Shell | 命令 |
 |---|---|
 | macOS / Linux | `AIUSAGE_DASHBOARD_PASSWORD="change-me" aiusage serve` |
 | Windows PowerShell | `$env:AIUSAGE_DASHBOARD_PASSWORD="change-me"; aiusage serve` |
 | Windows CMD | `set AIUSAGE_DASHBOARD_PASSWORD=change-me && aiusage serve` |
+
+如需网络访问，请显式使用 `aiusage serve --host 0.0.0.0`（IPv6 使用 `--host ::`），并设置非空 `AIUSAGE_DASHBOARD_PASSWORD`，否则启动会被拒绝。Docker 镜像同样使用显式网络监听，因此密码是必需的。远程访问建议使用可信的 HTTPS 反向代理；代理必须保留浏览器侧的 Host 请求头，并将 `X-Forwarded-Proto` 覆盖为浏览器侧协议。
+
+API 仅接受同源浏览器请求，不再支持跨源集成。本地非浏览器客户端可以省略 Origin。凭据设置只显示是否已配置并允许替换，不返回已有密钥或凭据引用；输入留空会保留原值。详见[本地 API 安全与兼容性说明](docs/dashboard-security.md)。
 
 PM2 后台运行时，也可以在启动 `aiusage pm2-start` 时传入同名变量；修改密码后使用 `pm2 restart aiusage-server --update-env` 更新环境变量。详见 [仪表盘密码](https://aiusage.jtanx.com/docs#dashboard-password) 和 [PM2](https://aiusage.jtanx.com/docs#pm2)。
 
@@ -125,6 +130,7 @@ AIUsage 采用本地优先设计。
 同步和排行榜是两个互相独立的可选功能。
 
 - **同步** 用于在自己的多台设备之间保持数据一致，支持 GitHub、S3、R2 或 MinIO。使用 `aiusage init` 配置，再运行 `aiusage sync`。
+  GitHub 同步推荐使用 `aiusage github login --repo OWNER/REPO` 或本地设置中的 **连接 GitHub**，通过最小权限 GitHub App 授权，无需 AIUsage 账号。细粒度 PAT 仍作为高级备用方案。详见 [GitHub App 配置与迁移说明](docs/github-sync.md)。
 - 如果 1.5.13 及更早版本产生了跨设备重复记录，可先用 `aiusage sync --repair` 检查，再决定是否执行清理。详见[同步修复指南](./docs/sync-repair.md)。
 - **排行榜** 面向明确选择分享聚合数据的用户。先用 `aiusage login` 授权设备，再运行 `aiusage upload`。
 - 参与排行榜时，可在 [站点设置](https://aiusage.jtanx.com/settings) 中开启匿名模式。

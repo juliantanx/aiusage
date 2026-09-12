@@ -373,9 +373,9 @@
       <CodeBlock lang="Terminal" copyText="aiusage serve">
         <span slot="lines"><span>1</span><span>2</span></span>
         <span class="tk-kw">aiusage</span> serve
-<span class="tk-cmt"># Listens on http://localhost:3847 by default</span>
+<span class="tk-cmt"># Listens on http://127.0.0.1:3847 by default</span>
       </CodeBlock>
-      <p>{zh ? '浏览器打开 http://localhost:3847 即可查看仪表盘。' : 'Open http://localhost:3847 in your browser to view the dashboard.'}</p>
+      <p>{zh ? '浏览器打开 http://127.0.0.1:3847 即可查看仪表盘。' : 'Open http://127.0.0.1:3847 in your browser to view the dashboard.'}</p>
       <Callout type="info">
         {zh
           ? 'serve 启动时会自动解析一次日志。之后首页会按设置中的轮询间隔自动刷新。需要导入新日志时，可在设置里启用自动解析间隔，或手动运行 aiusage parse。'
@@ -387,8 +387,8 @@
     <section id="dashboard-password">
       <h3>{zh ? '仪表盘密码' : 'Dashboard Password'}</h3>
       <p>{zh
-        ? '本地仪表盘默认不需要登录。设置 AIUSAGE_DASHBOARD_PASSWORD 后，除首页、静态资源和公开 summary / quotas API 外，其他 API 会要求先输入密码。密码仅用于本地 dashboard cookie，不会写入数据库。'
-        : 'The local dashboard does not require sign-in by default. Set AIUSAGE_DASHBOARD_PASSWORD to protect dashboard APIs except the home page, static assets, and public summary / quotas endpoints. The password is used only for the local dashboard cookie and is not stored in the database.'
+        ? '本地仪表盘默认只监听 127.0.0.1，不需要登录。IPv6 回环可用 --host ::1。其他地址（例如 --host 0.0.0.0）及 Docker 必须设置非空 AIUSAGE_DASHBOARD_PASSWORD。API 仅接受同源浏览器请求；凭据只能设置或替换，不能读取已有密钥。设置 AIUSAGE_DASHBOARD_PASSWORD 后，除首页、静态资源和仅返回合计数据的公开 /api/home-summary 接口外，其他 API（包括详细汇总）都会要求先输入密码。密码仅用于本地 dashboard cookie，不会写入数据库。'
+        : 'The dashboard binds to 127.0.0.1 without sign-in by default; use --host ::1 for IPv6 loopback. Other addresses (such as --host 0.0.0.0) and Docker require a non-empty AIUSAGE_DASHBOARD_PASSWORD. Browser API requests must be same-origin. Stored credentials can be replaced but never retrieved. Set AIUSAGE_DASHBOARD_PASSWORD to protect every dashboard API, including the detailed summary, except the home page, static assets, and the public /api/home-summary endpoint, which returns aggregate totals only. The password is used only for the local dashboard cookie and is not stored in the database.'
       }</p>
       <DocsTable
         headers={zh ? ['系统 / Shell', '一次性启动命令'] : ['System / Shell', 'One-time start command']}
@@ -460,22 +460,8 @@
     <section id="docker">
       <h3>Docker</h3>
       <p>{zh
-        ? '使用官方 Docker 镜像运行 AIUsage，无需安装 Node.js：'
-        : 'Run AIUsage with the official Docker image, no Node.js installation required:'}</p>
-      <CodeBlock lang="Terminal" copyText={'docker run -d \\\n  -p 3847:3847 \\\n  -v ~/.aiusage:/root/.aiusage \\\n  juliantanx/aiusage'}>
-        <span slot="lines"><span>1</span><span>2</span><span>3</span><span>4</span></span>
-        <span class="tk-kw">docker</span> run -d \
-  -p 3847:3847 \
-  -v ~/.aiusage:/root/.aiusage \
-  juliantanx/aiusage
-      </CodeBlock>
-      <Callout type="info">
-        {zh
-          ? '官方镜像当前提供在 Docker Hub（juliantanx/aiusage），支持 amd64 和 arm64 架构。'
-          : 'The official image is currently published on Docker Hub (juliantanx/aiusage) with amd64 and arm64 support.'
-        }
-      </Callout>
-      <p>{zh ? 'Docker 中启用仪表盘密码：' : 'Enable the dashboard password in Docker:'}</p>
+        ? '使用官方 Docker 镜像运行 AIUsage，无需安装 Node.js。容器内的仪表盘监听 0.0.0.0，因此必须设置非空的 AIUSAGE_DASHBOARD_PASSWORD，否则容器启动会被拒绝：'
+        : 'Run AIUsage with the official Docker image, no Node.js installation required. The container binds the dashboard to 0.0.0.0, so a non-empty AIUSAGE_DASHBOARD_PASSWORD is required or the container refuses to start:'}</p>
       <CodeBlock lang="Terminal" copyText={'docker run -d \\\n  -p 3847:3847 \\\n  -e AIUSAGE_DASHBOARD_PASSWORD=change-me \\\n  -v ~/.aiusage:/root/.aiusage \\\n  juliantanx/aiusage'}>
         <span slot="lines"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></span>
         <span class="tk-kw">docker</span> run -d \
@@ -484,6 +470,12 @@
   -v ~/.aiusage:/root/.aiusage \
   juliantanx/aiusage
       </CodeBlock>
+      <Callout type="info">
+        {zh
+          ? '官方镜像当前提供在 Docker Hub（juliantanx/aiusage），支持 amd64 和 arm64 架构。请将 change-me 换成你自己的密码；详细 API 需要登录后才能访问，首页只展示公开的合计数据。'
+          : 'The official image is currently published on Docker Hub (juliantanx/aiusage) with amd64 and arm64 support. Replace change-me with your own password; detailed APIs require signing in, and the home page shows only the public aggregate totals.'
+        }
+      </Callout>
       <Callout type="warn">
         {zh
           ? '如果需要解析宿主机上的 AI 工具日志，还需要额外挂载对应日志目录，并用 AIUSAGE_*_PATH 指向容器内路径。只挂载 ~/.aiusage 只能持久化 aiusage 自己的数据库和配置。'

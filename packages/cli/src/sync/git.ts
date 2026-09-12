@@ -2,12 +2,15 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFile, writeFile, mkdir, readdir, stat, unlink, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { gitCredentialOptions } from '../github/git-credentials.js'
+import { validateRepo, GitHubAuthError } from '../github/auth.js'
 
 const exec = promisify(execFile)
 
 export interface GitSyncConfig {
   repo: string
-  token: string
+  token?: string
+  getToken?: () => Promise<string>
   /** Local directory to clone the repo into */
   cacheDir: string
   /** Branch to sync with (default: 'main') */
@@ -16,66 +19,67 @@ export interface GitSyncConfig {
 
 export class GitSyncBackend {
   private repo: string
-  private token: string
+  private getToken: () => Promise<string>
   private cacheDir: string
   private dataDir: string
   private branch: string
 
   constructor(config: GitSyncConfig) {
+    validateRepo(config.repo)
     this.repo = config.repo
-    this.token = config.token
+    this.getToken = config.getToken ?? (async () => config.token ?? '')
     this.cacheDir = config.cacheDir
     this.dataDir = join(config.cacheDir, 'data')
     this.branch = config.branch ?? 'main'
+    if (!/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(this.branch) || this.branch.includes('..')) throw new Error('Invalid GitHub sync branch')
   }
 
   private get remoteUrl(): string {
-    return `https://x-access-token:${this.token}@github.com/${this.repo}.git`
-  }
-
-  private sanitizeError(error: unknown): unknown {
-    if (error instanceof Error) {
-      const pattern = /https:\/\/[^@\s]+@github\.com/g
-      error.message = error.message.replace(pattern, 'https://github.com')
-      const err = error as any
-      if (typeof err.stderr === 'string') {
-        err.stderr = err.stderr.replace(pattern, 'https://github.com')
-      }
-    }
-    return error
+    return `https://github.com/${this.repo}.git`
   }
 
   private async git(args: string[], cwd?: string): Promise<string> {
+    const network = ['clone', 'fetch', 'pull', 'push'].includes(args[0])
     try {
-      const { stdout } = await exec('git', args, {
+      const token = network ? await this.getToken() : undefined
+      const credentials = gitCredentialOptions(this.repo, token)
+      const { stdout } = await exec('git', [...credentials.args, ...args], {
         cwd: cwd ?? this.cacheDir,
         timeout: 60_000,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+        env: credentials.env,
+        windowsHide: true,
       })
-      return stdout.trim()
+      // Network output is never consumed or surfaced: servers can echo secrets.
+      return network ? '' : stdout.trim()
     } catch (error) {
-      throw this.sanitizeError(error)
+      if (error instanceof GitHubAuthError) throw error
+      // Never retain child-process message, stack, stdout, stderr, cmd, or cause.
+      throw new Error('GitHub Git operation failed or was rejected. Check repository access, network connectivity, and Git identity.')
     }
   }
 
   /** Clone or pull the repo to get latest remote state */
   async prepare(): Promise<void> {
+    let exists = false
     try {
       await stat(join(this.cacheDir, '.git'))
-      // Repo exists — pull latest
-      await this.git(['fetch', 'origin', this.branch, '--depth=1'])
-      await this.git(['reset', '--hard', `origin/${this.branch}`])
-    } catch {
-      // First time — shallow clone
-      await mkdir(this.cacheDir, { recursive: true })
+      exists = true
+    } catch { /* clone below */ }
+    if (exists) {
+      // Remove legacy authenticated URLs before any Git operation. Do not expose
+      // the old config via subprocess output or errors, even on migration failure.
       try {
-        await exec('git', ['clone', '--depth=1', this.remoteUrl, this.cacheDir], {
-          timeout: 120_000,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-        })
-      } catch (error) {
-        throw this.sanitizeError(error)
-      }
+        const path = join(this.cacheDir, '.git', 'config')
+        const config = await readFile(path, 'utf8')
+        await writeFile(path, config.replace(/https:\/\/[^\s/]*@github\.com/gi, 'https://github.com'), { mode: 0o600 })
+      } catch { throw new Error('Cannot migrate the GitHub sync cache configuration.') }
+      await this.git(['config', '--replace-all', 'remote.origin.url', this.remoteUrl])
+      await this.git(['config', '--replace-all', 'remote.origin.pushurl', this.remoteUrl])
+      await this.git(['fetch', this.remoteUrl, this.branch, '--depth=1'])
+      await this.git(['checkout', '-f', '-B', this.branch, 'FETCH_HEAD'])
+    } else {
+      await mkdir(this.cacheDir, { recursive: true })
+      await this.git(['clone', '--depth=1', '--branch', this.branch, this.remoteUrl, this.cacheDir], this.cacheDir)
     }
   }
 
@@ -133,11 +137,11 @@ export class GitSyncBackend {
 
     for (let attempt = 1; attempt <= GitSyncBackend.MAX_PUSH_RETRIES; attempt++) {
       try {
-        await this.git(['push', 'origin', this.branch])
+        await this.git(['push', this.remoteUrl, this.branch])
         return true
       } catch (error) {
         if (attempt >= GitSyncBackend.MAX_PUSH_RETRIES) throw error
-        await this.git(['pull', '--rebase', 'origin', this.branch])
+        await this.git(['pull', '--rebase', this.remoteUrl, this.branch])
       }
     }
 

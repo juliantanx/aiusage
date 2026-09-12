@@ -3,9 +3,7 @@ import { unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { AIUSAGE_DIR, loadConfig } from '../config.js'
 import { cloudClear } from '../sync/cloud.js'
-import { GitSyncBackend } from '../sync/git.js'
-import { S3SyncBackend } from '../sync/s3.js'
-import { loadCredential } from '../config.js'
+import { createBackend } from './sync.js'
 
 export interface CleanResult {
   deletedCount: number
@@ -91,37 +89,6 @@ export function getRemoteBackends(): RemoteBackend[] {
   return backends
 }
 
-function createBackend(config: ReturnType<typeof loadConfig>) {
-  if (!config?.sync) return null
-
-  if (config.sync.backend === 'github') {
-    if (!config.sync.repo) return null
-    const token = loadCredential(`github/${config.sync.repo}/token`)
-    if (!token) return null
-    return new GitSyncBackend({
-      repo: config.sync.repo,
-      token,
-      cacheDir: join(AIUSAGE_DIR, 'sync-repo'),
-    })
-  }
-
-  if (config.sync.backend === 's3') {
-    if (!config.sync.bucket) return null
-    const accessKeyId = loadCredential(`s3/${config.sync.bucket}/accessKeyId`)
-    const secretAccessKey = loadCredential(`s3/${config.sync.bucket}/secretAccessKey`)
-    if (!accessKeyId || !secretAccessKey) return null
-    return new S3SyncBackend({
-      bucket: config.sync.bucket,
-      prefix: config.sync.prefix ?? 'aiusage/',
-      accessKeyId,
-      secretAccessKey,
-      endpoint: config.sync.endpoint,
-      region: config.sync.region,
-    })
-  }
-
-  return null
-}
 
 export async function propagateClean(options: {
   all: boolean
@@ -174,6 +141,7 @@ export async function propagateClean(options: {
       const files = await backend.listFiles()
       const fileCount = files.length
       if (fileCount > 0) {
+        if (!backend.deleteAllData) throw new Error('Backend cannot clear remote data')
         await backend.deleteAllData()
       }
       await backend.flush?.()

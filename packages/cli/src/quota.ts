@@ -100,8 +100,8 @@ function parseClaudeCredJson(content: string): ClaudeCredResult {
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(content)
-  } catch (e) {
-    return { token: null, status: 'parse_error', message: `Failed to parse credentials JSON: ${e}` }
+  } catch {
+    return { token: null, status: 'parse_error', message: 'Failed to parse credentials JSON' }
   }
 
   const entry = (parsed['claudeAiOauth'] ?? parsed['claude.ai_oauth']) as Record<string, unknown> | undefined
@@ -141,8 +141,8 @@ function readClaudeCredentials(): ClaudeCredResult {
   let content: string
   try {
     content = readFileSync(credPath, 'utf-8')
-  } catch (e) {
-    return { token: null, status: 'parse_error', message: `Failed to read credentials file: ${e}` }
+  } catch {
+    return { token: null, status: 'parse_error', message: 'Failed to read credentials file' }
   }
 
   return parseClaudeCredJson(content)
@@ -161,8 +161,8 @@ function parseCodexCredJson(content: string): CodexCredResult {
   let parsed: Record<string, unknown>
   try {
     parsed = JSON.parse(content)
-  } catch (e) {
-    return { token: null, accountId: null, status: 'parse_error', message: `Failed to parse Codex auth JSON: ${e}` }
+  } catch {
+    return { token: null, accountId: null, status: 'parse_error', message: 'Failed to parse Codex auth JSON' }
   }
 
   // Only OAuth mode has usage data
@@ -211,8 +211,8 @@ function readCodexCredentials(): CodexCredResult {
   let content: string
   try {
     content = readFileSync(authPath, 'utf-8')
-  } catch (e) {
-    return { token: null, accountId: null, status: 'parse_error', message: `Failed to read Codex auth file: ${e}` }
+  } catch {
+    return { token: null, accountId: null, status: 'parse_error', message: 'Failed to read Codex auth file' }
   }
 
   return parseCodexCredJson(content)
@@ -234,8 +234,8 @@ async function queryClaudeQuota(accessToken: string): Promise<QuotaResult> {
       },
       signal: AbortSignal.timeout(10000),
     })
-  } catch (e) {
-    return apiError('claude-code', `Network error: ${e}`)
+  } catch {
+    return apiError('claude-code', 'Network error')
   }
 
   if (resp.status === 401 || resp.status === 403) {
@@ -243,15 +243,15 @@ async function queryClaudeQuota(accessToken: string): Promise<QuotaResult> {
   }
 
   if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    return apiError('claude-code', `API error (HTTP ${resp.status}): ${body}`)
+    await resp.body?.cancel()
+    return apiError('claude-code', `API error (HTTP ${resp.status})`)
   }
 
   let body: Record<string, unknown>
   try {
     body = await resp.json()
-  } catch (e) {
-    return apiError('claude-code', `Failed to parse API response: ${e}`)
+  } catch {
+    return apiError('claude-code', 'Failed to parse API response')
   }
 
   const tiers: QuotaTier[] = []
@@ -318,8 +318,8 @@ async function callCodexQuotaApi(accessToken: string, accountId: string | null):
       headers,
       signal: AbortSignal.timeout(10000),
     })
-  } catch (e) {
-    return apiError('codex', `Network error: ${e}`)
+  } catch {
+    return apiError('codex', 'Network error')
   }
 
   if (resp.status === 401 || resp.status === 403) {
@@ -327,15 +327,15 @@ async function callCodexQuotaApi(accessToken: string, accountId: string | null):
   }
 
   if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    return apiError('codex', `API error (HTTP ${resp.status}): ${body}`)
+    await resp.body?.cancel()
+    return apiError('codex', `API error (HTTP ${resp.status})`)
   }
 
   let body: Record<string, unknown>
   try {
     body = await resp.json()
-  } catch (e) {
-    return apiError('codex', `Failed to parse API response: ${e}`)
+  } catch {
+    return apiError('codex', 'Failed to parse API response')
   }
 
   const tiers: QuotaTier[] = []
@@ -454,8 +454,8 @@ async function callCopilotQuotaApi(token: string): Promise<QuotaResult> {
       },
       signal: AbortSignal.timeout(10000),
     })
-  } catch (e) {
-    return apiError('copilot', `Network error: ${e}`)
+  } catch {
+    return apiError('copilot', 'Network error')
   }
 
   if (resp.status === 401 || resp.status === 403) {
@@ -463,15 +463,15 @@ async function callCopilotQuotaApi(token: string): Promise<QuotaResult> {
   }
 
   if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    return apiError('copilot', `GitHub Copilot API error (HTTP ${resp.status}): ${body}`)
+    await resp.body?.cancel()
+    return apiError('copilot', `GitHub Copilot API error (HTTP ${resp.status})`)
   }
 
   let body: Record<string, unknown>
   try {
     body = await resp.json()
-  } catch (e) {
-    return apiError('copilot', `Failed to parse API response: ${e}`)
+  } catch {
+    return apiError('copilot', 'Failed to parse API response')
   }
 
   const resetIso = copilotResetIso(body.quota_reset_date)

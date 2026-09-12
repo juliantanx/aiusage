@@ -15,12 +15,12 @@ export function verifyPassword(configuredPassword: string | null | undefined, su
   return safeEqual(configuredPassword, submittedPassword)
 }
 
-export function buildAuthCookie(password: string): string {
-  return `${AUTH_COOKIE_NAME}=${hashPassword(password)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}`
+export function buildAuthCookie(password: string, secure = false): string {
+  return `${AUTH_COOKIE_NAME}=${hashPassword(password)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}${secure ? '; Secure' : ''}`
 }
 
-export function buildClearAuthCookie(): string {
-  return `${AUTH_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+export function buildClearAuthCookie(secure = false): string {
+  return `${AUTH_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`
 }
 
 export function isAuthenticated(configuredPassword: string | null | undefined, cookieHeader: string | null | undefined): boolean {
@@ -39,11 +39,11 @@ export function isPublicPath(pathname: string): boolean {
 
 export function shouldProtectApiPath(pathname: string): boolean {
   if (!pathname.startsWith('/api/')) return false
-  if (isPublicPath(pathname)) return false
+  if (['/api/auth/status', '/api/auth/login', '/api/auth/logout'].includes(pathname)) return false
 
-  // The public home page depends on summary and quota display data.
-  if (pathname === '/api/summary') return false
-  if (pathname === '/api/quotas') return false
+  // The minimal home-page totals endpoint is deliberately public; every other
+  // data API, including the detailed /api/summary breakdown, requires auth.
+  if (pathname === '/api/home-summary') return false
   return true
 }
 

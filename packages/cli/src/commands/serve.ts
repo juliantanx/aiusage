@@ -3,6 +3,8 @@ import { readFileSync, existsSync, statSync, writeFileSync, unlinkSync } from 'n
 import { join, extname, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createApiServer } from '../api/server.js'
+import { dashboardHost } from '../api/trust.js'
+import { getDashboardPassword } from '../auth.js'
 import { importConfigPriceOverrides, loadPricingRuntime } from '../pricing-registry.js'
 import { runParse } from './parse.js'
 import { runSync } from './sync.js'
@@ -20,6 +22,7 @@ import type Database from 'better-sqlite3'
 
 export interface ServeOptions {
   port: number
+  host?: string
   db: Database.Database
 }
 
@@ -40,6 +43,7 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 export function serve(options: ServeOptions): void {
+  const host = dashboardHost(options.host, getDashboardPassword())
   const config = loadConfig()
   const dbWriteQueue = new AsyncTaskQueue()
   const runDbWrite = <T>(task: () => T | Promise<T>) => dbWriteQueue.run(task)
@@ -128,7 +132,15 @@ export function serve(options: ServeOptions): void {
   }
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+    let url: URL
+    try {
+      if (!req.url?.startsWith('/') || req.url.startsWith('//')) throw new Error('Invalid request target')
+      url = new URL(req.url, 'http://localhost')
+    } catch {
+      res.writeHead(400)
+      res.end()
+      return
+    }
 
     // API routes go to API server
     if (url.pathname.startsWith('/api/')) {
@@ -173,13 +185,13 @@ export function serve(options: ServeOptions): void {
 
   const listenOnPort = (port: number): void => {
     currentPort = port
-    server.listen(port, '0.0.0.0')
+    server.listen(port, host)
   }
 
   server.on('listening', () => {
     started = true
     writeFileSync(PORT_FILE, String(currentPort), 'utf-8')
-    console.log(`aiusage serve listening on http://localhost:${currentPort}`)
+    console.log(`aiusage serve listening on http://${host.includes(':') ? `[${host}]` : host}:${currentPort}`)
   })
 
   server.on('error', (error: NodeJS.ErrnoException) => {

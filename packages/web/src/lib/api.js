@@ -7,12 +7,23 @@ function buildUrl(base, params) {
   return query ? `${base}?${query}` : base
 }
 
+export async function githubConnection(action, body = {}) {
+  const response = await fetch(`/api/github/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  const result = await response.json()
+  if (!response.ok) throw new Error(result.error?.message || 'GitHub connection failed')
+  return result
+}
+
 // Stale-while-revalidate cache (§11.4)
 const swrCache = new Map()
 const inflightRequests = new Map()
 
-async function apiFetch(url, { signal, swr = false } = {}) {
-  const request = () => signal ? fetch(url, { signal }) : fetch(url)
+async function apiFetch(url, { signal, swr = false, method } = {}) {
+  const request = () => method
+    ? fetch(url, signal ? { method, signal } : { method })
+    : signal ? fetch(url, { signal }) : fetch(url)
 
   // Stale-while-revalidate: return cached data immediately, refresh in background
   if (swr && swrCache.has(url)) {
@@ -56,6 +67,12 @@ export async function fetchSummary(params, { signal, swr = true } = {}) {
   return apiFetch(buildUrl('/api/summary', params), { signal, swr })
 }
 
+// Public aggregate totals for the home page; stays reachable without the
+// dashboard password and only accepts `range`.
+export async function fetchHomeSummary(params, { signal, swr = true } = {}) {
+  return apiFetch(buildUrl('/api/home-summary', { range: params?.range }), { signal, swr })
+}
+
 export async function fetchBootstrap(params = {}) {
   return apiFetch(buildUrl('/api/bootstrap', params))
 }
@@ -96,7 +113,7 @@ export async function fetchProjects(params) {
 }
 
 export async function refreshData() {
-  return apiFetch('/api/refresh')
+  return apiFetch('/api/refresh', { method: 'POST' })
 }
 
 export async function fetchPricing() {
@@ -326,8 +343,8 @@ export async function refreshExchangeRate() {
   return response.json()
 }
 
-export async function fetchCredential(ref) {
-  return apiFetch(buildUrl('/api/config/credential', { ref }))
+export async function fetchCredentialStatus({ backend, repo, bucket }) {
+  return apiFetch(buildUrl('/api/config/credentials/status', { backend, repo, bucket }))
 }
 
 export const SETTINGS_UPDATED_EVENT = 'aiusage:settings-updated'

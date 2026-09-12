@@ -125,8 +125,10 @@ describe('GitSyncBackend.flush', () => {
     expect(thrown).toBeInstanceOf(Error)
     const err = thrown as any
     expect(err.message).not.toContain('secret-token-abc')
-    expect(err.stderr).not.toContain('secret-token-abc')
-    expect(err.message).toContain('github.com')
+    expect(err.stderr).toBeUndefined()
+    expect(err.stdout).toBeUndefined()
+    expect(err.cause).toBeUndefined()
+    expect(err.stack).not.toContain('secret-token-abc')
   })
 
   it('uses custom branch name in push operations', async () => {
@@ -148,5 +150,41 @@ describe('GitSyncBackend.flush', () => {
       expect(call[1]).toContain('master')
       expect(call[1]).not.toContain('main')
     }
+  })
+
+  it('uses temporary credentials only for network operations and never in arguments', async () => {
+    const { GitSyncBackend } = await import('../../src/sync/git.js')
+    const getToken = vi.fn().mockResolvedValue('secret-from-keychain')
+    const backend = new GitSyncBackend({ repo: 'u/r', getToken, cacheDir: '/tmp/s' })
+    gitResolves('M data/x.ndjson'); gitResolves(); gitResolves(); gitResolves()
+    await backend.flush()
+    expect(getToken).toHaveBeenCalledTimes(1)
+    for (const call of mockExecFile.mock.calls as any[]) {
+      expect(JSON.stringify(call[1])).not.toContain('secret-from-keychain')
+      expect(JSON.stringify(call[1])).not.toContain('x-access-token:')
+      expect(call[2].env.AIUSAGE_GIT_CREDENTIAL).toBe(call[1].includes('push') ? 'secret-from-keychain' : undefined)
+    }
+  })
+
+  it('removes legacy authenticated remote URLs before fetching with current credentials', async () => {
+    const { readFile, writeFile } = await import('node:fs/promises')
+    vi.mocked(readFile).mockResolvedValue('[remote "origin"]\nurl = https://x-access-token:old-pat@github.com/u/r.git\npushurl = https://x-access-token:old-pat@github.com/u/r.git\n')
+    const { GitSyncBackend } = await import('../../src/sync/git.js')
+    const backend = new GitSyncBackend({ repo: 'u/r', token: 'new-pat', cacheDir: '/tmp/s' })
+    gitResolves(); gitResolves(); gitResolves(); gitResolves()
+    await backend.prepare()
+    expect(vi.mocked(writeFile).mock.calls[0][1]).not.toContain('old-pat')
+    expect(vi.mocked(writeFile).mock.calls[0][1]).toContain('https://github.com/u/r.git')
+    expect(mockExecFile.mock.calls.find((c: any) => c[1].includes('fetch'))?.[1]).toContain('https://github.com/u/r.git')
+  })
+
+  it('does not fall back to clone when an existing repository fetch fails', async () => {
+    const { readFile } = await import('node:fs/promises')
+    vi.mocked(readFile).mockResolvedValue('[remote "origin"]\nurl = https://github.com/u/r.git\n')
+    const { GitSyncBackend } = await import('../../src/sync/git.js')
+    const backend = new GitSyncBackend({ repo: 'u/r', token: 'secret', cacheDir: '/tmp/s' })
+    gitResolves(); gitResolves(); gitRejects('secret')
+    await expect(backend.prepare()).rejects.toThrow('GitHub Git operation')
+    expect(mockExecFile.mock.calls.some((c: any) => c[1].includes('clone'))).toBe(false)
   })
 })

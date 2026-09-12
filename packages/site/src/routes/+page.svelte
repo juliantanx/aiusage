@@ -447,13 +447,14 @@
           <div class="code-header">
             <span class="code-lang">Terminal</span>
             <button class="copy-btn" on:click={() => {
-              navigator.clipboard.writeText('docker run -d -p 3847:3847 -v ~/.aiusage:/root/.aiusage juliantanx/aiusage')
+              navigator.clipboard.writeText('docker run -d -p 3847:3847 -e AIUSAGE_DASHBOARD_PASSWORD=change-me -v ~/.aiusage:/root/.aiusage juliantanx/aiusage')
               copied = true; setTimeout(() => copied = false, 2000)
             }}>{copied ? '✓ Copied' : 'Copy'}</button>
           </div>
-          <pre><code><span class="tk-cmt">{zh ? '# 使用 Docker 运行' : '# Run with Docker'}</span>
+          <pre><code><span class="tk-cmt">{zh ? '# 使用 Docker 运行（必须设置仪表盘密码）' : '# Run with Docker (dashboard password required)'}</span>
 <span class="tk-kw">docker</span> run -d \
   -p 3847:3847 \
+  -e AIUSAGE_DASHBOARD_PASSWORD=change-me \
   -v ~/.aiusage:/root/.aiusage \
   juliantanx/aiusage</code></pre>
         </div>

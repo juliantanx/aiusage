@@ -4,6 +4,7 @@ import { setSyncConsent } from '../init.js'
 import { loadConfig, saveConfig, buildConsentConfig, AIUSAGE_DIR, type Config } from '../config.js'
 import { hasCredentials } from '../leaderboard/credentials.js'
 import { getSyncTarget } from '../sync/target.js'
+import { setPat, validateRepo } from '../github/auth.js'
 
 export interface InitOptions {
   backend?: 'github' | 's3' | 'cloud' | 'skip'
@@ -14,6 +15,8 @@ export interface InitOptions {
   region?: string
   device?: string
   token?: string
+  /** Explicitly completed App login takes precedence over an environment PAT. */
+  githubAuth?: 'github-app'
   accessKeyId?: string
   secretAccessKey?: string
 }
@@ -60,15 +63,19 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
     if (!options.repo) {
       return { success: false, message: 'GitHub repository is required (format: username/repo-name).' }
     }
-    if (!options.token) {
-      return { success: false, message: 'GitHub Personal Access Token is required.' }
+    try { validateRepo(options.repo) } catch { return { success: false, message: 'Invalid GitHub repository. Use owner/repo.' } }
+    const previous = existingConfig?.sync?.repo === options.repo ? existingConfig.sync : undefined
+    if (!options.token && !process.env.AIUSAGE_GITHUB_TOKEN && !previous?.githubAuth && !existingConfig?.credentials?.[`github/${options.repo}/token`]) {
+      return { success: false, message: 'Run aiusage github login to connect GitHub, or configure an advanced Personal Access Token.' }
     }
 
     const config: Config = {
+      ...existingConfig,
       sync: {
         backend: 'github',
         repo: options.repo,
-        credentialRef: `github/${options.repo}/token`,
+        githubAuth: !options.githubAuth && (options.token || process.env.AIUSAGE_GITHUB_TOKEN) ? { method: 'pat' } : previous?.githubAuth ?? { method: 'pat' },
+        branch: previous?.branch,
       },
       device: options.device ?? existingConfig?.device,
       platform: existingConfig?.platform ?? platform(),
@@ -76,9 +83,10 @@ export function runInit(options: InitOptions): { success: boolean; message: stri
       refreshInterval: existingConfig?.refreshInterval,
       credentials: {
         ...existingConfig?.credentials,
-        [`github/${options.repo}/token`]: options.token,
       },
     }
+
+    if (options.token) setPat(config, options.token)
 
     const consentConfig = buildConsentConfig(config)
     if (!consentConfig) {

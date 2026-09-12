@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fetchSummary, fetchTokens, fetchCost } from '../src/lib/api.js'
+import { fetchSummary, fetchHomeSummary, fetchTokens, fetchCost, refreshData } from '../src/lib/api.js'
 
 // Mock fetch
 const mockFetch = vi.fn()
@@ -22,6 +22,18 @@ describe('API Client', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/summary?range=day')
   })
 
+  it('fetches the public home summary with only the range parameter', async () => {
+    const mockData = { totalTokens: 1000, totalCost: 0.001 }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockData),
+    })
+
+    const result = await fetchHomeSummary({ range: 'week', device: 'other', tool: 'codex' } as any)
+    expect(result).toEqual(mockData)
+    expect(mockFetch).toHaveBeenCalledWith('/api/home-summary?range=week')
+  })
+
   it('fetches tokens data', async () => {
     const mockData = { data: [{ date: '2026-05-12', tokens: 1000 }] }
     mockFetch.mockResolvedValueOnce({
@@ -31,6 +43,19 @@ describe('API Client', () => {
 
     const result = await fetchTokens({ range: 'week' })
     expect(result).toEqual(mockData)
+  })
+
+  it('refreshes data via POST', async () => {
+    const mockData = { ok: true }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockData),
+    })
+
+    const result = await refreshData()
+
+    expect(result).toEqual(mockData)
+    expect(mockFetch).toHaveBeenCalledWith('/api/refresh', { method: 'POST' })
   })
 
   it('handles API errors', async () => {
@@ -94,5 +119,13 @@ describe('API Client', () => {
         body: JSON.stringify({ weekStart: 1, device: 'my-mac' }),
       })
     )
+  })
+
+  it('fetches only configured state for a sync target', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ githubToken: true }) })
+    const api = await import('../src/lib/api.js')
+    expect(await api.fetchCredentialStatus({ backend: 'github', repo: 'owner/repo' })).toEqual({ githubToken: true })
+    expect(mockFetch).toHaveBeenCalledWith('/api/config/credentials/status?backend=github&repo=owner%2Frepo')
+    expect(api).not.toHaveProperty('fetchCredential')
   })
 })

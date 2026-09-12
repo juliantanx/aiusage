@@ -129,10 +129,12 @@ describe('API Server', () => {
       })
     })
 
-    const protectedRes = await fetch(`${baseUrl}/api/tokens?range=day`)
-    expect(protectedRes.status).toBe(401)
+    for (const route of ['/api/tokens?range=day', '/api/summary?range=day']) {
+      const protectedRes = await fetch(`${baseUrl}${route}`)
+      expect(protectedRes.status).toBe(401)
+    }
 
-    const publicRes = await fetch(`${baseUrl}/api/summary?range=day`)
+    const publicRes = await fetch(`${baseUrl}/api/home-summary?range=day`)
     expect(publicRes.ok).toBe(true)
   })
 

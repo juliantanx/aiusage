@@ -11,6 +11,7 @@ import { hasCredentials } from '../leaderboard/credentials.js'
 import type { SyncProgress } from '../sync/runtime.js'
 import { getSyncTarget } from '../sync/target.js'
 import { repairSyncContamination, type RepairReport } from '../sync/repair.js'
+import { githubToken } from '../github/auth.js'
 
 export function createBackend(config: import('../config.js').Config): SyncBackend | null {
   const sync = config.sync
@@ -18,11 +19,11 @@ export function createBackend(config: import('../config.js').Config): SyncBacken
 
   if (sync.backend === 'github') {
     if (!sync.repo) return null
-    const token = loadCredential(`github/${sync.repo}/token`)
-    if (!token) return null
+    if (!sync.githubAuth && !process.env.AIUSAGE_GITHUB_TOKEN && !loadCredential(`github/${sync.repo}/token`)) return null
     return new GitSyncBackend({
       repo: sync.repo,
-      token,
+      getToken: () => githubToken(sync),
+      branch: sync.branch,
       cacheDir: join(AIUSAGE_DIR, 'sync-repo'),
     })
   }
