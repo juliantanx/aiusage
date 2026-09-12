@@ -57,11 +57,15 @@ interface StepMetadata {
   events: UsageEvent[]
 }
 
+// A protobuf varint carries at most 64 bits, which is 10 base-128 bytes.
+// Negative int64/int32 values (for example -1 sentinels) always use all 10.
+const MAX_VARINT_BYTES = 10
+
 function readVarint(data: Buffer, start: number): { value: number; offset: number } {
   let value = 0
   let shift = 0
   let offset = start
-  while (offset < data.length && shift < 56) {
+  while (offset < data.length && offset - start < MAX_VARINT_BYTES) {
     const byte = data[offset++]
     value += (byte & 0x7f) * (2 ** shift)
     if ((byte & 0x80) === 0) return { value, offset }

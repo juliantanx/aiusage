@@ -337,6 +337,51 @@ describe('parse-antigravity', () => {
     expect(parse().records[0].ts).toBe(generationTs)
   })
 
+  it('accepts 10-byte varints in generation and step metadata', () => {
+    // int64 -1 on the wire: nine 0xff continuation bytes followed by 0x01.
+    const negativeOne = Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01])
+    const maxUint64 = Buffer.concat([varint(99 * 8), negativeOne])
+    const createdAt = Date.UTC(2026, 8, 6, 14, 19, 29, 321)
+    db.prepare('INSERT INTO steps (idx, metadata) VALUES (?, ?)').run(3, Buffer.concat([
+      stepMetadata({ ts: createdAt }),
+      maxUint64,
+    ]))
+    db.prepare('INSERT INTO gen_metadata (idx, data, size) VALUES (?, ?, ?)').run(0, Buffer.concat([
+      maxUint64,
+      generationMetadata({
+        model: 'gemini-3.8-flash',
+        usage: usage({ input: 42, totalOutput: 10, thinking: 4, responseOutput: 6 }),
+        stepIndices: [3],
+      }),
+    ]), 1)
+
+    const result = parse()
+
+    expect(result.errors).toEqual([])
+    expect(result.nextIndex).toBe(1)
+    expect(result.records).toHaveLength(1)
+    expect(result.records[0]).toMatchObject({
+      ts: createdAt,
+      model: 'gemini-3.8-flash',
+      inputTokens: 42,
+      outputTokens: 6,
+      thinkingTokens: 4,
+    })
+  })
+
+  it('rejects varints longer than 10 bytes', () => {
+    const overlong = Buffer.concat([varint(99 * 8), Buffer.alloc(11, 0xff)])
+    db.prepare('INSERT INTO gen_metadata (idx, data, size) VALUES (?, ?, ?)').run(0, Buffer.concat([
+      generationMetadata({ model: 'gemini-3.8-flash', usage: usage({ input: 1, totalOutput: 1 }) }),
+      overlong,
+    ]), 1)
+
+    const result = parse()
+
+    expect(result.records).toEqual([])
+    expect(result.errors).toEqual(['generation metadata 0: invalid protobuf varint'])
+  })
+
   it('leaves an unfinished metadata row for a later parse', () => {
     db.prepare('INSERT INTO gen_metadata (idx, data, size) VALUES (?, ?, ?)').run(0, generationMetadata({}), 0)
 

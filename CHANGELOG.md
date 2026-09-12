@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Antigravity parser rejected valid 10-byte varints** — the protobuf varint reader stopped after 8 bytes, so any generation or step metadata row containing a 10-byte varint (for example an `int64` `-1` sentinel in an unrelated field) failed with `invalid protobuf varint` and every usage record in that row was dropped. The reader now accepts the full 10-byte protobuf maximum and still rejects longer sequences.
+
+---
+
 ## [1.5.15] - 2026-09-08
 
 ### Added
