@@ -107,8 +107,9 @@ export function runParseKilo(
 
     const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens }
     const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
-    const logCostValid = parsed.cost != null && parsed.cost > 0
-    const cost = logCostValid ? parsed.cost : calculatedCost
+    const logCost = parsed.cost
+    const logCostValid = logCost != null && logCost > 0
+    const cost = logCostValid ? logCost : calculatedCost
     const costSource: StatsRecord['costSource'] = logCostValid ? 'log' : calculatedCost > 0 ? 'pricing' : 'unknown'
 
     records.push({

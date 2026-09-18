@@ -1,14 +1,32 @@
-import type { SyncRecord, SyncTombstone } from '@aiusage/core'
+import type { SyncRecord } from '@aiusage/core'
 import { computeHmac, sha256, generateNonce, generateIdempotencyKey, buildCanonicalString } from '../leaderboard/crypto.js'
 import { loadCredentials } from '../leaderboard/credentials.js'
 import { getSiteUrl } from '../site-url.js'
+import { fromCloudRecord, parseSyncGeneration, toCloudRecord } from './cloud-dto.js'
 
 const SYNC_PUSH_PATH = '/api/cli/sync/push'
 const SYNC_PULL_PATH = '/api/cli/sync/pull'
 
+/**
+ * Tombstone as the server returns it from `/sync/pull` (snake_case fields).
+ * `SyncTombstone` from core describes the local table, not this wire shape.
+ */
+export interface CloudPulledTombstone {
+  id: string
+  device_instance_id?: string
+  deleted_at?: string | number
+  updated_at?: string | number
+}
+
+/** Tombstone as `/sync/push` expects it: the wire id of a record this device retracts. */
+export interface CloudPushTombstone {
+  record_id: string
+  updatedAt: number
+}
+
 export interface PullResult {
   records: SyncRecord[]
-  tombstones: SyncTombstone[]
+  tombstones: CloudPulledTombstone[]
   nextCursor?: string
   hasMore: boolean
   syncGeneration: number
@@ -59,7 +77,9 @@ async function readJsonOrNull(response: Response): Promise<Record<string, unknow
   const contentType = response.headers.get('content-type') || ''
   if (!contentType.includes('application/json')) return null
   try {
-    return await response.json()
+    const data: unknown = await response.json()
+    return data !== null && typeof data === 'object' && !Array.isArray(data)
+      ? data as Record<string, unknown> : null
   } catch {
     return null
   }
@@ -67,7 +87,7 @@ async function readJsonOrNull(response: Response): Promise<Record<string, unknow
 
 export async function cloudPush(
   records: SyncRecord[],
-  tombstones: SyncTombstone[],
+  tombstones: CloudPushTombstone[],
   deviceInstanceId: string,
   syncGeneration: number
 ): Promise<PushResult> {
@@ -81,7 +101,7 @@ export async function cloudPush(
     sync_generation: syncGeneration,
     client_version: getClientVersion(),
     client_platform: process.platform,
-    records,
+    records: records.map(toCloudRecord),
     tombstones,
   })
 
@@ -108,7 +128,7 @@ export async function cloudPush(
     updated: (data.updated as number) || 0,
     skipped: (data.skipped as number) || 0,
     serverCursor: data.server_cursor as string | undefined,
-    syncGeneration: (data.sync_generation as number) || syncGeneration,
+    syncGeneration: parseSyncGeneration(data.sync_generation) ?? syncGeneration,
   }
 }
 
@@ -145,12 +165,40 @@ export async function cloudPull(
 
   if (!data) throw new CloudSyncError('Invalid response from server', 'invalid_response')
 
+  // A completed pull is reconciled against: every record must be
+  // representable, or the pull fails rather than silently omitting it (an
+  // omission would read as the record's absence from the cloud).
+  const syncGeneration = parseSyncGeneration(data.sync_generation)
+  if (!Array.isArray(data.records) || !Array.isArray(data.tombstones)
+    || typeof data.has_more !== 'boolean'
+    || syncGeneration === undefined
+    || (data.next_cursor != null && (typeof data.next_cursor !== 'string' || !/^[0-9]+$/.test(data.next_cursor)))
+    || (data.has_more && (typeof data.next_cursor !== 'string' || BigInt(data.next_cursor) <= 0n))) {
+    throw new CloudSyncError('Invalid response from server: malformed pull envelope', 'invalid_response')
+  }
+  // Tombstones can delete records too; validate their identity before any
+  // page is returned to the authoritative reconciliation path.
+  for (const raw of data.tombstones) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)
+      || typeof raw.id !== 'string' || !raw.id
+      || typeof raw.device_instance_id !== 'string' || !raw.device_instance_id) {
+      throw new CloudSyncError('Invalid response from server: malformed tombstone', 'invalid_response')
+    }
+  }
+  const rawRecords = data.records
+  const records: SyncRecord[] = []
+  for (const raw of rawRecords) {
+    const record = fromCloudRecord(raw)
+    if (!record) throw new CloudSyncError('Invalid response from server: a pulled record could not be parsed', 'invalid_response')
+    records.push(record)
+  }
+
   return {
-    records: (data.records as SyncRecord[]) || [],
-    tombstones: (data.tombstones as SyncTombstone[]) || [],
-    nextCursor: data.next_cursor as string | undefined,
-    hasMore: (data.has_more as boolean) || false,
-    syncGeneration: (data.sync_generation as number) || 1,
+    records,
+    tombstones: data.tombstones as CloudPulledTombstone[],
+    nextCursor: (data.next_cursor as string | null | undefined) ?? undefined,
+    hasMore: data.has_more,
+    syncGeneration,
   }
 }
 
@@ -179,7 +227,7 @@ export async function cloudClear(): Promise<{ syncGeneration: number }> {
   if (!data) throw new CloudSyncError('Invalid response from server', 'invalid_response')
 
   return {
-    syncGeneration: (data.sync_generation as number) || 1,
+    syncGeneration: parseSyncGeneration(data.sync_generation) ?? 1,
   }
 }
 

@@ -140,6 +140,17 @@ describe('cleanAll', () => {
     expect(db.prepare('SELECT COUNT(*) as count FROM tool_calls').get()).toEqual({ count: 0 })
   })
 
+  it('clears every piece of sync bookkeeping, retired wire ids included', () => {
+    db.prepare("INSERT INTO sync_record_claims (target, device_instance_id, record_id) VALUES ('github:o/r', 'di2', 'sr1')").run()
+    db.prepare("INSERT INTO sync_retired_wire_ids (target, wire_id) VALUES ('cloud', 'old-wire-id')").run()
+    db.prepare("INSERT INTO sync_retired_wire_ids (target, wire_id) VALUES ('github:o/r', 'old-wire-id')").run()
+
+    const result = cleanAll(db)
+    expect(result.deletedRetiredWireIds).toBe(2)
+    expect(db.prepare('SELECT COUNT(*) as count FROM sync_retired_wire_ids').get()).toEqual({ count: 0 })
+    expect(db.prepare('SELECT COUNT(*) as count FROM sync_record_claims').get()).toEqual({ count: 0 })
+  })
+
   it('deletes all synced records', () => {
     db.prepare("INSERT INTO synced_records (id, ts, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, updated_at, session_key, source_file, cwd, device, device_instance_id, platform) VALUES ('sr1', 1000, 'claude-code', 'test', 'test', 0, 0, 0, 0, 0, 1000, 's1', '/f1', '', 'd1', 'di1', '')").run()
     db.prepare("INSERT INTO synced_records (id, ts, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, updated_at, session_key, source_file, cwd, device, device_instance_id, platform) VALUES ('sr2', 2000, 'claude-code', 'test', 'test', 0, 0, 0, 0, 0, 2000, 's2', '/f2', '', 'd1', 'di1', '')").run()

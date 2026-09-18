@@ -56,6 +56,13 @@ describe('S3SyncBackend', () => {
     expect(result).toBeNull()
   })
 
+  it('rejects a successful GET without a body, but accepts an empty body', async () => {
+    mockSend.mockResolvedValueOnce({})
+    await expect(backend.readFile('dev/manifest.json')).rejects.toThrow('no body')
+    mockSend.mockResolvedValueOnce({ Body: { transformToString: async () => '' } })
+    await expect(backend.readFile('dev/manifest.json')).resolves.toBe('')
+  })
+
   it('throws on non-404 errors', async () => {
     mockSend.mockRejectedValueOnce({ name: 'AccessDenied', $metadata: { httpStatusCode: 403 } })
 
@@ -87,6 +94,38 @@ describe('S3SyncBackend', () => {
   })
 
   describe('listFiles', () => {
+    it.each([
+      {}, { IsTruncated: 'false' }, { IsTruncated: false, Contents: {} },
+      { IsTruncated: false, Contents: [{}] },
+      { IsTruncated: false, Contents: [{ Key: 'another-prefix/dev/manifest.json' }] },
+    ])('rejects malformed listing %# instead of treating it as absence', async response => {
+      mockSend.mockResolvedValueOnce(response)
+      await expect(backend.listFiles()).rejects.toThrow('invalid object')
+    })
+
+    it('discovers manifest-only namespaces without listing unrelated JSON files', async () => {
+      mockSend.mockResolvedValueOnce({
+        Contents: [{ Key: 'aiusage/new-device/manifest.json' }, { Key: 'aiusage/readme.json' }],
+        IsTruncated: false,
+      })
+      await expect(backend.listFiles()).resolves.toEqual(['new-device/manifest.json'])
+    })
+
+    it.each([undefined, '', ' '])('rejects a truncated page with unusable token %s', async token => {
+      mockSend.mockResolvedValueOnce({ Contents: [], IsTruncated: true, NextContinuationToken: token })
+      await expect(backend.listFiles()).rejects.toThrow('progressing continuation token')
+    })
+
+    it.each(['listFiles', 'listFileDigests', 'deleteAllData'] as const)(
+      '%s rejects a cyclic listing before accepting or deleting a partial snapshot', async method => {
+        for (const token of ['a', 'b', 'a']) {
+          mockSend.mockResolvedValueOnce({ Contents: [{ Key: 'aiusage/dev/day.ndjson' }], IsTruncated: true, NextContinuationToken: token })
+        }
+        await expect(backend[method]()).rejects.toThrow('progressing continuation token')
+        expect(mockSend).toHaveBeenCalledTimes(3)
+      },
+    )
+
     it('returns paths relative to prefix (no data/ subdirectory)', async () => {
       mockSend.mockResolvedValueOnce({
         Contents: [

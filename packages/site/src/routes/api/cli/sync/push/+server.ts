@@ -108,7 +108,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
   // Check sync generation
   const reset = await sql`SELECT sync_generation FROM cloud_sync_resets WHERE user_id = ${userId}`
-  const serverGeneration = reset.length > 0 ? (reset[0] as { sync_generation: number }).sync_generation : 1
+  const serverGeneration = reset.length > 0 ? Number((reset[0] as { sync_generation: string | number }).sync_generation) : 1
 
   if (clientSyncGeneration < serverGeneration) {
     return json({

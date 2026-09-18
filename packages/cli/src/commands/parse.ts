@@ -4,7 +4,7 @@ import { basename, join, dirname } from 'node:path'
 import { hostname } from 'node:os'
 import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, resolvePrice, generateRecordId, normalizeCodeFuseModel, parseTimestamp, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
-import { insertRecord, LOCAL_RECORDS_WHERE } from '../db/records.js'
+import { insertRecord, LOCAL_RECORDS_WHERE, backfillUnknownDeviceInstanceId } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
 import { loadConfig, AIUSAGE_DIR } from '../config.js'
@@ -1251,11 +1251,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
 
   // Fix historical records that were parsed before init created state.json.
   // If the current device UUID is known, backfill any records with 'unknown' device_instance_id.
-  if (deviceInstanceId !== 'unknown') {
-    db.prepare(
-      `UPDATE records SET device_instance_id = ?, device = ? WHERE device_instance_id = 'unknown' AND ${LOCAL_RECORDS_WHERE}`
-    ).run(deviceInstanceId, device)
-  }
+  backfillUnknownDeviceInstanceId(db, deviceInstanceId, device)
 
   // Backfill platform for existing records that have an empty platform field.
   if (devicePlatform) {

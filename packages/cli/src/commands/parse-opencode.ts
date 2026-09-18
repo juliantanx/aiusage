@@ -120,8 +120,9 @@ export function runParseOpenCode(
     const tokenArgs = { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, thinkingTokens: reasoningTokens }
     const calculatedCost = model !== 'unknown' ? calculateCost(model, tokenArgs, exchangeRate) : 0
     // OpenCode often logs cost:0 even for paid models; fall back to pricing table when that happens
-    const logCostValid = parsed.cost != null && parsed.cost > 0
-    const cost = logCostValid ? parsed.cost : calculatedCost
+    const logCost = parsed.cost
+    const logCostValid = logCost != null && logCost > 0
+    const cost = logCostValid ? logCost : calculatedCost
     const costSource: StatsRecord['costSource'] = logCostValid ? 'log' : calculatedCost > 0 ? 'pricing' : 'unknown'
 
     const record: StatsRecord = {

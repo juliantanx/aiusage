@@ -7,6 +7,25 @@ import { validateRepo, GitHubAuthError } from '../github/auth.js'
 
 const exec = promisify(execFile)
 
+/**
+ * True only for `ENOENT`, the one errno that confirms absence. `ENOTDIR`
+ * (a path component is a file where a directory is expected) means the cache
+ * layout is corrupt, not that the file was deleted: for a reader that prunes
+ * against absence it must surface as an error.
+ */
+function isNotFound(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === 'ENOENT'
+}
+
+/**
+ * Error surfaced for cache I/O failures. Only the relative sync path and the
+ * errno code are retained: never the absolute cache path or the OS message.
+ */
+function cacheError(operation: string, path: string, error: unknown): Error {
+  const code = (error as { code?: string } | null)?.code ?? 'unknown error'
+  return new Error(`Cannot ${operation} '${path}' in the GitHub sync cache (${code}). Check the permissions of the sync cache directory.`)
+}
+
 export interface GitSyncConfig {
   repo: string
   token?: string
@@ -83,12 +102,20 @@ export class GitSyncBackend {
     }
   }
 
+  /**
+   * `null` only when the file does not exist (`ENOENT`). Any other failure
+   * (permission denied, I/O error, a directory where a file was expected, a
+   * file where a directory was expected) is thrown: the orchestrator treats a
+   * missing file as a deletion and prunes against it, so a masked read error
+   * would destroy local data.
+   */
   async readFile(path: string): Promise<string | null> {
     try {
       const fullPath = join(this.dataDir, path)
       return await readFile(fullPath, 'utf-8')
-    } catch {
-      return null
+    } catch (error) {
+      if (isNotFound(error)) return null
+      throw cacheError('read', path, error)
     }
   }
 
@@ -98,11 +125,22 @@ export class GitSyncBackend {
     await writeFile(fullPath, content, 'utf-8')
   }
 
+  /**
+   * Every `*.ndjson` and namespace manifest under `data/`. A repository without
+   * a `data/` directory is genuinely empty; a failure walking an existing tree is thrown
+   * so that it can never be mistaken for "every namespace was deleted".
+   */
   async listFiles(): Promise<string[]> {
     try {
+      await stat(this.dataDir)
+    } catch (error) {
+      if (isNotFound(error)) return []
+      throw cacheError('list', 'data', error)
+    }
+    try {
       return await this.walkDir(this.dataDir, '')
-    } catch {
-      return []
+    } catch (error) {
+      throw cacheError('list', 'data', error)
     }
   }
 
@@ -110,19 +148,16 @@ export class GitSyncBackend {
     const fullPath = join(this.dataDir, path)
     try {
       await unlink(fullPath)
-    } catch {
-      // file may not exist
+    } catch (error) {
+      if (isNotFound(error)) return // already gone
+      throw cacheError('delete', path, error)
     }
   }
 
   async deleteAllData(): Promise<number> {
-    try {
-      const files = await this.listFiles()
-      await rm(this.dataDir, { recursive: true, force: true })
-      return files.length
-    } catch {
-      return 0
-    }
+    const files = await this.listFiles()
+    await rm(this.dataDir, { recursive: true, force: true })
+    return files.filter(path => path.endsWith('.ndjson')).length
   }
 
   private static readonly MAX_PUSH_RETRIES = 3
@@ -156,7 +191,7 @@ export class GitSyncBackend {
       const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
       if (entry.isDirectory()) {
         files.push(...await this.walkDir(join(dir, entry.name), relPath))
-      } else if (entry.name.endsWith('.ndjson')) {
+      } else if (entry.name.endsWith('.ndjson') || (entry.name === 'manifest.json' && prefix !== '' && !prefix.includes('/'))) {
         files.push(relPath)
       }
     }

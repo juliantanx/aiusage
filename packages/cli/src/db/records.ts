@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3'
-import type { RecordOrigin, StatsRecord } from '@aiusage/core'
+import type { RecordOrigin, StatsRecord, Tool } from '@aiusage/core'
+import { generateSyncRecordId } from '@aiusage/core'
+import { usesGeneratedWireId } from '../sync/mapper.js'
 
 /**
  * Sentinel device id used by parsers that ran before `state.json` existed.
@@ -202,4 +204,77 @@ function mapRowToRecord(row: Record<string, unknown>): StatsRecord {
     platform: (row.platform as string) || undefined,
     origin: ((row.origin as string) || 'local') as RecordOrigin,
   }
+}
+
+/**
+ * Local rows still stamped `'unknown'` that were already published somewhere
+ * travel, for tools whose wire id is generated from the device id, under
+ * `sha256('unknown', sourceFile, lineOffset)`. Adopting them under the real
+ * device id changes that wire id, so the old one must be retired on every
+ * target that received it (file backends drop it with the next snapshot, the
+ * cloud backend pushes a tombstone) and the row must be published again. This
+ * records the retired ids and clears the rows' sync state; it does not
+ * relabel anything. Returns the number of `(target, wire id)` pairs retired.
+ */
+export function retireWireIdsOfUnknownLocalRows(db: Database.Database): number {
+  const rows = db.prepare(`
+    SELECT s.record_id, s.target, r.tool, r.source_file, r.line_offset
+    FROM sync_record_state s
+    JOIN records r ON r.id = s.record_id
+    WHERE r.${LOCAL_RECORDS_WHERE} AND r.device_instance_id = '${UNKNOWN_DEVICE_INSTANCE_ID}'
+  `).all() as Array<{ record_id: string; target: string; tool: Tool; source_file: string; line_offset: number }>
+  const affected = rows.filter(r => usesGeneratedWireId(r.tool))
+  if (affected.length === 0) return 0
+
+  const retire = db.prepare(`INSERT OR IGNORE INTO sync_retired_wire_ids (target, wire_id) VALUES (?, ?)`)
+  const forget = db.prepare(`DELETE FROM sync_record_state WHERE record_id = ? AND target = ?`)
+  const requeue = db.prepare(`UPDATE records SET synced_at = NULL WHERE id = ?`)
+  return db.transaction(() => {
+    let retired = 0
+    for (const row of affected) {
+      retired += retire.run(row.target, generateSyncRecordId(UNKNOWN_DEVICE_INSTANCE_ID, row.source_file, row.line_offset)).changes
+      forget.run(row.record_id, row.target)
+      requeue.run(row.record_id)
+    }
+    return retired
+  })()
+}
+
+/**
+ * Re-label locally parsed rows that still carry the pre-init `'unknown'`
+ * sentinel with the real device id. Only `origin = 'local'` rows qualify: a
+ * pulled row is never relabelled, whatever its device id says. Rows that had
+ * already been published under the sentinel have their old wire ids retired
+ * first (see `retireWireIdsOfUnknownLocalRows`). Returns the number of rows
+ * updated.
+ */
+export function backfillUnknownDeviceInstanceId(db: Database.Database, deviceInstanceId: string, device?: string): number {
+  if (!deviceInstanceId || deviceInstanceId === UNKNOWN_DEVICE_INSTANCE_ID) return 0
+  return db.transaction(() => {
+    retireWireIdsOfUnknownLocalRows(db)
+    const result = device !== undefined
+      ? db.prepare(`
+          UPDATE records SET device_instance_id = ?, device = ?
+          WHERE device_instance_id = '${UNKNOWN_DEVICE_INSTANCE_ID}' AND ${LOCAL_RECORDS_WHERE}
+        `).run(deviceInstanceId, device)
+      : db.prepare(`
+          UPDATE records SET device_instance_id = ?
+          WHERE device_instance_id = '${UNKNOWN_DEVICE_INSTANCE_ID}' AND ${LOCAL_RECORDS_WHERE}
+        `).run(deviceInstanceId)
+    return result.changes
+  })()
+}
+
+/**
+ * The complete, authoritative set of records this device publishes: every
+ * locally parsed row stamped with its id. This is what a sync snapshot of the
+ * device's remote namespace is built from — never a delta.
+ */
+export function getLocalRecordsForDevice(db: Database.Database, deviceInstanceId: string): StatsRecord[] {
+  const rows = db.prepare(`
+    SELECT * FROM records
+    WHERE ${LOCAL_RECORDS_WHERE} AND device_instance_id = ?
+    ORDER BY ts, id
+  `).all(deviceInstanceId) as Record<string, unknown>[]
+  return rows.map(mapRowToRecord)
 }

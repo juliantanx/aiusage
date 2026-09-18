@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ request, url }) => {
 
   // Get current sync generation
   const reset = await sql`SELECT sync_generation FROM cloud_sync_resets WHERE user_id = ${userId}`
-  const currentGeneration = reset.length > 0 ? (reset[0] as { sync_generation: number }).sync_generation : 1
+  const currentGeneration = reset.length > 0 ? Number((reset[0] as { sync_generation: string | number }).sync_generation) : 1
 
   // Query records from all devices (including self), using change_seq as cursor.
   // Local merge logic (mergeSyncedRecordsIntoRecords) deduplicates via LEFT JOIN,

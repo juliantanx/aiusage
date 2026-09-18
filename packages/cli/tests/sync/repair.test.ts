@@ -121,8 +121,10 @@ describe('sync repair', () => {
 
     const nsA = report.remote!.namespaces.find(n => n.owner === A)!
     const nsB = report.remote!.namespaces.find(n => n.owner === B)!
-    expect(nsA).toMatchObject({ lines: 6, foreignLines: 0, echoLines: 1 })
-    expect(nsB).toMatchObject({ lines: 3, foreignLines: 1, echoLines: 1 })
+    // The pre-init 'unknown' line has no local counterpart: A's namespace is a
+    // snapshot of A's database, so it is stale.
+    expect(nsA).toMatchObject({ lines: 6, foreignLines: 0, echoLines: 1, staleLines: 1, duplicateLines: 0 })
+    expect(nsB).toMatchObject({ lines: 3, foreignLines: 1, echoLines: 1, staleLines: 0, duplicateLines: 0 })
     // Own-device echo + 'unknown' chain echo in synced_records; B's own record untouched.
     expect(report.local.echoSyncedIds.sort()).toEqual([echoesUnderB[0].id, echoOf({ ...wires[1], id: '', deviceInstanceId: 'unknown' }, 'unknown').id].sort())
     expect(report.local.echoSyncedIds).not.toContain(bOwn.id)
@@ -135,9 +137,9 @@ describe('sync repair', () => {
     expect(report.applied).toBe(true)
     expect(report.remoteResult).toMatchObject({ rewritten: 2, deleted: 0, flushed: true })
 
-    // Remote: A keeps its 4 real lines + the legitimate 'unknown' pre-init line; B keeps only its own.
+    // Remote: A keeps exactly its 4 local records (the orphaned 'unknown' line is stale); B keeps only its own.
     const linesA = backend.linesUnder(A)
-    expect(linesA.map(l => l.id).sort()).toEqual([...wires.map(w => w.id), generateSyncRecordId('unknown', FILE_A, 200)].sort())
+    expect(linesA.map(l => l.id).sort()).toEqual(wires.map(w => w.id).sort())
     expect(backend.linesUnder(B).map(l => l.id)).toEqual([bOwn.id])
 
     // Local: only A's 4 local rows + B's genuine record remain.
@@ -190,6 +192,6 @@ describe('sync repair', () => {
     backend.files.set(`${B}/2026/09/08.ndjson`, ndjson([stray]))
     const plan = await planRemoteRepair(backend, { deviceInstanceId: B })
     const file = plan.files.find(f => f.path === `${B}/2026/09/08.ndjson`)!
-    expect(file).toMatchObject({ foreignLines: 1, echoLines: 0, keptLines: [] })
+    expect(file).toMatchObject({ foreignLines: 1, echoLines: 0, keptRecords: [] })
   })
 })

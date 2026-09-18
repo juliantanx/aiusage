@@ -7,10 +7,17 @@ import { nanoid } from 'nanoid'
 export const POST: RequestHandler = async (event) => {
   const user = await requireUser(event)
 
-  // Get current generation
+  // Get current generation. BIGINT columns come back from the driver as strings,
+  // so without Number() the `+ 1` below would concatenate ('2' -> '21').
   const reset = await sql`SELECT sync_generation FROM cloud_sync_resets WHERE user_id = ${user.id}`
-  const currentGeneration = reset.length > 0 ? (reset[0] as { sync_generation: number }).sync_generation : 1
+  const currentGeneration = reset.length > 0 ? Number((reset[0] as { sync_generation: string | number }).sync_generation) : 1
   const newGeneration = currentGeneration + 1
+  // A generation this endpoint already corrupted past 2^53 cannot be
+  // incremented (or sent to a client) exactly: refuse rather than mark every
+  // record deleted without advancing the generation.
+  if (!Number.isSafeInteger(newGeneration)) {
+    return json({ error: 'Sync generation is out of range.', error_code: 'sync_generation_out_of_range' }, { status: 500 })
+  }
 
   // Get max change_seq before clear
   const maxSeq = await sql`SELECT MAX(change_seq) as max_seq FROM cloud_usage_records WHERE user_id = ${user.id}`

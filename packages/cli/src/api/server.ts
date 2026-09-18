@@ -1510,8 +1510,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             json(res, { error: { code: 'INVALID_PARAM', message: 'alias and modelKey required' } }, 400)
             return
           }
+          const { alias, modelKey } = data
           await runDbWrite(() => {
-            setUserPricingAlias(db, data.alias, data.modelKey)
+            setUserPricingAlias(db, alias, modelKey)
             loadPricingRuntime(db, loadConfig())
           })
           json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
