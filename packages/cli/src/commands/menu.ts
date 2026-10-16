@@ -67,11 +67,21 @@ function openBrowser(url: string): void {
   }
 }
 
+/**
+ * Runs a command of this CLI in a child process. The npm shim is
+ * `aiusage.cmd` on Windows, which spawnSync cannot start without a shell
+ * (ENOENT, and nothing ran), so the child is this same Node.js and entry
+ * script. The command prints its own output; failing to start it is
+ * reported here.
+ */
 function runCommand(args: string[]): void {
-  try {
-    spawnSync('aiusage', args, { stdio: 'inherit' })
-  } catch {
-    // command handles its own output
+  const entry = process.argv[1]
+  // Node flags are passed on only to load a TypeScript entry (a development
+  // run through tsx); others, such as --inspect, must not reach the child.
+  const nodeFlags = /\.[cm]?ts$/.test(entry) ? process.execArgv : []
+  const result = spawnSync(process.execPath, [...nodeFlags, entry, ...args], { stdio: 'inherit' })
+  if (result.error) {
+    console.error(`Could not run "aiusage ${args.join(' ')}": ${result.error.message}`)
   }
 }
 

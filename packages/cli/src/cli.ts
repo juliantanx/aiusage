@@ -323,6 +323,9 @@ program
         for (const r of propagation.backends) {
           if (r.status === 'ok') {
             console.log(`  ${r.backend.label}: ${r.detail}`)
+          } else if (r.status === 'failed') {
+            console.error(`  ${r.backend.label}: failed — ${r.detail}. The remote data was not removed; run the command again to retry.`)
+            process.exitCode = 1
           } else {
             console.log(`  ${r.backend.label}: skipped — ${r.detail}`)
           }
@@ -330,10 +333,11 @@ program
       } catch (err) {
         if (err instanceof JsonFileError) throw err
         console.error(`  Propagation failed: ${err instanceof Error ? err.message : err}`)
+        process.exitCode = 1
       }
     }
 
-    console.log('\nDone.')
+    console.log(process.exitCode ? '\nDone locally; the remote clean did not complete.' : '\nDone.')
   })
 
 // recalc command
@@ -447,6 +451,12 @@ program
         }
         if (ignored) {
           console.log('  Some remote lines belong to a different device than the namespace they are in. Run "aiusage sync --repair" for details.')
+        }
+        if ('rejectedCount' in result && result.rejectedCount) {
+          console.log(`  Note: ${result.rejectedCount} local record(s) were not uploaded: the cloud cannot store them (a missing tool or model, or a value out of range). They stay on this device as unsynced and are sent again with the next sync.`)
+        }
+        if ('unretiredCount' in result && result.unretiredCount) {
+          console.log(`  Note: ${result.unretiredCount} stale remote record(s) could not be retracted: the cloud did not apply their deletion. They are retracted again with the next sync.`)
         }
         if ('collisionCount' in result && result.collisionCount) {
           console.log(`  WARNING: ${result.collisionCount} local record(s) share a sync id with another record and were not uploaded. Run "aiusage sync --repair" for details.`)

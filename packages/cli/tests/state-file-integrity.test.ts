@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as init from '../src/init.js'
 
+/** The files in `dir`, leaving out settings.lock, which the writers keep there (src/settings-lock.ts). */
+const filesIn = (dir: string) => readdirSync(dir).filter(name => name !== 'settings.lock')
+
 const { ensureAiusageDir, getState, setState, setSyncTargetState, setSyncConsent } = init
 
 const DEVICE = '11111111-2222-3333-4444-555555555555'
@@ -52,7 +55,7 @@ describe('state.json integrity (#104)', () => {
         it(`${name} refuses to write over it`, () => {
           expect(write).toThrow(init.StateFileError)
           expect(readFileSync(statePath, 'utf-8')).toBe(content)
-          expect(readdirSync(dir)).toEqual(['state.json'])
+          expect(filesIn(dir)).toEqual(['state.json'])
         })
       }
 
@@ -118,7 +121,7 @@ describe('state.json integrity (#104)', () => {
       setSyncTargetState(dir, 'cloud', { lastSyncAt: i, lastSyncError: 'x'.repeat(2000) })
       expect(JSON.parse(readFileSync(statePath, 'utf-8')).syncTargets.cloud.lastSyncAt).toBe(i)
     }
-    expect(readdirSync(dir)).toEqual(['state.json'])
+    expect(filesIn(dir)).toEqual(['state.json'])
     expect(existsSync(statePath)).toBe(true)
   })
 })

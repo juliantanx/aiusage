@@ -550,5 +550,35 @@ const migrations = [
         ADD CONSTRAINT leaderboard_metrics_upload_request_id_fkey
         FOREIGN KEY (upload_request_id) REFERENCES upload_requests(id) ON DELETE SET NULL`
     }
+  },
+  {
+    version: 17,
+    name: 'leaderboard_metrics_entry_hidden',
+    up: async (tx: typeof sql) => {
+      // Marks a row an admin hid on its own (hideLeaderboardEntry), so that an
+      // approval of a snapshot of its period does not publish it again.
+      await tx`ALTER TABLE leaderboard_metrics ADD COLUMN IF NOT EXISTS entry_hidden BOOLEAN NOT NULL DEFAULT FALSE`
+
+      // Rows hidden on their own before the column existed, from the audit
+      // log's last hide or restore of each row. A row whose log entries were
+      // cleared is treated like a row hidden with its period.
+      // admin_audit_logs has no index on its target, so the last action of
+      // every row is found in one pass over the log rather than one lookup
+      // per hidden row.
+      await tx`
+        UPDATE leaderboard_metrics lm
+        SET entry_hidden = TRUE
+        FROM (
+          SELECT DISTINCT ON (al.target_id) al.target_id, al.action
+          FROM admin_audit_logs al
+          WHERE al.target_type = 'leaderboard_metrics'
+            AND al.action IN ('hide_metric', 'restore_metric')
+          ORDER BY al.target_id, al.created_at DESC, al.id DESC
+        ) last_action
+        WHERE last_action.target_id = lm.id
+          AND last_action.action = 'hide_metric'
+          AND lm.visibility = 'hidden'
+      `
+    }
   }
 ]

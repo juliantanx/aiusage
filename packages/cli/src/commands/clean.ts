@@ -33,7 +33,8 @@ export interface RemoteBackend {
 }
 
 export interface CleanPropagationResult {
-  backends: Array<{ backend: RemoteBackend; status: 'ok' | 'skipped'; detail?: string }>
+  /** `skipped`: not attempted, by design. `failed`: attempted, and the remote data may still be there. */
+  backends: Array<{ backend: RemoteBackend; status: 'ok' | 'skipped' | 'failed'; detail?: string }>
 }
 
 export function cleanOldData(db: Database.Database, days: number): CleanResult {
@@ -249,7 +250,7 @@ export async function propagateClean(options: {
       } catch (err) {
         results.push({
           backend: { type: 'cloud', label: 'AIUsage Cloud' },
-          status: 'skipped',
+          status: 'failed',
           detail: err instanceof Error ? err.message : 'unknown error',
         })
       }
@@ -309,7 +310,7 @@ export async function propagateClean(options: {
         type: config.sync.backend as 'github' | 's3',
         label: config.sync.backend === 'github' ? `GitHub (${config.sync.repo})` : `S3 (${config.sync.bucket})`,
       },
-      status: 'skipped',
+      status: 'failed',
       detail: err instanceof Error ? err.message : 'unknown error',
     })
   }

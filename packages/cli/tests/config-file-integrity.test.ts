@@ -68,6 +68,24 @@ describe('config.json integrity (#104)', () => {
     expect(leftovers()).toEqual([])
   })
 
+  it('changes the config on disk through updateConfig, and writes nothing for a change that returns false', () => {
+    // No file yet: the change starts from an empty config.
+    expect(config.updateConfig((cfg) => { cfg.device = 'G14' })).toEqual({ device: 'G14' })
+    saveCredential('a', '1')
+
+    // Built on the file as it is now, not on a copy read before.
+    const stale = loadConfig()!
+    saveCredential('b', '2')
+    const saved = config.updateConfig((cfg) => { cfg.syncInterval = stale.syncInterval ?? 60000 })
+    expect(saved).toEqual({ device: 'G14', credentials: { a: '1', b: '2' }, syncInterval: 60000 })
+    expect(loadConfig()).toEqual(saved)
+
+    const before = readFileSync(CONFIG_PATH, 'utf-8')
+    expect(config.updateConfig(() => false)).toEqual(saved)
+    expect(readFileSync(CONFIG_PATH, 'utf-8')).toBe(before)
+    expect(leftovers()).toEqual([])
+  })
+
   for (const [label, content] of UNUSABLE) {
     describe(`a config.json that is ${label}`, () => {
       beforeEach(() => writeFileSync(CONFIG_PATH, content, 'utf-8'))
@@ -101,6 +119,10 @@ describe('config.json integrity (#104)', () => {
           cfg.exchangeRateCache = { CNY_USD: 0.14, fetchedAt: 1 }
           saveConfig(cfg)
         }).toThrow(config.ConfigFileError)
+        untouched()
+        let called = false
+        expect(() => config.updateConfig(() => { called = true })).toThrow(config.ConfigFileError)
+        expect(called).toBe(false)
         untouched()
       })
     })
@@ -175,9 +197,10 @@ describe('config.json integrity (#104)', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ device: 'renamed' }),
       })
-      // The handler answers every failure in its body with this response.
-      expect(response.status).toBe(400)
-      expect(await response.json()).toEqual({ error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } })
+      expect(response.status).toBe(500)
+      const body = await response.json() as { error: { code: string; message: string } }
+      expect(body.error.code).toBe('SETTINGS_FILE_UNUSABLE')
+      expect(body.error.message).toContain(CONFIG_PATH)
       expect(readFileSync(CONFIG_PATH, 'utf-8')).toBe(TYPO)
     })
 

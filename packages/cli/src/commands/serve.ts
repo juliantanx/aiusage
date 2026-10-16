@@ -11,7 +11,7 @@ import { runSync } from './sync.js'
 import { cleanOldData } from './clean.js'
 import { uploadLeaderboardData, wasLeaderboardUploadStored } from './leaderboard-upload.js'
 import { getState, setState } from '../init.js'
-import { AIUSAGE_DIR, loadConfig, saveConfig } from '../config.js'
+import { AIUSAGE_DIR, loadConfig, updateConfig } from '../config.js'
 import { SyncRuntimeController } from '../sync/runtime.js'
 import { getSyncTarget } from '../sync/target.js'
 import { RuntimeSettingsController } from '../runtime/settings-controller.js'
@@ -53,10 +53,17 @@ export function serve(options: ServeOptions): void {
   // After import, drop them from config so the registry is the single source of
   // truth and this does not run again.
   if (config?.priceOverrides && Object.keys(config.priceOverrides).length > 0) {
-    const imported = importConfigPriceOverrides(options.db, config.priceOverrides)
+    const migrated = config.priceOverrides
+    const imported = importConfigPriceOverrides(options.db, migrated)
+    // Only the overrides imported here leave config.json; one the dashboard
+    // saved since the read above stays for the next start.
+    const saved = updateConfig((cfg) => {
+      if (!cfg.priceOverrides) return false
+      for (const model of Object.keys(migrated)) delete cfg.priceOverrides[model]
+      if (Object.keys(cfg.priceOverrides).length === 0) delete cfg.priceOverrides
+    })
     delete config.priceOverrides
-    saveConfig(config)
-    loadPricingRuntime(options.db, config)
+    loadPricingRuntime(options.db, saved)
     if (imported.length > 0) {
       console.log(`[serve] migrated ${imported.length} config price override(s) into the registry: ${imported.join(', ')}`)
     }
@@ -70,9 +77,7 @@ export function serve(options: ServeOptions): void {
     if (cacheAge >= CACHE_TTL_MS) {
       fetchExchangeRate().then(rate => {
         if (rate != null) {
-          const cfg = loadConfig() ?? {}
-          cfg.exchangeRateCache = { CNY_USD: rate, fetchedAt: Date.now() }
-          saveConfig(cfg)
+          updateConfig((cfg) => { cfg.exchangeRateCache = { CNY_USD: rate, fetchedAt: Date.now() } })
         }
       }).catch(() => {
         // Silently ignore — FALLBACK_RATE will be used

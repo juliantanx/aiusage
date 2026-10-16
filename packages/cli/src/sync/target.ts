@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { SyncConfig } from '../config.js'
 import { getBookkeepingTargets } from '../db/sync-claims.js'
-import { getState, setState, type State } from '../init.js'
+import { getState, updateState, type State } from '../init.js'
 
 /**
  * Sync target identity.
@@ -109,21 +109,28 @@ export function adoptLegacySyncTarget(aiusageDir: string, db: Database.Database,
   const legacy = getLegacySyncTarget(sync)
   if (!target || !legacy) return null
 
-  let stateCopied = false
-  const state = getState(aiusageDir)
-  if (state) {
+  const stateCopy = (state: State): Partial<State> | undefined => {
     const consents = state.syncConsents ?? {}
     const targets = state.syncTargets ?? {}
     const updates: Partial<State> = {}
     if (!consents[target] && consents[legacy]) {
       updates.syncConsents = { ...consents, [target]: consents[legacy] }
-      stateCopied = true
     }
     if (!targets[target] && targets[legacy]) {
       updates.syncTargets = { ...targets, [target]: { ...targets[legacy], lastSyncTarget: target } }
-      stateCopied = true
     }
-    if (stateCopied) setState(aiusageDir, updates)
+    return Object.keys(updates).length > 0 ? updates : undefined
+  }
+  let stateCopied = false
+  const state = getState(aiusageDir)
+  // Checked again under the lock, on the file as it is then.
+  if (state && stateCopy(state)) {
+    updateState(aiusageDir, (current) => {
+      const updates = stateCopy(current)
+      if (!updates) return undefined
+      stateCopied = true
+      return { ...current, ...updates }
+    })
   }
 
   const copied = { syncStateRows: 0, claimRows: 0, retiredWireIdRows: 0 }
@@ -184,16 +191,21 @@ export function isSyncTargetInState(state: State | null, target: string): boolea
  * changed.
  */
 export function forgetSyncTargetState(aiusageDir: string, target: string): boolean {
-  const state = getState(aiusageDir)
-  if (!state || !isSyncTargetInState(state, target)) return false
-  const { [target]: _consent, ...syncConsents } = state.syncConsents ?? {}
-  const { [target]: _status, ...syncTargets } = state.syncTargets ?? {}
-  setState(aiusageDir, {
-    syncConsents,
-    syncTargets,
-    lastSyncTarget: state.lastSyncTarget === target ? undefined : state.lastSyncTarget,
+  if (!isSyncTargetInState(getState(aiusageDir), target)) return false
+  let changed = false
+  updateState(aiusageDir, (state) => {
+    if (!isSyncTargetInState(state, target)) return undefined
+    changed = true
+    const { [target]: _consent, ...syncConsents } = state.syncConsents ?? {}
+    const { [target]: _status, ...syncTargets } = state.syncTargets ?? {}
+    return {
+      ...state,
+      syncConsents,
+      syncTargets,
+      lastSyncTarget: state.lastSyncTarget === target ? undefined : state.lastSyncTarget,
+    }
   })
-  return true
+  return changed
 }
 
 /**

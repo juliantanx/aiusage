@@ -108,10 +108,23 @@ describe('approveSnapshot', () => {
     expect(update.text).toContain(
       'AND ( lm.upload_request_id = s.upload_request_id OR EXISTS ( SELECT 1 FROM upload_snapshots src WHERE src.upload_request_id = lm.upload_request_id'
     )
+    // An accepted upload that an admin hid or rejected since does not count.
     expect(update.text).toContain(
-      "AND src.user_id = s.user_id AND src.period_type = s.period_type AND src.period_start = s.period_start AND (src.status <> 'flagged' OR src.review_status = 'approved') ) )"
+      "AND src.user_id = s.user_id AND src.period_type = s.period_type AND src.period_start = s.period_start AND ( src.review_status = 'approved' OR (src.status <> 'flagged' AND src.review_status IS NULL) ) ) )"
     )
     expect(auditMetadata()).toEqual({ metrics_updated: 4 })
+    // tests/admin/snapshot-moderation.pg.test.ts runs these rules on PostgreSQL.
+  })
+
+  it('leaves rows hidden on their own, and the whole period while another snapshot of it stands hidden or rejected', async () => {
+    database({ metricRows: 0 })
+
+    await approveSnapshot('admin_1', 'snap_1')
+
+    const update = queries.find(isMetricUpdate)!
+    expect(update.text).toContain(
+      "AND NOT lm.entry_hidden AND NOT EXISTS ( SELECT 1 FROM upload_snapshots hold WHERE hold.user_id = s.user_id AND hold.period_type = s.period_type AND hold.period_start = s.period_start AND hold.review_status IN ('hidden', 'rejected') )"
+    )
   })
 
   it('reports the rows of the period it left unpublished', async () => {

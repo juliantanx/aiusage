@@ -72,3 +72,9 @@ export function loadGitHubCredentials(id: string): GitHubCredentials | null {
     throw new GitHubAuthError('Cannot read GitHub credentials. Unlock the OS keychain or run aiusage github login again.')
   }
 }
+
+/** Best effort: remove a stored record nothing refers to. Never throws. */
+export function deleteGitHubCredentials(id: string): void {
+  try { unlinkSync(file(id)) } catch { /* not in the file store */ }
+  try { entry(id).deletePassword() } catch { /* not in the keychain, or the keychain is unavailable */ }
+}

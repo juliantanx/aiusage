@@ -655,9 +655,19 @@ export async function processUpload(
       // Admin moderation outlives the upload: a row that is hidden stays hidden
       // in the upsert below, whatever this upload's status, and a row this
       // upload adds (a tool or model the period did not have before) starts
-      // hidden when every existing row of the period is hidden.
+      // hidden while a snapshot of the period stands hidden or rejected, or
+      // when every existing row of the period is hidden.
       const periodRows = await tx`
-        SELECT COALESCE(BOOL_AND(visibility = 'hidden'), FALSE) AS hidden
+        SELECT (
+          COALESCE(BOOL_AND(visibility = 'hidden'), FALSE)
+          OR EXISTS (
+            SELECT 1 FROM upload_snapshots hold
+            WHERE hold.user_id = ${userId}
+              AND hold.period_type = ${snapshot.period_type}
+              AND hold.period_start = ${snapshot.period_start}
+              AND hold.review_status IN ('hidden', 'rejected')
+          )
+        ) AS hidden
         FROM leaderboard_metrics
         WHERE user_id = ${userId}
           AND period_type = ${snapshot.period_type}

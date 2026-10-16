@@ -5,7 +5,11 @@ import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
 import { calculateCostForPrice, removePriceOverride, inferProvider, normalizeQoderModel, resolveExchangeRate, fetchExchangeRate, TOOLS, type PriceEntry } from '@aiusage/core'
-import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig } from '../config.js'
+import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, updateConfig } from '../config.js'
+import { withSettingsLock } from '../settings-lock.js'
+import { JsonFileError } from '../json-file.js'
+import { GitHubAuthError } from '../github/errors.js'
+import { deleteGitHubCredentials, saveGitHubCredentials } from '../github/credentials.js'
 import { browserProtocol, isTrustedApiRequest } from './trust.js'
 import { credentialStatus, publicSyncConfig, setSyncCredentials } from './credential-settings.js'
 import { createGitHubDeviceSessions } from '../github/device-sessions.js'
@@ -1502,9 +1506,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           try {
             await runDbWrite(() => {
               setUserPrice(db, data.model as string, entry)
-              const cfg = loadConfig() ?? {}
-              cfg.priceOverrides = { ...cfg.priceOverrides, [data.model as string]: entry }
-              saveConfig(cfg)
+              const cfg = updateConfig((c) => {
+                c.priceOverrides = { ...c.priceOverrides, [data.model as string]: entry }
+              })
               loadPricingRuntime(db, cfg)
             })
           } catch (error) {
@@ -1528,11 +1532,10 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             await runDbWrite(() => {
               resetUserPriceToSynced(db, model)
               removePriceOverride(model)
-              const cfg = loadConfig() ?? {}
-              if (cfg.priceOverrides) {
-                delete cfg.priceOverrides[model]
-                saveConfig(cfg)
-              }
+              const cfg = updateConfig((c) => {
+                if (!c.priceOverrides) return false
+                delete c.priceOverrides[model]
+              })
               loadPricingRuntime(db, cfg)
             })
             json(res, { ok: true, needsRecalc: true, needsRecalcSince: markPricingNeedsRecalc() })
@@ -1972,160 +1975,201 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
         if (req.method === 'PUT') {
           let body = ''
           for await (const chunk of req) body += chunk
+          let update: Record<string, unknown>
           try {
-            const update = JSON.parse(body) as Record<string, unknown>
-            const existing: Config = loadConfig() ?? {}
-
-            if ('device' in update) {
-              if (!update.device) delete existing.device
-              else existing.device = String(update.device)
-            }
-            if ('weekStart' in update) {
-              const ws = Number(update.weekStart)
-              if (ws === 0 || ws === 1) {
-                existing.weekStart = ws as 0 | 1
-                weekStart = ws as 0 | 1
-              } else {
-                delete existing.weekStart
-              }
-            }
-            if ('displayCurrency' in update) {
-              const dc = update.displayCurrency
-              if (dc === 'USD' || dc === 'CNY') {
-                existing.displayCurrency = dc
-              } else {
-                delete existing.displayCurrency
-              }
-            }
-            if ('exchangeRate' in update) {
-              const er = update.exchangeRate
-              if (er != null && typeof er === 'number' && er > 0) {
-                existing.exchangeRate = er
-              } else {
-                delete existing.exchangeRate
-              }
-            }
-
-            // Milliseconds. A delay above 2^31 - 1 overflows a Node timer, which then
-            // fires every 1 ms, and a value typed in seconds runs back to back.
-            // A blank or zero value still clears the setting.
-            const intervalBounds: Array<[string, number, number]> = [
-              ['refreshInterval', 1000, 2147483647],
-              ['leaderboardUploadInterval', 3600000, 31536000000],
-              ['syncInterval', 60000, 2147483647],
-            ]
-            const intervals: Record<string, number | undefined> = {}
-            for (const [field, min, max] of intervalBounds) {
-              const raw = update[field]
-              if (raw == null || raw === false || raw === '' || raw === 0 || raw === '0') continue
-              const value = typeof raw === 'number' || typeof raw === 'string' ? Number(raw) : NaN
-              if (!Number.isFinite(value) || value < min || value > max) {
-                // Nothing is saved, so undo the week start this request may have applied above.
-                weekStart = (loadConfig()?.weekStart ?? 1) as 0 | 1
-                json(res, { error: { code: 'INVALID_INTERVAL', message: `${field} must be a number of milliseconds between ${min} and ${max}` } }, 400)
-                return
-              }
-              intervals[field] = value
-            }
-
-            if ('refreshInterval' in update) {
-              if (intervals.refreshInterval == null) {
-                delete existing.refreshInterval
-              } else {
-                existing.refreshInterval = intervals.refreshInterval
-              }
-              // Clean up legacy fields
-              delete existing.dashboardPollInterval
-              delete existing.parseInterval
-            }
-            if ('retentionDays' in update) {
-              if (!update.retentionDays) delete existing.retentionDays
-              else existing.retentionDays = Number(update.retentionDays)
-            }
-            if ('leaderboardAutoUpload' in update) {
-              existing.leaderboardAutoUpload = update.leaderboardAutoUpload === true
-            }
-            if ('leaderboardUploadInterval' in update) {
-              const uploadInterval = intervals.leaderboardUploadInterval
-              if (uploadInterval != null) {
-                existing.leaderboardUploadInterval = uploadInterval
-              } else {
-                delete existing.leaderboardUploadInterval
-              }
-            }
-
-            if ('syncInterval' in update) {
-              const si = intervals.syncInterval
-              if (si != null) {
-                existing.syncInterval = si
-              } else {
-                delete existing.syncInterval
-              }
-            }
-
-            if ('sync' in update) {
-              const syncUpdate = update.sync as Record<string, unknown> | null
-              if (!syncUpdate?.backend) {
-                delete existing.sync
-              } else {
-                const backendVal = String(syncUpdate.backend)
-                if (backendVal !== 'github' && backendVal !== 's3' && backendVal !== 'cloud') {
-                  json(res, { error: { code: 'INVALID_BACKEND', message: 'sync.backend must be cloud, github, or s3' } }, 400)
-                  return
-                }
-                // Merge with existing sync config to preserve fields from other backends
-                const newSync: SyncConfig = { ...existing.sync, backend: backendVal as 'github' | 's3' | 'cloud' }
-                for (const f of ['repo', 'bucket', 'prefix', 'endpoint', 'region', 'credentialRef'] as const) {
-                  if (syncUpdate[f] != null && syncUpdate[f] !== '') (newSync as any)[f] = String(syncUpdate[f])
-                }
-                if (newSync.repo !== existing.sync?.repo) {
-                  delete newSync.githubAuth
-                  delete newSync.branch
-                  delete newSync.credentialRef
-                }
-                if (newSync.backend === 'github' && newSync.repo) validateRepo(newSync.repo)
-                if (newSync.backend === 'github' && !newSync.repo) {
-                  json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.repo is required for GitHub sync' } }, 400)
-                  return
-                }
-                if (newSync.backend === 's3' && !newSync.bucket) {
-                  json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.bucket is required for S3 sync' } }, 400)
-                  return
-                }
-                existing.sync = newSync
-              }
-            }
-
-            if (update.credentials && typeof update.credentials === 'object') {
-              const creds = update.credentials as Record<string, unknown>
-              const c: Record<string, string> = existing.credentials ?? {}
-              for (const [key, val] of Object.entries(creds)) {
-                if (val !== '' && val !== null && val !== undefined) {
-                  c[key] = String(val)
-                }
-              }
-              if (Object.keys(c).length) existing.credentials = c
-              else delete existing.credentials
-            }
-
-            if (update.syncCredentials && typeof update.syncCredentials === 'object') {
-              setSyncCredentials(existing, update.syncCredentials as Record<string, unknown>)
-            }
-
-            saveConfig(existing)
-            const consentConfig = buildConsentConfig(existing)
-            const syncTarget = getSyncTarget(existing.sync)
-            if (consentConfig && syncTarget) {
-              setSyncConsent(AIUSAGE_DIR, syncTarget, {
-                syncConsentAt: Date.now(),
-                syncConsentTarget: generateConsentFingerprint(consentConfig),
-              })
-            }
-            options?.onConfigUpdated?.()
-            json(res, { ok: true })
+            update = JSON.parse(body) as Record<string, unknown>
           } catch {
             json(res, { error: { code: 'INVALID_JSON', message: 'Invalid JSON body' } }, 400)
+            return
           }
+          // Set once config.json is written: a failure after that point (the
+          // consent in state.json) must not be reported as nothing saved.
+          let configSaved = false
+          const syncCredentials = update.syncCredentials && typeof update.syncCredentials === 'object'
+            ? update.syncCredentials as Record<string, unknown> : undefined
+          // A new GitHub token goes to the OS keychain first, outside the
+          // settings lock: the keychain can wait on the user (an access
+          // prompt), and other processes must not wait on that to save
+          // state.json or config.json. It is removed again unless the saved
+          // config refers to it.
+          let storedTokenId: string | undefined
+          let storedTokenKept = false
+          try {
+            const githubToken = syncCredentials?.githubToken
+            if (typeof githubToken === 'string' && githubToken) {
+              storedTokenId = saveGitHubCredentials({ method: 'pat', accessToken: githubToken })
+            }
+            // Read, change and save under the settings lock, so that a change
+            // another process saves meanwhile (`aiusage init`, a login, a
+            // sync) is not written over with the copy read here.
+            const saved = withSettingsLock(AIUSAGE_DIR, (): boolean => {
+              const existing: Config = loadConfig() ?? {}
+
+              if ('device' in update) {
+                if (!update.device) delete existing.device
+                else existing.device = String(update.device)
+              }
+              if ('weekStart' in update) {
+                const ws = Number(update.weekStart)
+                if (ws === 0 || ws === 1) {
+                  existing.weekStart = ws as 0 | 1
+                  weekStart = ws as 0 | 1
+                } else {
+                  delete existing.weekStart
+                }
+              }
+              if ('displayCurrency' in update) {
+                const dc = update.displayCurrency
+                if (dc === 'USD' || dc === 'CNY') {
+                  existing.displayCurrency = dc
+                } else {
+                  delete existing.displayCurrency
+                }
+              }
+              if ('exchangeRate' in update) {
+                const er = update.exchangeRate
+                if (er != null && typeof er === 'number' && er > 0) {
+                  existing.exchangeRate = er
+                } else {
+                  delete existing.exchangeRate
+                }
+              }
+
+              // Milliseconds. A delay above 2^31 - 1 overflows a Node timer, which then
+              // fires every 1 ms, and a value typed in seconds runs back to back.
+              // A blank or zero value still clears the setting.
+              const intervalBounds: Array<[string, number, number]> = [
+                ['refreshInterval', 1000, 2147483647],
+                ['leaderboardUploadInterval', 3600000, 31536000000],
+                ['syncInterval', 60000, 2147483647],
+              ]
+              const intervals: Record<string, number | undefined> = {}
+              for (const [field, min, max] of intervalBounds) {
+                const raw = update[field]
+                if (raw == null || raw === false || raw === '' || raw === 0 || raw === '0') continue
+                const value = typeof raw === 'number' || typeof raw === 'string' ? Number(raw) : NaN
+                if (!Number.isFinite(value) || value < min || value > max) {
+                  // Nothing is saved, so undo the week start this request may have applied above.
+                  weekStart = (loadConfig()?.weekStart ?? 1) as 0 | 1
+                  json(res, { error: { code: 'INVALID_INTERVAL', message: `${field} must be a number of milliseconds between ${min} and ${max}` } }, 400)
+                  return false
+                }
+                intervals[field] = value
+              }
+
+              if ('refreshInterval' in update) {
+                if (intervals.refreshInterval == null) {
+                  delete existing.refreshInterval
+                } else {
+                  existing.refreshInterval = intervals.refreshInterval
+                }
+                // Clean up legacy fields
+                delete existing.dashboardPollInterval
+                delete existing.parseInterval
+              }
+              if ('retentionDays' in update) {
+                if (!update.retentionDays) delete existing.retentionDays
+                else existing.retentionDays = Number(update.retentionDays)
+              }
+              if ('leaderboardAutoUpload' in update) {
+                existing.leaderboardAutoUpload = update.leaderboardAutoUpload === true
+              }
+              if ('leaderboardUploadInterval' in update) {
+                const uploadInterval = intervals.leaderboardUploadInterval
+                if (uploadInterval != null) {
+                  existing.leaderboardUploadInterval = uploadInterval
+                } else {
+                  delete existing.leaderboardUploadInterval
+                }
+              }
+
+              if ('syncInterval' in update) {
+                const si = intervals.syncInterval
+                if (si != null) {
+                  existing.syncInterval = si
+                } else {
+                  delete existing.syncInterval
+                }
+              }
+
+              if ('sync' in update) {
+                const syncUpdate = update.sync as Record<string, unknown> | null
+                if (!syncUpdate?.backend) {
+                  delete existing.sync
+                } else {
+                  const backendVal = String(syncUpdate.backend)
+                  if (backendVal !== 'github' && backendVal !== 's3' && backendVal !== 'cloud') {
+                    json(res, { error: { code: 'INVALID_BACKEND', message: 'sync.backend must be cloud, github, or s3' } }, 400)
+                    return false
+                  }
+                  // Merge with existing sync config to preserve fields from other backends
+                  const newSync: SyncConfig = { ...existing.sync, backend: backendVal as 'github' | 's3' | 'cloud' }
+                  for (const f of ['repo', 'bucket', 'prefix', 'endpoint', 'region', 'credentialRef'] as const) {
+                    if (syncUpdate[f] != null && syncUpdate[f] !== '') (newSync as any)[f] = String(syncUpdate[f])
+                  }
+                  if (newSync.repo !== existing.sync?.repo) {
+                    delete newSync.githubAuth
+                    delete newSync.branch
+                    delete newSync.credentialRef
+                  }
+                  if (newSync.backend === 'github' && newSync.repo) validateRepo(newSync.repo)
+                  if (newSync.backend === 'github' && !newSync.repo) {
+                    json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.repo is required for GitHub sync' } }, 400)
+                    return false
+                  }
+                  if (newSync.backend === 's3' && !newSync.bucket) {
+                    json(res, { error: { code: 'INVALID_SYNC_CONFIG', message: 'sync.bucket is required for S3 sync' } }, 400)
+                    return false
+                  }
+                  existing.sync = newSync
+                }
+              }
+
+              if (update.credentials && typeof update.credentials === 'object') {
+                const creds = update.credentials as Record<string, unknown>
+                const c: Record<string, string> = existing.credentials ?? {}
+                for (const [key, val] of Object.entries(creds)) {
+                  if (val !== '' && val !== null && val !== undefined) {
+                    c[key] = String(val)
+                  }
+                }
+                if (Object.keys(c).length) existing.credentials = c
+                else delete existing.credentials
+              }
+
+              if (syncCredentials) setSyncCredentials(existing, syncCredentials, storedTokenId)
+
+              saveConfig(existing)
+              configSaved = true
+              storedTokenKept = storedTokenId !== undefined && existing.sync?.githubAuth?.credentialId === storedTokenId
+              const consentConfig = buildConsentConfig(existing)
+              const syncTarget = getSyncTarget(existing.sync)
+              if (consentConfig && syncTarget) {
+                setSyncConsent(AIUSAGE_DIR, syncTarget, {
+                  syncConsentAt: Date.now(),
+                  syncConsentTarget: generateConsentFingerprint(consentConfig),
+                })
+              }
+              return true
+            })
+            if (!saved) return
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            if (configSaved) {
+              // The settings are in config.json: run with them, and say what failed.
+              options?.onConfigUpdated?.()
+              json(res, { error: { code: 'CONSENT_NOT_SAVED', message: `The settings were saved, but the sync consent was not: ${message}` } }, 500)
+            } else if (error instanceof GitHubAuthError) {
+              json(res, { error: { code: 'INVALID_SYNC_CONFIG', message } }, 400)
+            } else {
+              json(res, { error: { code: error instanceof JsonFileError ? 'SETTINGS_FILE_UNUSABLE' : 'CONFIG_NOT_SAVED', message } }, 500)
+            }
+            return
+          } finally {
+            if (storedTokenId && !storedTokenKept) deleteGitHubCredentials(storedTokenId)
+          }
+          options?.onConfigUpdated?.()
+          json(res, { ok: true })
           return
         }
       }
@@ -2196,10 +2240,9 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
           json(res, { error: { code: 'FETCH_FAILED', message: 'Failed to fetch exchange rate' } }, 502)
           return
         }
-        const cfg = loadConfig() ?? {}
-        cfg.exchangeRateCache = { CNY_USD: rate, fetchedAt: Date.now() }
-        saveConfig(cfg)
-        json(res, { rate, fetchedAt: cfg.exchangeRateCache.fetchedAt })
+        const exchangeRateCache = { CNY_USD: rate, fetchedAt: Date.now() }
+        updateConfig((cfg) => { cfg.exchangeRateCache = exchangeRateCache })
+        json(res, { rate, fetchedAt: exchangeRateCache.fetchedAt })
         return
       }
 

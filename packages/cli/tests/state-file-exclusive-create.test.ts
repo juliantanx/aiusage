@@ -3,6 +3,9 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+/** The files in `dir`, leaving out settings.lock, which the writers keep there (src/settings-lock.ts). */
+const filesIn = (dir: string) => readdirSync(dir).filter(name => name !== 'settings.lock')
+
 // linkSync is replaceable, to stand in for a file system without hard links
 // and for another process that gets in between two steps.
 const link = vi.hoisted(() => ({ impl: undefined as undefined | ((from: string, to: string) => void) }))
@@ -41,7 +44,7 @@ describe('state.json is created by one process only (#104)', () => {
     expect(writeFileAtomic(statePath, 'first', { exclusive: true })).toBe(true)
     expect(writeFileAtomic(statePath, 'second', { exclusive: true })).toBe(false)
     expect(readFileSync(statePath, 'utf-8')).toBe('first')
-    expect(readdirSync(dir)).toEqual(['state.json'])
+    expect(filesIn(dir)).toEqual(['state.json'])
   })
 
   it('keeps the identity another process created between the check and the link', () => {
@@ -51,7 +54,7 @@ describe('state.json is created by one process only (#104)', () => {
     }
     ensureAiusageDir(dir)
     expect(readFileSync(statePath, 'utf-8')).toBe(THEIRS)
-    expect(readdirSync(dir)).toEqual(['state.json'])
+    expect(filesIn(dir)).toEqual(['state.json'])
   })
 
   it('without hard links, still keeps the identity another process created in the meantime', () => {
@@ -66,13 +69,13 @@ describe('state.json is created by one process only (#104)', () => {
     rmSync(statePath)
     setState(dir, { lastSyncAt: 5 })
     expect(JSON.parse(readFileSync(statePath, 'utf-8'))).toEqual({ ...JSON.parse(THEIRS), lastSyncAt: 5 })
-    expect(readdirSync(dir)).toEqual(['state.json'])
+    expect(filesIn(dir)).toEqual(['state.json'])
   })
 
   it('without hard links, creates the file when no one else does', () => {
     link.impl = noHardLinks
     ensureAiusageDir(dir)
     expect(getState(dir)!.deviceInstanceId).toHaveLength(36)
-    expect(readdirSync(dir)).toEqual(['state.json'])
+    expect(filesIn(dir)).toEqual(['state.json'])
   })
 })

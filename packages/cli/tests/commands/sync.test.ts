@@ -5,11 +5,17 @@ import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
 
 // Mock the init module
-vi.mock('../../src/init.js', () => ({
-  getState: vi.fn(),
-  setState: vi.fn(),
-  setSyncTargetState: vi.fn(),
-}))
+vi.mock('../../src/init.js', () => {
+  const getState = vi.fn()
+  return {
+    getState,
+    setState: vi.fn(),
+    setSyncTargetState: vi.fn(),
+    // Applies the change to what the getState mock returns, as updateState
+    // does to the file; the new state is the call's result.
+    updateState: vi.fn((dir: string, mutate: (state: unknown) => unknown) => mutate(getState(dir))),
+  }
+})
 
 vi.mock('../../src/sync/consent.js', () => ({ verifyConsent: vi.fn(() => true) }))
 vi.mock('../../src/sync/git.js', () => ({ GitSyncBackend: class {} }))
@@ -176,13 +182,13 @@ describe('Sync Command', () => {
 
     it('forgets the legacy key: database first, then state, without touching the remote', async () => {
       await configure({ backend: 'github', repo: 'user/repo', branch: 'dev' }, {})
-      const { setState } = await import('../../src/init.js')
+      const { updateState } = await import('../../src/init.js')
 
       const dry = await runSyncRepair(db, { forgetTarget: legacy })
       expect(dry.status).toBe('ok')
       expect(dry.forget).toMatchObject({ target: legacy, applied: false, bookkeeping: { claimRows: 1, lastClaimRows: 0 }, remainingTargets: [target] })
       expect(claimRows(legacy)).toBe(1)
-      expect(setState).not.toHaveBeenCalled()
+      expect(updateState).not.toHaveBeenCalled()
 
       const applied = await runSyncRepair(db, { forgetTarget: legacy, apply: true })
       expect(applied.status).toBe('ok')
@@ -191,8 +197,10 @@ describe('Sync Command', () => {
       expect(claimRows(legacy)).toBe(0)
       expect(claimRows(target)).toBe(1)
       expect(repairCalls).not.toHaveBeenCalled()
-      expect(setState).toHaveBeenCalledTimes(1)
-      expect(vi.mocked(setState).mock.calls[0][1]).toEqual({
+      expect(updateState).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(updateState).mock.results[0].value).toEqual({
+        deviceInstanceId: 'dev-123',
+        lastSyncStatus: 'ok',
         syncConsents: { [target]: { syncConsentAt: 1, syncConsentTarget: 'fp' } },
         syncTargets: { [target]: { lastSyncAt: 2, lastSyncStatus: 'ok', lastSyncTarget: target } },
         lastSyncTarget: undefined,

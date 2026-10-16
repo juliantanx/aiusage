@@ -2,6 +2,7 @@ import { mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { JsonFileError, readJsonObjectFile, writeFileAtomic } from './json-file.js'
+import { withSettingsLock } from './settings-lock.js'
 
 export interface State {
   deviceInstanceId: string
@@ -124,14 +125,33 @@ function writeState(aiusageDir: string, state: State): void {
   writeFileAtomic(statePathOf(aiusageDir), JSON.stringify(state, null, 2))
 }
 
+/**
+ * Change `state.json`: `mutate` gets the state as it is on disk now and
+ * returns the new state, or `undefined` to leave the file as it is. The read
+ * and the write happen under the settings lock (`withSettingsLock`), so an
+ * update another process makes at the same time is never written over with
+ * an older copy of the file. Build every change from `current`, not from a
+ * state read earlier. Returns the state the file holds afterwards.
+ */
+export function updateState(aiusageDir: string, mutate: (current: State) => State | undefined): State {
+  return withSettingsLock(aiusageDir, () => {
+    const current = loadStateForUpdate(aiusageDir)
+    const updated = mutate(current)
+    if (updated === undefined) return current
+    writeState(aiusageDir, updated)
+    return updated
+  })
+}
+
 export function setState(aiusageDir: string, updates: Partial<State>): void {
-  const current = loadStateForUpdate(aiusageDir)
-  const updated = { ...current, ...updates }
-  writeState(aiusageDir, updated)
+  updateState(aiusageDir, current => ({ ...current, ...updates }))
 }
 
 export function setSyncTargetState(aiusageDir: string, target: string, updates: SyncTargetState): void {
-  const current = loadStateForUpdate(aiusageDir)
+  updateState(aiusageDir, current => syncTargetStateUpdate(current, target, updates))
+}
+
+function syncTargetStateUpdate(current: State, target: string, updates: SyncTargetState): State {
   const targetState = {
     ...(current.syncTargets?.[target] ?? {}),
     ...updates,
@@ -146,7 +166,7 @@ export function setSyncTargetState(aiusageDir: string, target: string, updates: 
     lastSyncPulled: targetState.lastSyncPulled,
     lastSyncDurationMs: targetState.lastSyncDurationMs,
   }
-  const updated = {
+  return {
     ...current,
     ...legacyUpdates,
     syncTargets: {
@@ -154,12 +174,10 @@ export function setSyncTargetState(aiusageDir: string, target: string, updates: 
       [target]: targetState,
     },
   }
-  writeState(aiusageDir, updated)
 }
 
 export function setSyncConsent(aiusageDir: string, target: string, consent: { syncConsentAt: number; syncConsentTarget: string }): void {
-  const current = loadStateForUpdate(aiusageDir)
-  const updated = {
+  updateState(aiusageDir, current => ({
     ...current,
     syncConsentAt: consent.syncConsentAt,
     syncConsentTarget: consent.syncConsentTarget,
@@ -167,6 +185,5 @@ export function setSyncConsent(aiusageDir: string, target: string, consent: { sy
       ...(current.syncConsents ?? {}),
       [target]: consent,
     },
-  }
-  writeState(aiusageDir, updated)
+  }))
 }

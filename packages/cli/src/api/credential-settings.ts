@@ -27,12 +27,17 @@ export function publicSyncConfig(sync?: SyncConfig): Record<string, unknown> | n
       ...(sync.githubAuth.method === 'github-app' ? { login: sync.githubAuth.login } : {}) } } : {}) }
 }
 
-export function setSyncCredentials(config: Config, values: Record<string, unknown>): void {
+/**
+ * `githubTokenCredentialId`: the `githubToken` value, already stored with
+ * `saveGitHubCredentials` by a caller that holds the settings lock now and
+ * must not wait on the OS keychain under it.
+ */
+export function setSyncCredentials(config: Config, values: Record<string, unknown>, githubTokenCredentialId?: string): void {
   for (const [field, key] of Object.entries(credentialFields(config.sync))) {
     const value = values[field]
     // Empty or omitted fields preserve the existing value.
     if (typeof value === 'string' && value) {
-      if (field === 'githubToken') setPat(config, value)
+      if (field === 'githubToken') setPat(config, value, githubTokenCredentialId)
       else config.credentials = { ...config.credentials, [key]: value }
     }
   }

@@ -1,9 +1,9 @@
-import { mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import type { ConsentConfig } from './sync/consent.js'
 import type { PriceEntry, ExchangeRateCache } from '@aiusage/core'
 import { JsonFileError, readJsonObjectFile, writeFileAtomic } from './json-file.js'
+import { withSettingsLock } from './settings-lock.js'
 
 export const AIUSAGE_DIR = join(homedir(), '.aiusage')
 export const CONFIG_PATH = join(AIUSAGE_DIR, 'config.json')
@@ -95,12 +95,37 @@ export function loadConfig(): Config | null {
  * Write `config.json` through a temporary file and a rename. Throws
  * `ConfigFileError`, writing nothing, when the file on disk cannot be used:
  * whatever is being saved was not built from it.
+ *
+ * `config` replaces the whole file. A caller that read the config earlier
+ * and changes part of it uses `updateConfig`, or holds `withSettingsLock`
+ * from its read to this save, so that a change another process saved in
+ * between is not written over.
  */
 export function saveConfig(config: Config): void {
-  mkdirSync(dirname(CONFIG_PATH), { recursive: true, mode: 0o700 })
-  const existing = readConfigFile()
-  if (existing.status === 'invalid') throw existing.error
-  writeFileAtomic(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
+  withSettingsLock(dirname(CONFIG_PATH), () => {
+    const existing = readConfigFile()
+    if (existing.status === 'invalid') throw existing.error
+    writeFileAtomic(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
+  })
+}
+
+/**
+ * Change `config.json`: `mutate` gets the configuration as it is on disk now
+ * (an empty one when there is no file) and changes it in place; returning
+ * `false` leaves the file as it is. The read and the write happen under the
+ * settings lock, so a change another process saves at the same time is kept.
+ * Throws `ConfigFileError` for a file that cannot be used, writing nothing.
+ * Returns the configuration the file holds afterwards.
+ */
+export function updateConfig(mutate: (config: Config) => void | false): Config {
+  return withSettingsLock(dirname(CONFIG_PATH), () => {
+    const read = readConfigFile()
+    if (read.status === 'invalid') throw read.error
+    const config: Config = read.status === 'ok' ? read.config : {}
+    if (mutate(config) === false) return config
+    writeFileAtomic(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
+    return config
+  })
 }
 
 export function buildConsentConfig(config: Config): ConsentConfig | null {
@@ -137,8 +162,7 @@ export function loadCredential(key: string): string | null {
 }
 
 export function saveCredential(key: string, value: string): void {
-  const config = loadConfig() ?? {}
-  if (!config.credentials) config.credentials = {}
-  config.credentials[key] = value
-  saveConfig(config)
+  updateConfig((config) => {
+    config.credentials = { ...config.credentials, [key]: value }
+  })
 }

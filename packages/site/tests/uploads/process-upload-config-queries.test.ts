@@ -33,7 +33,7 @@ function emptyConfigDatabase(overrides: Record<string, number> = {}) {
       const key = q.values[0] as string
       return key in overrides ? [{ value: overrides[key] }] : []
     }
-    if (q.text.startsWith('SELECT COALESCE(BOOL_AND(visibility')) return [{ hidden: false }]
+    if (q.text.startsWith('SELECT ( COALESCE(BOOL_AND(visibility')) return [{ hidden: false }]
     if (q.text.startsWith('SELECT COUNT(*) as cnt')) return [{ cnt: 0 }]
     if (q.text.startsWith('SELECT COALESCE(AVG(total_tokens), 0) as avg_tokens')) return [{ avg_tokens: 0 }]
     return undefined

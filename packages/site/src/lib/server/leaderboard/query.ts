@@ -38,6 +38,25 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>()
 
+// The cache is per server instance and invalidateLeaderboardCache clears only
+// the instance it runs on, so after a moderation action another instance
+// shows the old first page until its entry expires. The TTL setting is capped
+// to keep that bounded whatever is saved. Keys come from query parameters, so
+// the number of entries is capped as well.
+const MAX_CACHE_TTL_MS = 5 * 60_000
+const MAX_CACHE_ENTRIES = 500
+
+function cacheFirstPage(key: string, data: LeaderboardResponse, ttlMs: number): void {
+  const ttl = Math.min(Math.max(Number.isFinite(ttlMs) ? ttlMs : 0, 0), MAX_CACHE_TTL_MS)
+  if (ttl === 0) return
+  const now = Date.now()
+  if (cache.size >= MAX_CACHE_ENTRIES) {
+    for (const [k, entry] of cache) if (entry.expiresAt <= now) cache.delete(k)
+    if (cache.size >= MAX_CACHE_ENTRIES) cache.clear()
+  }
+  cache.set(key, { data, expiresAt: now + ttl })
+}
+
 function cacheKey(options: { periodType: string; periodStart: string; metric: string; scope: string; tool: string | null; model: string | null; cursor: string | null }): string {
   return `${options.periodType}:${options.periodStart}:${options.metric}:${options.scope}:${options.tool ?? ''}:${options.model ?? ''}:${options.cursor ?? '0'}`
 }
@@ -127,7 +146,7 @@ export async function queryLeaderboard(options: {
 
   // Cache first-page results
   if (!options.cursor) {
-    cache.set(key, { data: result, expiresAt: Date.now() + cacheTtlMs })
+    cacheFirstPage(key, result, cacheTtlMs)
   }
 
   return result

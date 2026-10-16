@@ -25,6 +25,34 @@ export function toCloudRecord(record: SyncRecord): CloudWireRecord {
   return { ...rest, deviceName: device }
 }
 
+const WIRE_INTEGER_FIELDS = ['ts', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'thinkingTokens', 'updatedAt'] as const
+const WIRE_TEXT_FIELDS = ['id', 'tool', 'model', 'provider', 'costSource', 'sessionKey', 'sourceFile', 'cwd', 'deviceName', 'platform'] as const
+
+/**
+ * Why the cloud would not store `record`, or null when it would: the checks
+ * `POST /api/cli/sync/push` makes before writing a record (an id, tool and
+ * model; whole non-negative numbers for the bigint columns; a cost that fits
+ * NUMERIC(20, 8); no NUL in text). Such a record is not sent, so it is not
+ * acknowledged either, whatever server version answers.
+ */
+export function cloudRecordProblem(record: CloudWireRecord): 'missing_field' | 'invalid_value' | null {
+  if (!record.id || !record.tool || !record.model) return 'missing_field'
+  const fields = record as unknown as Record<string, unknown>
+  for (const field of WIRE_TEXT_FIELDS) {
+    const value = fields[field]
+    if (value == null) continue
+    if (typeof value !== 'string' || value.includes('\u0000')) return 'invalid_value'
+  }
+  for (const field of WIRE_INTEGER_FIELDS) {
+    const value = fields[field]
+    if (value == null) continue
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return 'invalid_value'
+  }
+  const cost = fields.cost
+  if (cost != null && (typeof cost !== 'number' || !Number.isFinite(cost) || Math.abs(cost) >= 1e12)) return 'invalid_value'
+  return null
+}
+
 const COST_SOURCES = new Set<SyncRecord['costSource']>(['log', 'pricing', 'unknown'])
 
 function str(value: unknown): string | undefined {

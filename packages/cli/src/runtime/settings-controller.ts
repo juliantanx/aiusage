@@ -19,6 +19,13 @@ export interface RuntimeSettingsControllerOptions {
 const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 const DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000
 const MIN_LEADERBOARD_UPLOAD_INTERVAL_MS = 60 * 60 * 1000
+const MIN_PARSE_INTERVAL_MS = 1000
+const MIN_SYNC_INTERVAL_MS = 60 * 1000
+
+/** A positive interval raised to `min`; 0, a negative or a non-number stays off (0). */
+function atLeast(value: number, min: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.max(value, min) : 0
+}
 const LEADERBOARD_UPLOAD_RETRY_MS = 60 * 60 * 1000
 // Node keeps a timer delay in a 32-bit signed integer. It replaces a longer
 // delay with 1 ms, so a 30-day setInterval fires continuously.
@@ -109,7 +116,10 @@ export class RuntimeSettingsController {
     this.syncTimer = null
 
     const config = this.loadConfigFn()
-    const parseInterval = Number(config?.refreshInterval ?? config?.parseInterval ?? 0)
+    // The floors PUT /api/config enforces, applied here as well: releases
+    // before it saved any value, and a refresh interval of 30 ms parsed back
+    // to back.
+    const parseInterval = atLeast(Number(config?.refreshInterval ?? config?.parseInterval ?? 0), MIN_PARSE_INTERVAL_MS)
     const retentionDays = Number(config?.retentionDays ?? 0)
     const leaderboardUploadInterval = Number(config?.leaderboardUploadInterval ?? DEFAULT_LEADERBOARD_UPLOAD_INTERVAL_MS)
 
@@ -134,7 +144,7 @@ export class RuntimeSettingsController {
     this.scheduleLeaderboardUpload()
 
     // The reported next sync time uses the same clamped delay as the timer.
-    const syncInterval = Math.min(Number(config?.syncInterval ?? 0), MAX_TIMER_DELAY_MS)
+    const syncInterval = Math.min(atLeast(Number(config?.syncInterval ?? 0), MIN_SYNC_INTERVAL_MS), MAX_TIMER_DELAY_MS)
     if (syncInterval > 0 && config?.sync?.backend && this.runSyncFn) {
       const updateNextSyncAt = () => {
         this.onSyncScheduleChangedFn?.(Date.now() + syncInterval)

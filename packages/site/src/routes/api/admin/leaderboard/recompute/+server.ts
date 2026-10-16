@@ -38,8 +38,7 @@ export const POST: RequestHandler = async (event) => {
            lm.thinking_tokens, lm.total_tokens, lm.total_cost_usd, lm.has_unknown_cost
     FROM leaderboard_metrics lm
     JOIN users u ON u.id = lm.user_id
-    WHERE lm.visibility != 'hidden'
-      AND u.status = 'active'
+    WHERE u.status = 'active'
       AND u.leaderboard_visibility = 'public'
       AND lm.scope_type = 'tool_model'
   `
@@ -57,6 +56,11 @@ export const POST: RequestHandler = async (event) => {
     query = sql`${query} AND lm.user_id = ${userId}`
   }
 
+  // Every row is recomputed and every child counts towards its parent,
+  // whatever its visibility: processUpload computes costs the same way, and
+  // visibility decides only whether a row is shown. Leaving hidden children
+  // out made a parent's cost drop below what its tokens cost, and left a
+  // hidden row with the old price for when it is restored.
   const metrics = await query as CostMetricRow[]
 
   let recomputed = 0
@@ -77,7 +81,6 @@ export const POST: RequestHandler = async (event) => {
           has_unknown_cost = ${update.hasUnknownCost},
           updated_at = NOW()
       WHERE id = ${metric.id}
-        AND visibility != 'hidden'
     `
 
     recomputed++
@@ -90,8 +93,7 @@ export const POST: RequestHandler = async (event) => {
            lm.total_cost_usd, lm.has_unknown_cost
     FROM leaderboard_metrics lm
     JOIN users u ON u.id = lm.user_id
-    WHERE lm.visibility != 'hidden'
-      AND lm.scope_type IN ('all', 'tool', 'model')
+    WHERE lm.scope_type IN ('all', 'tool', 'model')
       AND u.status = 'active'
       AND u.leaderboard_visibility = 'public'
       ${periodType ? sql`AND lm.period_type = ${periodType}` : sql``}
@@ -104,13 +106,14 @@ export const POST: RequestHandler = async (event) => {
     const metric = row as CostMetricRow & { upload_request_id: string | null; user_id: string; period_type: string; period_start: string }
     let children
     if (metric.scope_type === 'all') {
+      // From the tool_model rows, as processUpload prices it: they are
+      // recomputed above, whereas the model rows may come later in this loop.
       children = await sql`
         SELECT total_cost_usd, has_unknown_cost FROM leaderboard_metrics
         WHERE user_id = ${metric.user_id}
           AND period_type = ${metric.period_type}
           AND period_start = ${metric.period_start}
-          AND scope_type = 'model'
-          AND visibility != 'hidden'
+          AND scope_type = 'tool_model'
       `
     } else if (metric.scope_type === 'tool') {
       children = await sql`
@@ -120,7 +123,6 @@ export const POST: RequestHandler = async (event) => {
           AND period_start = ${metric.period_start}
           AND scope_type = 'tool_model'
           AND tool = ${metric.tool}
-          AND visibility != 'hidden'
       `
     } else {
       children = await sql`
@@ -130,7 +132,6 @@ export const POST: RequestHandler = async (event) => {
           AND period_start = ${metric.period_start}
           AND scope_type = 'tool_model'
           AND model = ${metric.model}
-          AND visibility != 'hidden'
       `
     }
 

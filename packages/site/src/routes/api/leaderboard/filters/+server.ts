@@ -8,33 +8,36 @@ export const GET: RequestHandler = async (event) => {
     const periodType = event.url.searchParams.get('period_type') || 'all_time'
     const metric = event.url.searchParams.get('metric') || 'tokens'
     const periodStart = event.url.searchParams.get('period_start') || getCurrentPeriodStart(periodType)
-    const valueColumn = metric === 'cost' ? sql`total_cost_usd` : sql`total_tokens`
-    const periodFilter = sql`period_type = ${periodType}::period_type AND period_start = ${periodStart}`
+    const valueColumn = metric === 'cost' ? sql`lm.total_cost_usd` : sql`lm.total_tokens`
+    // The rows the leaderboard itself shows (leaderboard/query.ts): public
+    // rows of active users whose leaderboard visibility is public.
+    const periodFilter = sql`lm.period_type = ${periodType}::period_type AND lm.period_start = ${periodStart}
+      AND lm.visibility = 'public' AND u.status = 'active' AND u.leaderboard_visibility = 'public'`
 
     const [tools, models] = await Promise.all([
       sql`
-        SELECT tool
-        FROM leaderboard_metrics
+        SELECT lm.tool
+        FROM leaderboard_metrics lm
+        JOIN users u ON u.id = lm.user_id
         WHERE ${periodFilter}
-          AND scope_type = 'tool'
-          AND tool IS NOT NULL
-          AND visibility = 'public'
-        GROUP BY tool
+          AND lm.scope_type = 'tool'
+          AND lm.tool IS NOT NULL
+        GROUP BY lm.tool
         ORDER BY
           SUM(${valueColumn}) DESC,
-          tool ASC
+          lm.tool ASC
       `,
       sql`
-        SELECT model
-        FROM leaderboard_metrics
+        SELECT lm.model
+        FROM leaderboard_metrics lm
+        JOIN users u ON u.id = lm.user_id
         WHERE ${periodFilter}
-          AND scope_type = 'model'
-          AND model IS NOT NULL
-          AND visibility = 'public'
-        GROUP BY model
+          AND lm.scope_type = 'model'
+          AND lm.model IS NOT NULL
+        GROUP BY lm.model
         ORDER BY
           SUM(${valueColumn}) DESC,
-          model ASC
+          lm.model ASC
       `,
     ])
     return json({

@@ -12,13 +12,13 @@ describe('RuntimeSettingsController', () => {
   })
 
   it('starts scheduling when refreshInterval is positive', async () => {
-    const loadConfig = vi.fn(() => ({ refreshInterval: 25 }))
+    const loadConfig = vi.fn(() => ({ refreshInterval: 1000 }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
 
     controller.start()
-    await vi.advanceTimersByTimeAsync(25)
+    await vi.advanceTimersByTimeAsync(1000)
 
     expect(runParse).toHaveBeenCalledTimes(1)
     expect(runCleanup).not.toHaveBeenCalled()
@@ -37,19 +37,19 @@ describe('RuntimeSettingsController', () => {
   })
 
   it('rebuilds scheduling on reload', async () => {
-    let refreshInterval = 25
+    let refreshInterval = 1000
     const loadConfig = vi.fn(() => ({ refreshInterval }))
     const runParse = vi.fn(async () => {})
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
 
     controller.start()
-    await vi.advanceTimersByTimeAsync(25)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(runParse).toHaveBeenCalledTimes(1)
 
-    refreshInterval = 60
+    refreshInterval = 2400
     controller.reload()
-    await vi.advanceTimersByTimeAsync(59)
+    await vi.advanceTimersByTimeAsync(2399)
     expect(runParse).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(runParse).toHaveBeenCalledTimes(2)
@@ -57,22 +57,55 @@ describe('RuntimeSettingsController', () => {
 
   it('skips overlapping parse runs', async () => {
     let release!: () => void
-    const loadConfig = vi.fn(() => ({ refreshInterval: 25 }))
+    const loadConfig = vi.fn(() => ({ refreshInterval: 1000 }))
     const runParse = vi.fn(() => new Promise<void>((resolve) => { release = resolve }))
     const runCleanup = vi.fn(() => {})
     const controller = new RuntimeSettingsController({ db: {} as any, loadConfig, runParse, runCleanup })
 
     controller.start()
-    await vi.advanceTimersByTimeAsync(25)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(runParse).toHaveBeenCalledTimes(1)
 
-    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(4000)
     expect(runParse).toHaveBeenCalledTimes(1)
 
     release()
     await Promise.resolve()
-    await vi.advanceTimersByTimeAsync(25)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(runParse).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['refreshInterval', { refreshInterval: 30 }],
+    ['legacy parseInterval', { parseInterval: 30 }],
+  ])('parses at most once a second for a %s below the minimum (saved by an earlier release)', async (_label, config) => {
+    const runParse = vi.fn(async () => {})
+    const controller = new RuntimeSettingsController({ db: {} as any, loadConfig: vi.fn(() => config), runParse, runCleanup: vi.fn() })
+
+    controller.start()
+    await vi.advanceTimersByTimeAsync(999)
+    expect(runParse).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(runParse).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(runParse).toHaveBeenCalledTimes(4)
+  })
+
+  it('syncs at most once a minute for a syncInterval below the minimum, and reports that schedule', async () => {
+    const runSync = vi.fn()
+    const onSyncScheduleChanged = vi.fn()
+    const start = Date.now()
+    const controller = new RuntimeSettingsController({
+      db: {} as any, loadConfig: vi.fn(() => ({ syncInterval: 50, sync: { backend: 'cloud' as const } })),
+      runParse: vi.fn(async () => {}), runCleanup: vi.fn(), runSync, onSyncScheduleChanged,
+    })
+
+    controller.start()
+    expect(onSyncScheduleChanged).toHaveBeenLastCalledWith(start + 60_000)
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(runSync).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(runSync).toHaveBeenCalledTimes(1)
   })
 
   it('starts cleanup scheduling when retentionDays is positive', async () => {

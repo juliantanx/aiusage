@@ -21,6 +21,7 @@ const { getState } = await import('../../src/init.js')
 const { initializeDatabase } = await import('../../src/db/index.js')
 const { insertRecord } = await import('../../src/db/records.js')
 const { acquireCloudSyncLock } = await import('../../src/sync/cloud-lock.js')
+const { mapStatsRecordToSyncRecord } = await import('../../src/sync/mapper.js')
 
 const DEVICE = 'device-a'
 const STATE_PATH = join(AIUSAGE_DIR, 'state.json')
@@ -41,6 +42,10 @@ const server = {
   /** Push requests (0-based, counted over the whole test) the server answers with HTTP 500. */
   failPushes: new Set<number>(),
   pushRequests: 0,
+  /** Record ids the server does not store, and reports in `rejected`. */
+  rejectIds: new Set<string>(),
+  /** Answer as a server from before `rejected` existed: no such field. */
+  legacy: false,
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -68,8 +73,13 @@ async function fakeFetch(input: unknown, init?: { method?: string; body?: string
       return jsonResponse({ error: 'Sync generation stale. Please pull first.', error_code: 'sync_generation_stale' }, 409)
     }
     server.pushes.push(body)
-    for (const record of body.records) server.records.set(record.id, record)
-    return jsonResponse({ inserted: body.records.length, updated: 0, skipped: 0, sync_generation: server.generation })
+    const rejected = body.records.filter(r => server.rejectIds.has(r.id)).map(r => ({ id: r.id, reason: 'invalid_value' }))
+    const stored = body.records.filter(r => !server.rejectIds.has(r.id))
+    for (const record of stored) server.records.set(record.id, record)
+    return jsonResponse({
+      inserted: stored.length, updated: 0, skipped: rejected.length, sync_generation: server.generation,
+      ...(server.legacy ? {} : { rejected }),
+    })
   }
   throw new Error(`unexpected request: ${url.pathname}`)
 }
@@ -116,6 +126,8 @@ describe('cloud sync state (stubbed fetch, real runSync)', () => {
     server.duringPush = undefined
     server.failPushes.clear()
     server.pushRequests = 0
+    server.rejectIds.clear()
+    server.legacy = false
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
 
     db = new Database(':memory:')
@@ -378,6 +390,103 @@ describe('cloud sync state (stubbed fetch, real runSync)', () => {
       const failed = await runSync(db)
       expect(failed.status).toBe('failed')
       expect(getState(AIUSAGE_DIR)?.syncTargets?.cloud).toMatchObject({ syncGeneration: 2, lastSyncStatus: 'failed' })
+    })
+  })
+
+  describe('only records the server stored are acknowledged', () => {
+    const wireId = (n: number, overrides: Partial<StatsRecord> = {}) => mapStatsRecordToSyncRecord(record(n, overrides)).id
+    const sentIds = () => server.pushes.map(push => push.records.map(r => r.id))
+
+    it('acknowledges a fully stored batch', async () => {
+      for (const n of [1, 2, 3]) insertRecord(db, record(n))
+
+      const result = await runSync(db)
+
+      expect(result).toMatchObject({ status: 'ok', uploadedCount: 3 })
+      expect(result).not.toHaveProperty('rejectedCount')
+      expect(syncedIds(db)).toEqual(['r1', 'r2', 'r3'])
+    })
+
+    it('leaves a record the server rejected unsynced, and sends only it again', async () => {
+      for (const n of [1, 2, 3]) insertRecord(db, record(n))
+      server.rejectIds.add(wireId(2))
+
+      const first = await runSync(db)
+      expect(first).toMatchObject({ status: 'ok', uploadedCount: 2, rejectedCount: 1 })
+      expect(syncedIds(db)).toEqual(['r1', 'r3'])
+      expect(server.records.has(wireId(2))).toBe(false)
+
+      // Still rejected: sent again, still not acknowledged, nothing else resent.
+      const second = await runSync(db)
+      expect(second).toMatchObject({ status: 'ok', uploadedCount: 0, rejectedCount: 1 })
+      expect(sentIds()[1]).toEqual([wireId(2)])
+      expect(syncedIds(db)).toEqual(['r1', 'r3'])
+
+      // Accepted once the server takes it.
+      server.rejectIds.clear()
+      const third = await runSync(db)
+      expect(third).toMatchObject({ status: 'ok', uploadedCount: 1 })
+      expect(syncedIds(db)).toEqual(['r1', 'r2', 'r3'])
+    })
+
+    it('acknowledges nothing of a batch the server rejected entirely', async () => {
+      for (const n of [1, 2]) insertRecord(db, record(n))
+      server.rejectIds.add(wireId(1)).add(wireId(2))
+
+      const result = await runSync(db)
+
+      expect(result).toMatchObject({ status: 'ok', uploadedCount: 0, rejectedCount: 2 })
+      expect(syncedIds(db)).toEqual([])
+    })
+
+    it.each([false, true])('does not send or acknowledge a record the cloud cannot store (server reports rejections: %s)', async (reports) => {
+      server.legacy = !reports
+      insertRecord(db, record(1))
+      insertRecord(db, record(2, { model: '' }))
+      insertRecord(db, record(3, { inputTokens: 1.5 }))
+
+      const result = await runSync(db)
+
+      expect(result).toMatchObject({ status: 'ok', uploadedCount: 1, rejectedCount: 2 })
+      expect(sentIds()).toEqual([[wireId(1)]])
+      expect(syncedIds(db)).toEqual(['r1'])
+    })
+
+    it('acknowledges every record sent when the server does not report rejections', async () => {
+      server.legacy = true
+      for (const n of [1, 2]) insertRecord(db, record(n))
+
+      expect(await runSync(db)).toMatchObject({ status: 'ok', uploadedCount: 2 })
+      expect(syncedIds(db)).toEqual(['r1', 'r2'])
+    })
+
+    it('does not acknowledge a record rewritten while the batch that rejected another one was in flight', async () => {
+      for (const n of [1, 2]) insertRecord(db, record(n))
+      server.rejectIds.add(wireId(2))
+      server.duringPush = () => { insertRecord(db, record(1, { inputTokens: 99, updatedAt: 2000 })) }
+
+      expect(await runSync(db)).toMatchObject({ status: 'ok', rejectedCount: 1 })
+      expect(syncedIds(db)).toEqual([])
+
+      server.duringPush = undefined
+      server.rejectIds.clear()
+      expect(await runSync(db)).toMatchObject({ status: 'ok', uploadedCount: 2 })
+      expect(syncedIds(db)).toEqual(['r1', 'r2'])
+      expect(server.records.get(wireId(1))).toMatchObject({ inputTokens: 99 })
+    })
+
+    it('sends a rejected record again after the cloud data was cleared', async () => {
+      for (const n of [1, 2]) insertRecord(db, record(n))
+      server.rejectIds.add(wireId(2))
+      await runSync(db)
+
+      server.generation++
+      server.records.clear()
+      server.rejectIds.clear()
+      const result = await runSync(db)
+
+      expect(result).toMatchObject({ status: 'ok', syncGeneration: 2, uploadedCount: 2 })
+      expect(syncedIds(db)).toEqual(['r1', 'r2'])
     })
   })
 })

@@ -81,6 +81,82 @@ describe('CloudSyncOrchestrator tombstones', () => {
     expect(cloudPush).not.toHaveBeenCalled()
   })
 
+  describe('retired ids the server did not apply', () => {
+    function retire(...ids: string[]): void {
+      for (const id of ids) db.prepare(`INSERT INTO sync_retired_wire_ids (target, wire_id) VALUES ('cloud', ?)`).run(id)
+    }
+    const tombstonesSent = async (): Promise<string[][]> => {
+      const { cloudPush } = await import('../../src/sync/cloud.js')
+      return vi.mocked(cloudPush).mock.calls.filter(c => c[1].length > 0).map(c => c[1].map(t => t.record_id))
+    }
+
+    it('forgets only the ids whose tombstones the server applied, and sends the rest again', async () => {
+      const { CloudSyncOrchestrator } = await import('../../src/sync/cloud-orchestrator.js')
+      const { cloudPush } = await import('../../src/sync/cloud.js')
+      retire('applied', 'refused')
+      vi.mocked(cloudPush).mockResolvedValueOnce({ inserted: 0, updated: 0, skipped: 1, rejectedTombstoneIds: ['refused'], syncGeneration: 1 })
+
+      const result = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(result).toMatchObject({ status: 'ok', retiredCount: 1, unretiredCount: 1 })
+      expect(getRetiredWireIds(db, 'cloud')).toEqual(['refused'])
+
+      vi.mocked(cloudPush).mockClear()
+      const again = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(again).toMatchObject({ status: 'ok', retiredCount: 1 })
+      expect(again.unretiredCount).toBeUndefined()
+      expect(await tombstonesSent()).toEqual([['refused']])
+      expect(getRetiredWireIds(db, 'cloud')).toEqual([])
+    })
+
+    it('keeps every id of a batch the server applied none of', async () => {
+      const { CloudSyncOrchestrator } = await import('../../src/sync/cloud-orchestrator.js')
+      const { cloudPush } = await import('../../src/sync/cloud.js')
+      retire('a', 'b')
+      vi.mocked(cloudPush).mockResolvedValueOnce({ inserted: 0, updated: 0, skipped: 2, rejectedTombstoneIds: ['a', 'b'], syncGeneration: 1 })
+
+      const result = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(result).toMatchObject({ status: 'ok', retiredCount: 0, unretiredCount: 2 })
+      expect(getRetiredWireIds(db, 'cloud').sort()).toEqual(['a', 'b'])
+    })
+
+    it('forgets an id the cloud cannot hold without sending it: there is no cloud record to retract', async () => {
+      const { CloudSyncOrchestrator } = await import('../../src/sync/cloud-orchestrator.js')
+      retire('ok', 'bad\u0000id', '')
+
+      const result = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(result).toMatchObject({ status: 'ok', retiredCount: 1 })
+      expect(result.unretiredCount).toBeUndefined()
+      expect(await tombstonesSent()).toEqual([['ok']])
+      expect(getRetiredWireIds(db, 'cloud')).toEqual([])
+    })
+
+    it('forgets an id the cloud cannot hold also when it is the only one', async () => {
+      const { CloudSyncOrchestrator } = await import('../../src/sync/cloud-orchestrator.js')
+      retire('bad\u0000id')
+
+      const result = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(result).toMatchObject({ status: 'ok', retiredCount: 0 })
+      expect(result.unretiredCount).toBeUndefined()
+      expect(await tombstonesSent()).toEqual([])
+      expect(getRetiredWireIds(db, 'cloud')).toEqual([])
+    })
+
+    it('keeps every id when the request fails, and retracts them on the retry', async () => {
+      const { CloudSyncOrchestrator } = await import('../../src/sync/cloud-orchestrator.js')
+      const { cloudPush } = await import('../../src/sync/cloud.js')
+      retire('a', 'b')
+      vi.mocked(cloudPush).mockRejectedValueOnce(new Error('connection reset'))
+
+      const failed = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(failed.status).toBe('failed')
+      expect(getRetiredWireIds(db, 'cloud').sort()).toEqual(['a', 'b'])
+
+      const retried = await new CloudSyncOrchestrator(db, { deviceInstanceId: OWN }).sync()
+      expect(retried).toMatchObject({ status: 'ok', retiredCount: 2 })
+      expect(getRetiredWireIds(db, 'cloud')).toEqual([])
+    })
+  })
+
   it('applies tombstones from other devices and ignores its own', async () => {
     const { CloudSyncOrchestrator } = await import('../../src/sync/cloud-orchestrator.js')
     // Both rows were pulled from the cloud earlier (claimed by it).

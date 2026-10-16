@@ -87,6 +87,15 @@ describe('clean with the cloud backend', () => {
     }])
   })
 
+  it('reports a cloud clear that failed as failed, not as skipped', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'boom', error_code: 'server_error' }), { status: 500, headers: { 'content-type': 'application/json' } })))
+
+    const result = await propagateClean({ all: true })
+
+    expect(result.backends).toHaveLength(1)
+    expect(result.backends[0]).toMatchObject({ backend: { type: 'cloud' }, status: 'failed' })
+  })
+
   it('does not count the cloud as reached by a partial clean', () => {
     const [cloud] = getRemoteBackends()
     expect(cloud.type).toBe('cloud')

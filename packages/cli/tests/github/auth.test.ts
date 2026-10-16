@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-vi.mock('../../src/config.js', () => ({ AIUSAGE_DIR: '/tmp/aiusage-github-tests', loadConfig: vi.fn(() => ({})), saveConfig: vi.fn(), loadCredential: vi.fn() }))
+vi.mock('../../src/config.js', () => {
+  const saveConfig = vi.fn()
+  return {
+    AIUSAGE_DIR: '/tmp/aiusage-github-tests', loadConfig: vi.fn(() => ({})), saveConfig, loadCredential: vi.fn(),
+    // Changes an empty configuration and hands it to the saveConfig mock the assertions read.
+    updateConfig: vi.fn((mutate: (config: object) => unknown) => {
+      const config = {}
+      if (mutate(config) !== false) saveConfig(config)
+      return config
+    }),
+  }
+})
 vi.mock('../../src/github/credentials.js', () => ({ loadGitHubCredentials: vi.fn(), saveGitHubCredentials: vi.fn(() => '11111111-1111-1111-1111-111111111111') }))
 vi.mock('../../src/lock.js', () => ({ acquireLock: vi.fn(() => true), releaseLock: vi.fn() }))
 vi.mock('node:fs', () => ({ mkdirSync: vi.fn() }))

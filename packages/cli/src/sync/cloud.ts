@@ -36,6 +36,17 @@ export interface PushResult {
   inserted: number
   updated: number
   skipped: number
+  /**
+   * Ids of records the server did not store. `undefined` when the server
+   * does not report them (versions before this field): it then stored every
+   * record that passes `cloudRecordProblem`.
+   */
+  rejectedIds?: string[]
+  /**
+   * Record ids of tombstones the server did not apply. `undefined` when the
+   * server does not report them (versions before this field).
+   */
+  rejectedTombstoneIds?: string[]
   serverCursor?: string
   syncGeneration: number
 }
@@ -127,6 +138,12 @@ export async function cloudPush(
     inserted: (data.inserted as number) || 0,
     updated: (data.updated as number) || 0,
     skipped: (data.skipped as number) || 0,
+    rejectedIds: Array.isArray(data.rejected)
+      ? data.rejected.map(entry => (entry as { id?: unknown } | null)?.id).filter((id): id is string => typeof id === 'string')
+      : undefined,
+    rejectedTombstoneIds: Array.isArray(data.rejected_tombstones)
+      ? data.rejected_tombstones.map(entry => (entry as { record_id?: unknown } | null)?.record_id).filter((id): id is string => typeof id === 'string')
+      : undefined,
     serverCursor: data.server_cursor as string | undefined,
     syncGeneration: parseSyncGeneration(data.sync_generation) ?? syncGeneration,
   }

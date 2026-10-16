@@ -49,9 +49,13 @@ async function runClean(cleanAnswers: string[]): Promise<string[][]> {
   await runMenu()
   expect(answers).toEqual([])
   expect(questions.some(q => q.includes(CLEAN_PROMPT))).toBe(true)
+  // The menu runs the CLI through this Node.js and its entry script, which
+  // also works on Windows, where the npm shim is aiusage.cmd.
   return spawnSync.mock.calls.map(call => {
-    expect(call[0]).toBe('aiusage')
-    return call[1]
+    expect(call[0]).toBe(process.execPath)
+    const entry = call[1].indexOf(process.argv[1])
+    expect(entry).toBeGreaterThanOrEqual(0)
+    return call[1].slice(entry + 1)
   })
 }
 

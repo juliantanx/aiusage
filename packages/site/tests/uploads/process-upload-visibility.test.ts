@@ -6,7 +6,7 @@ vi.mock('../../src/lib/server/db/pool.js', async () => ({ sql: (await import('..
 import { processUpload, type UploadBreakdown, type UploadRequest } from '../../src/lib/server/uploads/verify.js'
 import { invalidateConfigCache } from '../../src/lib/server/config.js'
 
-const isPeriodLookup = (q: RecordedQuery) => q.text.startsWith('SELECT COALESCE(BOOL_AND(visibility = \'hidden\'), FALSE) AS hidden FROM leaderboard_metrics')
+const isPeriodLookup = (q: RecordedQuery) => q.text.startsWith('SELECT ( COALESCE(BOOL_AND(visibility = \'hidden\'), FALSE) OR EXISTS (')
 const isMetricUpsert = (q: RecordedQuery) => q.text.startsWith('INSERT INTO leaderboard_metrics')
 
 function breakdown(scope_type: UploadBreakdown['scope_type'], tool: string | null, model: string | null): UploadBreakdown {
@@ -99,8 +99,12 @@ describe('processUpload leaderboard visibility', () => {
     await processUpload('user_1', 'device_1', 'key_1', uploadRequest(), '127.0.0.1')
 
     const lookup = queries.find(isPeriodLookup)!
-    expect(lookup.text).toContain('WHERE user_id = ? AND period_type = ? AND period_start = ?')
-    expect(lookup.values).toEqual(['user_1', 'daily', '2026-06-01T00:00:00.000Z'])
+    expect(lookup.text).toContain(') AS hidden FROM leaderboard_metrics WHERE user_id = ? AND period_type = ? AND period_start = ?')
+    // A snapshot of the period that an admin hid or rejected keeps new rows hidden.
+    expect(lookup.text).toContain(
+      "SELECT 1 FROM upload_snapshots hold WHERE hold.user_id = ? AND hold.period_type = ? AND hold.period_start = ? AND hold.review_status IN ('hidden', 'rejected')"
+    )
+    expect(lookup.values).toEqual(['user_1', 'daily', '2026-06-01T00:00:00.000Z', 'user_1', 'daily', '2026-06-01T00:00:00.000Z'])
     expect(queries.indexOf(lookup)).toBeLessThan(queries.findIndex(isMetricUpsert))
   })
 
@@ -128,7 +132,7 @@ describe('processUpload leaderboard visibility', () => {
     expect(insertedVisibilities()).toEqual(['public', 'public'])
   })
 
-  it.each([false, true])('adds rows as hidden when every existing row of the period is hidden (flagged upload: %s)', async (flagged) => {
+  it.each([false, true])('adds rows as hidden when the period is hidden (flagged upload: %s)', async (flagged) => {
     database({ periodHidden: true, flagged })
 
     const result = await processUpload('user_1', 'device_1', 'key_1', uploadRequest(), '127.0.0.1')

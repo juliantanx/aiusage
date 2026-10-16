@@ -1,21 +1,30 @@
 // packages/cli/tests/api/server-config.test.ts
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import http from 'node:http'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
 vi.mock('../../src/github/credentials.js', () => ({
   saveGitHubCredentials: vi.fn(() => '11111111-1111-1111-1111-111111111111'),
   loadGitHubCredentials: vi.fn(),
+  deleteGitHubCredentials: vi.fn(),
 }))
 
 vi.mock('../../src/config.js', async (importOriginal) => {
   const actual = await importOriginal() as Record<string, unknown>
+  // Inside the test home (tests/setup-home.ts): the settings lock the
+  // handlers take creates a file in this directory.
+  const { homedir } = await import('node:os')
+  const { join } = await import('node:path')
+  const aiusageDir = join(homedir(), '.aiusage-server-config-test')
   return {
     ...actual,
     loadConfig: vi.fn(() => null),
     saveConfig: vi.fn(),
-    AIUSAGE_DIR: '/tmp/test-aiusage',
-    CONFIG_PATH: '/tmp/test-aiusage/config.json',
+    AIUSAGE_DIR: aiusageDir,
+    CONFIG_PATH: join(aiusageDir, 'config.json'),
     buildConsentConfig: vi.fn(() => null),
     loadCredential: vi.fn(() => null),
     saveCredential: vi.fn(),
@@ -34,8 +43,25 @@ vi.mock('../../src/init.js', async (importOriginal) => {
 })
 
 import { createApiServer } from '../../src/api/server.js'
-import { buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../../src/config.js'
+import { AIUSAGE_DIR, buildConsentConfig, loadConfig, saveConfig, loadCredential } from '../../src/config.js'
 import { getState, setState, setSyncConsent } from '../../src/init.js'
+import { deleteGitHubCredentials, saveGitHubCredentials } from '../../src/github/credentials.js'
+
+/**
+ * Whether another process can take the settings lock now, as one saving
+ * state.json or config.json would. Runs synchronously, so called from inside
+ * a mocked keychain write it blocks this process the way a keychain prompt
+ * does.
+ */
+function lockFreeForAnotherProcess(): boolean {
+  mkdirSync(AIUSAGE_DIR, { recursive: true })
+  const child = spawnSync(process.execPath, ['-e', `
+    const Database = require('better-sqlite3')
+    const lock = new Database(process.argv[1], { timeout: 500 })
+    try { lock.exec('BEGIN EXCLUSIVE'); lock.exec('COMMIT') } catch { process.exit(3) }
+  `, join(AIUSAGE_DIR, 'settings.lock')], { cwd: join(__dirname, '..', '..'), stdio: ['ignore', 'ignore', 'inherit'] })
+  return child.status === 0
+}
 
 describe('GET /api/config', () => {
   let db: Database.Database
@@ -124,6 +150,7 @@ describe('PUT /api/config', () => {
   let db: Database.Database
   let server: http.Server
   let baseUrl: string
+  let onConfigUpdated: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     vi.mocked(loadConfig).mockReturnValue(null)
@@ -134,7 +161,8 @@ describe('PUT /api/config', () => {
     vi.mocked(setSyncConsent).mockReset()
     db = new Database(':memory:')
     initializeDatabase(db)
-    server = createApiServer(db)
+    onConfigUpdated = vi.fn()
+    server = createApiServer(db, { onConfigUpdated })
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', () => {
         const addr = server.address() as { port: number }
@@ -247,10 +275,53 @@ describe('PUT /api/config', () => {
     expect(vi.mocked(saveConfig)).toHaveBeenCalledWith(expect.objectContaining({
       sync: expect.objectContaining({ backend: 'github', repo: 'user/repo' }),
     }))
-    expect(vi.mocked(setSyncConsent)).toHaveBeenCalledWith('\/tmp\/test-aiusage', 'github:user/repo', expect.objectContaining({
+    expect(vi.mocked(setSyncConsent)).toHaveBeenCalledWith(AIUSAGE_DIR, 'github:user/repo', expect.objectContaining({
       syncConsentAt: expect.any(Number),
       syncConsentTarget: expect.any(String),
     }))
+  })
+
+  it('reports settings that were saved when the consent could not be, and applies them', async () => {
+    vi.mocked(loadConfig).mockReturnValue({} as any)
+    vi.mocked(buildConsentConfig).mockReturnValue({
+      backend: 'github', target: 'user/repo', endpoint: 'https://api.github.com', region: 'global',
+      fields: ['ts'], operations: ['read', 'write'], schemaVersion: 'v1',
+    })
+    vi.mocked(setSyncConsent).mockImplementationOnce(() => { throw new Error('state.json is locked') })
+
+    const res = await fetch(`${baseUrl}/api/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sync: { backend: 'github', repo: 'user/repo' }, credentials: { 'github/user/repo/token': 'ghp_test' } }),
+    })
+
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: { code: 'CONSENT_NOT_SAVED', message: 'The settings were saved, but the sync consent was not: state.json is locked' } })
+    expect(vi.mocked(saveConfig)).toHaveBeenCalledTimes(1)
+    expect(onConfigUpdated).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers an invalid repository with 400 INVALID_SYNC_CONFIG, saving nothing', async () => {
+    vi.mocked(loadConfig).mockReturnValue({} as any)
+
+    const res = await fetch(`${baseUrl}/api/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sync: { backend: 'github', repo: 'not a repo' } }),
+    })
+
+    expect(res.status).toBe(400)
+    expect((await res.json()).error.code).toBe('INVALID_SYNC_CONFIG')
+    expect(vi.mocked(saveConfig)).not.toHaveBeenCalled()
+    expect(onConfigUpdated).not.toHaveBeenCalled()
+  })
+
+  it('answers a body that is not JSON with 400 INVALID_JSON', async () => {
+    const res = await fetch(`${baseUrl}/api/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{' })
+
+    expect(res.status).toBe(400)
+    expect((await res.json()).error.code).toBe('INVALID_JSON')
+    expect(vi.mocked(saveConfig)).not.toHaveBeenCalled()
   })
 
   it('does not reset local record sync markers when the sync target changes', async () => {
@@ -327,6 +398,36 @@ describe('PUT /api/config', () => {
 
     expect(res.status).toBe(200)
     expect(vi.mocked(saveConfig)).toHaveBeenCalledWith({})
+  })
+
+  it('stores a new GitHub token before taking the settings lock, so other processes can save meanwhile', async () => {
+    vi.mocked(loadConfig).mockReturnValue({ sync: { backend: 'github', repo: 'user/repo' } } as any)
+    let freeDuringKeychainWrite: boolean | undefined
+    vi.mocked(saveGitHubCredentials).mockImplementationOnce(() => {
+      freeDuringKeychainWrite = lockFreeForAnotherProcess()
+      return '22222222-2222-2222-2222-222222222222'
+    })
+
+    const res = await fetch(`${baseUrl}/api/config`, { method: 'PUT', body: JSON.stringify({ syncCredentials: { githubToken: 'ghp_new' } }) })
+
+    expect(res.status).toBe(200)
+    expect(freeDuringKeychainWrite).toBe(true)
+    expect(vi.mocked(saveGitHubCredentials)).toHaveBeenCalledWith({ method: 'pat', accessToken: 'ghp_new' })
+    expect(vi.mocked(saveConfig).mock.calls[0][0].sync?.githubAuth).toEqual({ method: 'pat', credentialId: '22222222-2222-2222-2222-222222222222' })
+    expect(vi.mocked(deleteGitHubCredentials)).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['the config does not use it (an S3 target)', { sync: { backend: 's3', bucket: 'bucket' } }, {}],
+    ['the request is refused', { sync: { backend: 'github', repo: 'user/repo' } }, { syncInterval: 5 }],
+  ])('removes a stored GitHub token again when %s', async (_case, config, extra) => {
+    vi.mocked(loadConfig).mockReturnValue(config as any)
+    vi.mocked(deleteGitHubCredentials).mockClear()
+
+    await fetch(`${baseUrl}/api/config`, { method: 'PUT', body: JSON.stringify({ ...extra, syncCredentials: { githubToken: 'ghp_unused' } }) })
+
+    expect(vi.mocked(deleteGitHubCredentials)).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111')
+    for (const [saved] of vi.mocked(saveConfig).mock.calls) expect(JSON.stringify(saved)).not.toContain('11111111-1111-1111-1111-111111111111')
   })
 
   it('returns 400 for invalid JSON', async () => {
