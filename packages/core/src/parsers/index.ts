@@ -1,5 +1,5 @@
 export type { ParseResult, Parser, ParseContext } from '../types.js'
-export { ClaudeCodeParser } from './claude-code.js'
+export { ClaudeCodeParser, claudeCodeToolCall } from './claude-code.js'
 export { CodexParser } from './codex.js'
 export { CodeFuseParser } from './codefuse.js'
 export { OpenClawParser } from './openclaw.js'

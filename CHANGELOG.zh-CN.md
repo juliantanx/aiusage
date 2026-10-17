@@ -7,6 +7,9 @@
 
 ## [未发布]
 
+### 修复
+- **重新导入记录会删除它的工具调用和同步状态**（[#137](https://github.com/juliantanx/aiusage/pull/137)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — 记录以 `INSERT OR REPLACE` 写入，该语句会先删除原行，并连带删除其工具调用和各同步目标的同步状态。因此包含多个工具调用的 Claude Code 消息只保存了一个，被重新解析的记录会再次上传到每个目标。现在记录改为原地更新，保留工具调用、`ingested_at` 和同步状态；只有已保存的字段发生变化时才会再次上传。Claude Code 的工具调用改为按 `tool_use` 块的 id 标识。升级后会重新导入一次 Claude Code 日志以恢复缺失的调用；日志已不存在的记录，其工具调用予以保留。
+
 ---
 
 ## [1.5.22] - 2026-10-14

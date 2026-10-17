@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Re-importing a record deleted its tool calls and sync state** ([#137](https://github.com/juliantanx/aiusage/pull/137) by [@aaroncchung](https://github.com/aaroncchung)) — records were written with `INSERT OR REPLACE`, which deletes the row first and takes its tool calls and per-target sync state with it. A Claude Code message with several tool calls was stored with one, and a re-parsed record was uploaded again to every target. Records are now updated in place and keep their tool calls, `ingested_at` and sync state; a row is uploaded again only when a stored field changed. Claude Code tool calls are keyed on the `tool_use` block id. Claude Code logs are re-imported once after upgrading to restore the missing calls; calls of records whose log no longer exists are kept.
+
 ---
 
 ## [1.5.22] - 2026-10-14

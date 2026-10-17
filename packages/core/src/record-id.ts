@@ -29,6 +29,19 @@ export function generateToolCallId(
   return hash.slice(0, 16)
 }
 
+/**
+ * Id of a tool call whose source gives every call an id of its own (a Claude
+ * Code `tool_use` block). Unlike `generateToolCallId` it does not depend on
+ * the position of the call within its line, so two calls of one record with
+ * the same name and timestamp get different ids.
+ */
+export function generateBlockToolCallId(recordId: string, blockId: string): string {
+  const hash = createHash('sha256')
+    .update(recordId + '\0' + blockId)
+    .digest('hex')
+  return hash.slice(0, 16)
+}
+
 export function generateOrphanToolCallId(
   tool: Tool,
   name: string,

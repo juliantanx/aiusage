@@ -17,6 +17,15 @@ const CURRENT_ANTIGRAVITY_PARSER_VERSION = 1
  */
 const CURRENT_CODEFUSE_PARSER_VERSION = 1
 
+/**
+ * v1: tool calls are keyed on the tool_use block and a re-inserted record
+ * keeps its tool calls (issue #89). Every Claude Code log is re-imported once
+ * to restore the calls earlier releases dropped. Records keep their ids and
+ * are updated in place; `runParse` removes the old-scheme tool calls of each
+ * log it reads from the start.
+ */
+const CURRENT_CLAUDE_CODE_PARSER_VERSION = 1
+
 export interface WatermarkEntry {
   offset: number
   size: number
@@ -65,6 +74,7 @@ export interface WatermarkState {
   codebuddyParserVersion?: number
   antigravityParserVersion?: number
   codefuseParserVersion?: number
+  claudeCodeParserVersion?: number
   toolCallBackfillVersion?: number
   opencode?: OpenCodeCursor | null
   hermes?: HermesCursor | null
@@ -89,6 +99,7 @@ function defaultState(): WatermarkState {
     codebuddyParserVersion: CURRENT_CODEBUDDY_PARSER_VERSION,
     antigravityParserVersion: CURRENT_ANTIGRAVITY_PARSER_VERSION,
     codefuseParserVersion: CURRENT_CODEFUSE_PARSER_VERSION,
+    claudeCodeParserVersion: CURRENT_CLAUDE_CODE_PARSER_VERSION,
   }
 }
 
@@ -150,6 +161,7 @@ export class WatermarkManager {
           codebuddyParserVersion: parsed.codebuddyParserVersion,
           antigravityParserVersion: parsed.antigravityParserVersion,
           codefuseParserVersion: parsed.codefuseParserVersion,
+          claudeCodeParserVersion: parsed.claudeCodeParserVersion,
           toolCallBackfillVersion: parsed.toolCallBackfillVersion,
           opencode: parsed.opencode ?? null,
           hermes: parsed.hermes ?? null,
@@ -188,6 +200,13 @@ export class WatermarkManager {
         // log so those records are corrected in place.
         state.files.codefuse = {}
         state.codefuseParserVersion = CURRENT_CODEFUSE_PARSER_VERSION
+      }
+      if ((state.claudeCodeParserVersion ?? 0) < CURRENT_CLAUDE_CODE_PARSER_VERSION) {
+        // v1: a message's tool calls were deleted each time its record was
+        // inserted again, leaving about one call per message; re-import every
+        // Claude Code log so the missing calls are restored.
+        state.files['claude-code'] = {}
+        state.claudeCodeParserVersion = CURRENT_CLAUDE_CODE_PARSER_VERSION
       }
       return state
     } catch {

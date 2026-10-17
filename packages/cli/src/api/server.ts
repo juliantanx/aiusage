@@ -2172,7 +2172,14 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
 
           const existingCount = await runDbWrite(() => {
             const existingCount = countExistingRecordIds(db, result.records.map((record) => record.id))
-            for (const record of result.records) insertRecord(db, record)
+            // The last import time reported for Kelivo is MAX(ingested_at), and
+            // insertRecord keeps the ingested_at of a row that already exists.
+            // Importing a backup again still counts as an import, so stamp it.
+            const stampImport = db.prepare('UPDATE records SET ingested_at = ? WHERE id = ?')
+            for (const record of result.records) {
+              insertRecord(db, record)
+              stampImport.run(now, record.id)
+            }
             return existingCount
           })
           const imported = result.records.length

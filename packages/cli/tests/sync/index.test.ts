@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { initializeDatabase } from '../../src/db/index.js'
 import { SyncOrchestrator, getSyncPath } from '../../src/sync/index.js'
+import { getUnsyncedRecords } from '../../src/db/records.js'
 import { generateSyncRecordId } from '@aiusage/core'
 import type { SyncRecord } from '@aiusage/core'
 
@@ -92,6 +93,27 @@ describe('SyncOrchestrator', () => {
     // Sync record ID is generated from deviceInstanceId + sourceFile + lineOffset
     const expectedSyncId = generateSyncRecordId('di1', '/f1', 0)
     expect(records[0].id).toBe(expectedSyncId)
+  })
+
+  it('acknowledges a record whose updated_at is ahead of the clock', async () => {
+    // A changed record is put above every earlier acknowledgement, which can
+    // be ahead of the wall clock after the clock was set back.
+    const ahead = Date.now() + 86_400_000
+    db.prepare("INSERT INTO records (id, ts, ingested_at, updated_at, line_offset, tool, model, provider, session_id, source_file, device, device_instance_id) VALUES ('r1', 1000, 1000, ?, 0, 'claude-code', 'test', 'test', 's1', '/f1', 'd1', 'di1')").run(ahead)
+
+    mockBackend.listFiles.mockResolvedValue([])
+    mockBackend.readFile.mockResolvedValue(null)
+    mockBackend.writeFile.mockResolvedValue(undefined)
+
+    const orchestrator = new SyncOrchestrator(db, mockBackend as any, {
+      deviceInstanceId: 'di1',
+      target: 'github:user/repo',
+      consentVerified: true,
+    })
+
+    expect((await orchestrator.sync()).uploadedCount).toBe(1)
+    expect(getUnsyncedRecords(db, 'github:user/repo', 'di1')).toEqual([])
+    expect((await orchestrator.sync()).uploadedCount).toBe(0)
   })
 
   it('groups uploads by day per device', async () => {

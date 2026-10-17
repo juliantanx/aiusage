@@ -107,33 +107,33 @@ describe('WatermarkManager', () => {
 
   it('migrates legacy flat watermark format to new envelope', () => {
     const legacyData = {
-      'claude-code': { '/path/file.jsonl': { offset: 500, size: 500, mtime: 1000 } },
-      'codex': {},
+      'claude-code': {},
+      'codex': { '/path/file.jsonl': { offset: 500, size: 500, mtime: 1000 } },
       'openclaw': {},
     }
     writeFileSync(watermarkPath, JSON.stringify(legacyData), 'utf-8')
 
     const wm = new WatermarkManager(watermarkPath)
-    expect(wm.getEntry('claude-code', '/path/file.jsonl')!.offset).toBe(500)
+    expect(wm.getEntry('codex', '/path/file.jsonl')!.offset).toBe(500)
     expect(wm.getOpenCodeCursor()).toBeNull()
 
     // Verify it round-trips into new format
     wm.save()
     const wm2 = new WatermarkManager(watermarkPath)
-    expect(wm2.getEntry('claude-code', '/path/file.jsonl')!.offset).toBe(500)
+    expect(wm2.getEntry('codex', '/path/file.jsonl')!.offset).toBe(500)
   })
 
   it('clears only stale Grok entries when upgrading the Grok parser', () => {
     writeFileSync(watermarkPath, JSON.stringify({
       files: {
         grok: { '/old/updates.jsonl': { offset: 100, size: 100, mtime: 1 } },
-        'claude-code': { '/claude/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
+        codex: { '/codex/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
       },
     }), 'utf-8')
 
     const wm = new WatermarkManager(watermarkPath)
     expect(wm.getEntry('grok', '/old/updates.jsonl')).toBeNull()
-    expect(wm.getEntry('claude-code', '/claude/session.jsonl')?.offset).toBe(200)
+    expect(wm.getEntry('codex', '/codex/session.jsonl')?.offset).toBe(200)
 
     wm.save()
     const saved = JSON.parse(readFileSync(watermarkPath, 'utf-8'))
@@ -156,13 +156,13 @@ describe('WatermarkManager', () => {
     writeFileSync(watermarkPath, JSON.stringify({
       files: {
         codebuddy: { '/cb/session.jsonl': { offset: 400, size: 400, mtime: 4 } },
-        'claude-code': { '/claude/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
+        codex: { '/codex/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
       },
     }), 'utf-8')
 
     const wm = new WatermarkManager(watermarkPath)
     expect(wm.getEntry('codebuddy', '/cb/session.jsonl')).toBeNull()
-    expect(wm.getEntry('claude-code', '/claude/session.jsonl')?.offset).toBe(200)
+    expect(wm.getEntry('codex', '/codex/session.jsonl')?.offset).toBe(200)
 
     wm.save()
     const saved = JSON.parse(readFileSync(watermarkPath, 'utf-8'))
@@ -185,7 +185,7 @@ describe('WatermarkManager', () => {
     writeFileSync(watermarkPath, JSON.stringify({
       files: {
         antigravity: { '/ag/conversations/session.db': { offset: 12, size: 4096, mtime: 6 } },
-        'claude-code': { '/claude/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
+        codex: { '/codex/session.jsonl': { offset: 200, size: 200, mtime: 2 } },
       },
       grokParserVersion: 1,
       codebuddyParserVersion: 1,
@@ -193,7 +193,7 @@ describe('WatermarkManager', () => {
 
     const wm = new WatermarkManager(watermarkPath)
     expect(wm.getEntry('antigravity', '/ag/conversations/session.db')).toBeNull()
-    expect(wm.getEntry('claude-code', '/claude/session.jsonl')?.offset).toBe(200)
+    expect(wm.getEntry('codex', '/codex/session.jsonl')?.offset).toBe(200)
 
     wm.save()
     const saved = JSON.parse(readFileSync(watermarkPath, 'utf-8'))

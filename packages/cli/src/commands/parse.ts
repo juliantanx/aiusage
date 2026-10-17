@@ -2,10 +2,10 @@ import Database from 'better-sqlite3'
 import { readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs'
 import { basename, join, dirname } from 'node:path'
 import { hostname } from 'node:os'
-import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, resolvePrice, generateRecordId, normalizeCodeFuseModel, parseTimestamp, type StatsRecord, type Tool } from '@aiusage/core'
+import { Aggregator, resolveExchangeRate, generateToolCallId, claudeCodeToolCall, inferProvider, calculateCost, resolvePrice, generateRecordId, normalizeCodeFuseModel, parseTimestamp, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
 import { insertRecord, LOCAL_RECORDS_WHERE, backfillUnknownDeviceInstanceId } from '../db/records.js'
-import { insertToolCall } from '../db/tool-calls.js'
+import { insertToolCall, deletePositionalCounterpart, hasPositionalToolCallId } from '../db/tool-calls.js'
 import { getState } from '../init.js'
 import { loadConfig, AIUSAGE_DIR } from '../config.js'
 import { WatermarkManager } from '../watermark.js'
@@ -708,8 +708,14 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             now: Date.now(),
             exchangeRate,
           })
+          // The last import time reported for Kelivo is MAX(ingested_at), and
+          // insertRecord keeps the ingested_at of a row that already exists.
+          // Reading a backup again still counts as an import, so stamp it, as
+          // the dashboard upload does.
+          const stampImport = db.prepare('UPDATE records SET ingested_at = ? WHERE id = ?')
           for (const record of result.records) {
             insertRecord(db, record)
+            stampImport.run(record.ingestedAt, record.id)
             parsedCount++
           }
           errors.push(...result.errors)
@@ -788,9 +794,25 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         const sessionId = tool === 'codefuse' && typeof firstData?.sessionId === 'string' && firstData.sessionId
           ? firstData.sessionId
           : extractSessionId(filePath, tool)
-        if (tool === 'codefuse' && filePath.endsWith('.jsonl')) {
-          deleteCodeFuseSnapshotFallback(db, deviceInstanceId, sessionId)
-        }
+
+        // Written once the whole file is read, one write per record id. Claude
+        // Code logs one line per content block of a message and every line
+        // yields the message's record again, each time with that line's
+        // offset, timestamp and running usage; the last line holds the final
+        // values. Writing only that one means a file that is read again
+        // compares final state against final state, so an unchanged record
+        // keeps its updated_at and stays synced.
+        const pendingRecords = new Map<string, StatsRecord>()
+        const pendingToolCalls: Array<{ tc: ToolCallRecord; lineOffset: number }> = []
+        // A Claude Code log read from its start writes all of its tool calls
+        // again under block-keyed ids, so the row an earlier release stored
+        // for each of those calls under a positional id is removed with it.
+        // This is the cleanup half of the one-time re-import (the watermark's
+        // claudeCodeParserVersion gate resets every file to offset 0). It is
+        // tied to the calls a file actually yields rather than to that gate,
+        // so calls that cannot be read again (their log is gone) are kept,
+        // and a re-import that was interrupted finishes file by file.
+        const replacesPositionalToolCalls = tool === 'claude-code' && offset === 0
 
         for (const line of lines) {
           if (!line.trim()) {
@@ -829,18 +851,58 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           const result = aggregator.parseLine(line, context)
           if (result) {
             if (result.record) {
-              insertRecord(db, result.record)
+              pendingRecords.set(result.record.id, result.record)
               parsedCount++
             }
 
             for (const tc of result.toolCalls) {
-              insertToolCall(db, tc)
+              pendingToolCalls.push({ tc, lineOffset: byteOffset })
               toolCallCount++
             }
           }
 
           byteOffset += Buffer.byteLength(line, 'utf-8') + 1
         }
+
+        // One transaction: a positional row is deleted only together with
+        // the insert of the row that replaces it, and a CodeFuse snapshot
+        // record only together with the records of the log that replaces it.
+        db.transaction(() => {
+          if (tool === 'codefuse' && filePath.endsWith('.jsonl')) {
+            deleteCodeFuseSnapshotFallback(db, deviceInstanceId, sessionId)
+          }
+          // Where each record was stored under this file before this pass.
+          const storedLines = new Map<string, number>()
+          const storedLine = db.prepare('SELECT line_offset FROM records WHERE id = ? AND source_file = ?')
+          for (const pending of pendingRecords.values()) {
+            if (replacesPositionalToolCalls) {
+              const stored = storedLine.get(pending.id, filePath) as { line_offset: number } | undefined
+              if (stored) storedLines.set(pending.id, stored.line_offset)
+            }
+            const record = tool === 'claude-code' ? resolveClaudeCodeRecord(db, pending, filePath) : pending
+            if (!record) continue
+            // The cwd is part of the row as it is written, so a record this
+            // pass changes gets its new updated_at from insertRecord alone;
+            // the UPDATE below only reaches rows this pass did not write.
+            // A record stored under another transcript keeps that file's cwd.
+            insertRecord(db, fileCwd && !record.cwd && record.sourceFile === filePath ? { ...record, cwd: fileCwd } : record)
+          }
+          const toolCallExists = db.prepare('SELECT 1 FROM tool_calls WHERE id = ?')
+          for (const { tc, lineOffset } of pendingToolCalls) {
+            if (replacesPositionalToolCalls) {
+              // An earlier release kept only the calls of the line its record
+              // was last written from, so an old row under another name (see
+              // deletePositionalCounterpart) is this call only when the record
+              // is still stored at this very line by such a release. Once
+              // this release has written the record from a line, that line's
+              // calls are stored under their block-keyed ids, and any old row
+              // still there was kept from somewhere else.
+              const fromStoredLine = storedLines.get(tc.recordId!) === lineOffset && !toolCallExists.get(tc.id)
+              deletePositionalCounterpart(db, tc, fromStoredLine)
+            }
+            insertToolCall(db, tc)
+          }
+        })()
 
         // Handle finalize (orphan tool calls for Codex, deduped fallback records for Copilot OTEL, etc.)
         const orphanResults = aggregator.finalize()
@@ -870,6 +932,10 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
         onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
       } catch (e) {
         errors.push(`${filePath}: ${e instanceof Error ? e.message : e}`)
+        // The pass did not reach finalize(), so the parsers may still hold
+        // state of this file (a Codex function call waiting for its usage
+        // line). Drop it so it is not attached to the next file.
+        try { aggregator.finalize() } catch {}
       }
     }
   }
@@ -1362,21 +1428,68 @@ export function backfillHermesSourceFiles(db: Database.Database): void {
   }
 }
 
+/**
+ * Decide what one pass over a Claude Code log writes for a message's record.
+ *
+ * Claude Code can copy a message into a second transcript (a resumed
+ * session), so the same record id can come from two files, and either file
+ * may hold more of the message's lines than the other. Each line carries its
+ * own timestamp and the usage so far, so the state of a message is ordered by
+ * timestamp and, between lines on one timestamp, by output tokens.
+ *
+ * - A pass never replaces the stored state with an earlier one.
+ * - While the file the record is stored under still exists, the record stays
+ *   with it: `source_file` and `line_offset` form the record's sync wire id,
+ *   and `session_id` its session. Letting each file claim the record in turn
+ *   would rewrite it twice on every re-import and queue an unchanged record
+ *   for upload. Another file's copy contributes only its content, when it
+ *   holds a later state, or the same state as the stored one: the same
+ *   model and usage, whose derived fields (the cost under current prices)
+ *   insertRecord then writes only if they differ.
+ *
+ * Returns the record to write, or null when nothing is to be written.
+ */
+function resolveClaudeCodeRecord(db: Database.Database, record: StatsRecord, filePath: string): StatsRecord | null {
+  const stored = db.prepare(
+    'SELECT ts, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, source_file, line_offset, session_id FROM records WHERE id = ?'
+  ).get(record.id) as { ts: number; model: string; input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_write_tokens: number; thinking_tokens: number; source_file: string; line_offset: number; session_id: string } | undefined
+  if (!stored) return record
+  const order = record.ts !== stored.ts ? record.ts - stored.ts : record.outputTokens - stored.output_tokens
+  if (order < 0) return null
+  if (stored.source_file === filePath || !existsSync(stored.source_file)) return record
+  // On equal order only the stored state itself is written again; a line
+  // that differs from it in what it reports is neither earlier nor later.
+  if (order === 0 && (record.model !== stored.model || record.inputTokens !== stored.input_tokens
+    || record.cacheReadTokens !== stored.cache_read_tokens || record.cacheWriteTokens !== stored.cache_write_tokens
+    || record.thinkingTokens !== stored.thinking_tokens)) return null
+  return { ...record, sourceFile: stored.source_file, lineOffset: stored.line_offset, sessionId: stored.session_id }
+}
+
 function backfillSkillNames(db: Database.Database): void {
   const rows = db.prepare(`
-    SELECT tc.id, tc.record_id, tc.ts, tc.call_index,
-           r.source_file, r.line_offset
+    SELECT tc.id, tc.record_id, tc.name, tc.ts, tc.call_index,
+           r.tool, r.source_file, r.line_offset
     FROM tool_calls tc
     JOIN records r ON r.id = tc.record_id
     WHERE (tc.name = 'Skill' OR tc.name = 'skill__unknown')
       AND r.${LOCAL_RECORDS_WHERE}
-  `).all() as { id: string; record_id: string; ts: number; call_index: number; source_file: string; line_offset: number }[]
+  `).all() as { id: string; record_id: string; name: string; ts: number; call_index: number; tool: Tool; source_file: string; line_offset: number }[]
 
   if (rows.length === 0) return
 
   const updateStmt = db.prepare('UPDATE tool_calls SET id = ?, name = ? WHERE id = ?')
+  const toolCallExists = db.prepare('SELECT 1 FROM tool_calls WHERE id = ?')
 
   for (const row of rows) {
+    // The parser no longer writes a Claude Code call under a positional id,
+    // so a row that is not under one was named by the current parser from
+    // its own block: there is nothing to backfill, and the lookup below does
+    // not apply to it. It finds a block by call_index in the record's line,
+    // which is the last line of the message and not necessarily the line the
+    // call came from, and it would move the row to a positional id. Rows
+    // still under a positional id were written by an earlier release, always
+    // from that last line.
+    if (row.tool === 'claude-code' && !hasPositionalToolCallId(row)) continue
     try {
       const fd = openSync(row.source_file, 'r')
       const buf = Buffer.alloc(65536)
@@ -1390,11 +1503,32 @@ function backfillSkillNames(db: Database.Database): void {
       const parsed = JSON.parse(line)
       if (!Array.isArray(parsed.message?.content)) continue
 
+      if (row.tool === 'claude-code') {
+        // An earlier release stored the call of the last line of its message,
+        // which is the line read here, unless the record has since moved: a
+        // call kept from a transcript that is gone stays with its record when
+        // another transcript takes the record over. Only a row that carries
+        // this line's timestamp is matched against this line's blocks, and
+        // (below) only a block that is not stored yet.
+        const rawTs = parsed.message.timestamp ?? parsed.timestamp
+        const lineTs = typeof rawTs === 'number' ? rawTs : new Date(rawTs).getTime()
+        if (lineTs !== row.ts) continue
+      }
+
       let callIndex = 0
       let skillArg = ''
+      let alreadyStored = false
       for (const block of parsed.message.content) {
         if (block.type !== 'tool_use') continue
         if (callIndex === row.call_index) {
+          if (row.tool === 'claude-code') {
+            // A timestamp and an index do not identify a block: another
+            // block of the message can share both. When this release has
+            // read the line, the block found here is stored under its own
+            // id, and the row is a different call that was kept beside it.
+            const current = claudeCodeToolCall(block, row.record_id, row.ts, row.call_index)
+            alreadyStored = current !== null && toolCallExists.get(current.id) !== undefined
+          }
           if (block.name === 'Skill') {
             const raw = block.input?.skill ?? block.input?.skillName ?? block.input?.name ?? ''
             skillArg = typeof raw === 'string' ? raw.trim() : ''
@@ -1403,6 +1537,7 @@ function backfillSkillNames(db: Database.Database): void {
         }
         callIndex++
       }
+      if (alreadyStored) continue
 
       const storedName = skillArg ? `skill__${skillArg}` : 'skill__unknown'
       const newId = generateToolCallId(row.record_id, storedName, row.ts, row.call_index)

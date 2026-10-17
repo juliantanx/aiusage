@@ -270,6 +270,35 @@ describe('runParse with CodeFuse data', () => {
     expect(cacheDb.prepare('SELECT COUNT(*) AS n FROM tool_calls').get()).toMatchObject({ n: 4 })
   })
 
+  it('keeps the snapshot record of a session whose log cannot be read to the end', async () => {
+    const ccDir = join(codeFuseRoot, 'engine', 'cc', 'projects', '-workspace')
+    mkdirSync(ccDir, { recursive: true })
+    const snapshotFile = join(ccDir, 'ant_cc_cc-session.json')
+    writeFileSync(snapshotFile, JSON.stringify({
+      session_id: 'cc-session',
+      model_id: 'glink/claude-opus-4-6',
+      last_status_line: { context_window: { current_usage: { input_tokens: 5000, output_tokens: 500 } } },
+      last_status_line_time: '2026-07-06T08:02:00.000Z',
+    }))
+    await runParse(cacheDb, 'codefuse')
+    const snapshot = () => cacheDb.prepare('SELECT input_tokens FROM records WHERE source_file = ?').all(snapshotFile)
+    expect(snapshot()).toEqual([{ input_tokens: 5000 }])
+
+    // The session's log appears; its second line has a tool name the parser cannot read.
+    const usage = { input_tokens: 100, output_tokens: 20 }
+    writeJsonl(join(ccDir, 'cc-session.jsonl'), [
+      { type: 'assistant', uuid: 'cc-uuid-1', sessionId: 'cc-session', timestamp: '2026-07-06T08:00:00.000Z', message: { model: 'claude-opus-4-6', content: [], usage } },
+      { type: 'assistant', uuid: 'cc-uuid-2', sessionId: 'cc-session', timestamp: '2026-07-06T08:00:01.000Z', message: { model: 'claude-opus-4-6', content: [{ type: 'tool_use', name: 7 }], usage } },
+    ])
+
+    const result = await runParse(cacheDb, 'codefuse')
+
+    expect(result.errors).toHaveLength(1)
+    // Nothing of the log was written, so the snapshot still stands for the session.
+    expect(snapshot()).toEqual([{ input_tokens: 5000 }])
+    expect(cacheDb.prepare('SELECT COUNT(*) AS n FROM records').get()).toEqual({ n: 1 })
+  })
+
   it('corrects embedded Codex records imported before cached tokens were subtracted, in place', async () => {
     const embeddedCodexDir = join(codeFuseRoot, 'engine', 'codex', 'sessions', '2026', '07', '06')
     const ccDir = join(codeFuseRoot, 'engine', 'cc', 'projects', '-workspace')
@@ -322,9 +351,9 @@ describe('runParse with CodeFuse data', () => {
     expect(select.get('cc-session')).toMatchObject({ input_tokens: 100, cache_read_tokens: 40 })
     expect(cacheDb.prepare('SELECT COUNT(*) AS n FROM records WHERE tool = ?').get('codefuse')).toMatchObject({ n: 2 })
     expect(cacheDb.prepare('SELECT COUNT(*) AS n FROM tool_calls').get()).toMatchObject({ n: 1 })
-    // The corrected row is published again.
+    // The corrected row is published again: it is newer than what was acknowledged.
     const state = cacheDb.prepare('SELECT synced_at, updated_at FROM records WHERE id = ?').get(fresh.id) as any
-    expect(state.synced_at).toBeNull()
+    expect(state.synced_at).toBe(1)
     expect(state.updated_at).toBeGreaterThan(1)
     expect(JSON.parse(readFileSync(watermarkPath, 'utf-8')).codefuseParserVersion).toBe(1)
   })
