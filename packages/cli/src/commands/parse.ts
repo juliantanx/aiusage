@@ -4,7 +4,7 @@ import { basename, join, dirname } from 'node:path'
 import { hostname } from 'node:os'
 import { Aggregator, resolveExchangeRate, generateToolCallId, inferProvider, calculateCost, resolvePrice, generateRecordId, normalizeCodeFuseModel, parseTimestamp, type StatsRecord, type Tool } from '@aiusage/core'
 import type { ToolCallRecord } from '@aiusage/core'
-import { insertRecord, LOCAL_RECORDS_WHERE, backfillUnknownDeviceInstanceId } from '../db/records.js'
+import { insertChangedRecords, insertRecord, LOCAL_RECORDS_WHERE, backfillUnknownDeviceInstanceId } from '../db/records.js'
 import { insertToolCall } from '../db/tool-calls.js'
 import { getState } from '../init.js'
 import { loadConfig, AIUSAGE_DIR } from '../config.js'
@@ -16,7 +16,7 @@ import { runParseQoder } from './parse-qoder.js'
 import { runParseCursor } from './parse-cursor.js'
 import { runParseCursorTranscript } from './parse-cursor.js'
 import { runParseKilo } from './parse-kilo.js'
-import { runParseKelivo } from './parse-kelivo.js'
+import { isKelivoDatabaseFile, isKelivoSourceFile, runParseKelivo } from './parse-kelivo.js'
 import { runParseGoose } from './parse-goose.js'
 import { runParseZed } from './parse-zed.js'
 import { runParseKiro } from './parse-kiro.js'
@@ -30,6 +30,8 @@ interface ParseResult {
   parsedCount: number
   toolCallCount: number
   errors: string[]
+  /** Imports that succeeded but may be incomplete (e.g. a Kelivo database whose WAL is missing). */
+  warnings: string[]
 }
 
 interface ToolPaths {
@@ -514,6 +516,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
   let parsedCount = 0
   let toolCallCount = 0
   const errors: string[] = []
+  const warnings: string[] = []
 
   const onProgress = options?.onProgress ?? (() => {})
 
@@ -560,7 +563,13 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           continue
         }
 
-        if (offset >= stat.size) {
+        // Append-only logs are skipped once the watermark reached EOF. A Kelivo
+        // SQLite database is not append-only: SQLite rewrites pages in place and
+        // appends to its -wal without changing the main file's size, so the
+        // watermark's offset would hide every later message. Those files are
+        // re-read in full instead and deduplicated by record id.
+        const skipUnchangedFile = !(tool === 'kelivo' && isKelivoDatabaseFile(filePath))
+        if (skipUnchangedFile && offset >= stat.size) {
           onProgress({ phase: 'Parsing logs', tool, current: toolIndex, total: toolTotal, records: parsedCount, toolCalls: toolCallCount })
           continue // No new data
         }
@@ -699,7 +708,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
           continue
         }
 
-        if (tool === 'kelivo' && (filePath.endsWith('chats.json') || filePath.endsWith('.zip'))) {
+        if (tool === 'kelivo' && isKelivoSourceFile(filePath)) {
           const result = await runParseKelivo({
             filePath,
             device,
@@ -708,11 +717,11 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
             now: Date.now(),
             exchangeRate,
           })
-          for (const record of result.records) {
-            insertRecord(db, record)
-            parsedCount++
-          }
+          // Only rows whose values changed are written, so re-reading the whole
+          // database neither grows the history nor marks synced rows as new.
+          parsedCount += insertChangedRecords(db, result.records)
           errors.push(...result.errors)
+          warnings.push(...result.warnings)
           wm.setEntry(tool, filePath, {
             offset: stat.size,
             size: stat.size,
@@ -1284,7 +1293,7 @@ export async function runParse(db: Database.Database, filterTool?: string, optio
     wm.save()
   }
 
-  return { parsedCount, toolCallCount, errors }
+  return { parsedCount, toolCallCount, errors, warnings }
 }
 
 /**

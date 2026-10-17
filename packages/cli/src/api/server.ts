@@ -31,8 +31,8 @@ import { startDeviceAuth, completeDeviceAuth, fetchLeaderboardStatus } from '../
 import { clearCredentials, hasCredentials, loadCredentials, saveCredentials } from '../leaderboard/credentials.js'
 import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { recordLeaderboardUpload, uploadLeaderboardData } from '../commands/leaderboard-upload.js'
-import { runParseKelivo } from '../commands/parse-kelivo.js'
-import { insertRecord, LOCAL_RECORDS_WHERE } from '../db/records.js'
+import { isKelivoSourceFile, runParseKelivo } from '../commands/parse-kelivo.js'
+import { insertChangedRecords, insertRecord, LOCAL_RECORDS_WHERE } from '../db/records.js'
 import { AsyncTaskQueue, type AsyncTaskQueueStatus } from '../db/write-queue.js'
 import { getPricingRegistrySummary, getUserAliasBindings, hasUserPrice, listLocalModelBindings, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPricingAlias, resetUserPriceToSynced, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
@@ -316,7 +316,7 @@ async function readMultipartFile(req: http.IncomingMessage): Promise<{ filename:
 }
 
 function isKelivoBackupFilename(filename: string): boolean {
-  return filename === 'chats.json' || filename.toLowerCase().endsWith('.zip')
+  return isKelivoSourceFile(filename)
 }
 
 function getDeviceName(): string {
@@ -2147,7 +2147,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return
           }
           if (!isKelivoBackupFilename(upload.filename)) {
-            json(res, { error: { code: 'INVALID_FILE', message: 'Upload a Kelivo .zip backup or chats.json' } }, 400)
+            json(res, { error: { code: 'INVALID_FILE', message: 'Upload a Kelivo .zip backup, chats.json, or Kelivo database (.db/.sqlite)' } }, 400)
             return
           }
 
@@ -2170,9 +2170,13 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             return
           }
 
+          // The upload lives in a temp directory here; report the name the user
+          // picked instead of this machine's temp path.
+          const forUser = (message: string) => message.split(tempPath).join(upload.filename)
+
           const existingCount = await runDbWrite(() => {
             const existingCount = countExistingRecordIds(db, result.records.map((record) => record.id))
-            for (const record of result.records) insertRecord(db, record)
+            insertChangedRecords(db, result.records)
             return existingCount
           })
           const imported = result.records.length
@@ -2181,7 +2185,8 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             imported,
             added,
             lastImportedAt: imported > 0 ? now : undefined,
-            errors: result.errors,
+            errors: result.errors.map(forUser),
+            warnings: result.warnings.map(forUser),
           })
         } finally {
           if (tempDir) rmSync(tempDir, { recursive: true, force: true })

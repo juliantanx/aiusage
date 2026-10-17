@@ -72,6 +72,69 @@ export function insertRecord(db: Database.Database, record: StatsRecord): void {
   })
 }
 
+/**
+ * Fields a parser can change. Bookkeeping is deliberately excluded:
+ * `ingested_at`, `updated_at`, `synced_at`, `line_offset` and `source_file`
+ * describe *when and from where* a row was read, not what it says. `origin` is
+ * excluded too, so a value-identical row that arrived from another device keeps
+ * its provenance instead of being re-labelled as local work.
+ */
+function recordValuesEqual(existing: StatsRecord, incoming: StatsRecord): boolean {
+  return existing.ts === incoming.ts
+    && existing.tool === incoming.tool
+    && existing.model === incoming.model
+    && existing.provider === incoming.provider
+    && existing.inputTokens === incoming.inputTokens
+    && existing.outputTokens === incoming.outputTokens
+    && existing.cacheReadTokens === incoming.cacheReadTokens
+    && existing.cacheWriteTokens === incoming.cacheWriteTokens
+    && existing.thinkingTokens === incoming.thinkingTokens
+    && existing.cost === incoming.cost
+    && existing.costSource === incoming.costSource
+    && existing.sessionId === incoming.sessionId
+    && (existing.cwd ?? '') === (incoming.cwd ?? '')
+    && existing.device === incoming.device
+    && existing.deviceInstanceId === incoming.deviceInstanceId
+    && (existing.platform ?? '') === (incoming.platform ?? '')
+}
+
+/**
+ * Writes only the records whose values changed, and returns how many rows were
+ * written.
+ *
+ * Sources that are re-read in full — a SQLite database whose pages are
+ * rewritten in place, or a backup archive that re-produces messages already
+ * imported — hand back records that are already stored. Rewriting those
+ * unchanged would move `updated_at` past `synced_at` and drop `synced_at`
+ * entirely, so every re-import marked the whole history as unsynced work.
+ * An identical record is now left exactly as it is.
+ */
+export function insertChangedRecords(db: Database.Database, records: StatsRecord[]): number {
+  if (records.length === 0) return 0
+
+  const existing = new Map<string, StatsRecord>()
+  const chunkSize = 400
+  for (let start = 0; start < records.length; start += chunkSize) {
+    const ids = records.slice(start, start + chunkSize).map((record) => record.id)
+    const rows = db
+      .prepare(`SELECT * FROM records WHERE id IN (${ids.map(() => '?').join(', ')})`)
+      .all(...ids) as Record<string, unknown>[]
+    for (const row of rows) existing.set(row.id as string, mapRowToRecord(row))
+  }
+
+  let written = 0
+  const write = db.transaction((items: StatsRecord[]) => {
+    for (const record of items) {
+      const prior = existing.get(record.id)
+      if (prior && recordValuesEqual(prior, record)) continue
+      insertRecord(db, record)
+      written++
+    }
+  })
+  write(records)
+  return written
+}
+
 export function getRecordById(db: Database.Database, id: string): StatsRecord | null {
   const row = db.prepare('SELECT * FROM records WHERE id = ?').get(id) as Record<string, unknown> | undefined
   if (!row) return null

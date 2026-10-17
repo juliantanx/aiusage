@@ -24,6 +24,7 @@
   let kelivoImportError = ''
   let kelivoImportedCount = null
   let kelivoAddedCount = null
+  let kelivoImportWarnings = []
 
   const PLATFORM_LABEL = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
 
@@ -495,7 +496,13 @@
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    if (file.name !== 'chats.json' && !file.name.toLowerCase().endsWith('.zip')) {
+    const lowerName = file.name.toLowerCase()
+    const accepted = lowerName === 'chats.json'
+      || lowerName.endsWith('.zip')
+      || lowerName.endsWith('.db')
+      || lowerName.endsWith('.sqlite')
+      || lowerName.endsWith('.sqlite3')
+    if (!accepted) {
       kelivoImportError = $t('settings.kelivoInvalidFile')
       return
     }
@@ -504,10 +511,12 @@
     kelivoImportError = ''
     kelivoImportedCount = null
     kelivoAddedCount = null
+    kelivoImportWarnings = []
     try {
       const result = await importKelivoBackup(file)
       kelivoImportedCount = result.imported ?? 0
       kelivoAddedCount = result.added ?? null
+      kelivoImportWarnings = Array.isArray(result.warnings) ? result.warnings : []
       let nextTools = detectedTools
       try {
         const toolsResult = await fetchDetectedTools()
@@ -629,7 +638,7 @@
         <div class="source-group">
           <div class="source-subtitle">{$t('settings.manualImports')}</div>
           <div class="field-hint">{$t('settings.manualImportsHint')}</div>
-          <input class="file-input" type="file" accept=".zip,.json,application/zip,application/json" bind:this={kelivoFileInput} on:change={handleKelivoFileChange} />
+          <input class="file-input" type="file" accept=".zip,.json,.db,.sqlite,.sqlite3,application/zip,application/json,application/vnd.sqlite3,application/x-sqlite3" bind:this={kelivoFileInput} on:change={handleKelivoFileChange} />
           <div class="detected-tools-list">
             {#each manualImportTools as tool}
               <div class="detected-tool">
@@ -659,6 +668,14 @@
                     {/if}
                   </div>
                   {#if kelivoImportError}<p class="section-error compact">{kelivoImportError}</p>{/if}
+                  {#if kelivoImportWarnings.length}
+                    <div class="import-warning">
+                      <span>{$t('settings.kelivoImportIncomplete')}</span>
+                      {#each kelivoImportWarnings as warning}
+                        <div>{warning}</div>
+                      {/each}
+                    </div>
+                  {/if}
                 {/if}
               </div>
             {/each}
@@ -1113,6 +1130,12 @@
     color: var(--rose);
   }
   .section-error.compact { margin: 0.5rem 0 0 1.25rem; }
+
+  .import-warning {
+    margin: 0.5rem 0 0 1.25rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
 
   .section-footer {
     display: flex;

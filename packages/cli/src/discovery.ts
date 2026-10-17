@@ -3,6 +3,7 @@ import { join, extname, isAbsolute, basename } from 'node:path'
 import { homedir, platform } from 'node:os'
 import type { Tool } from '@aiusage/core'
 import { loadConfig } from './config.js'
+import { isKelivoDatabaseFile, isKelivoSourceFile } from './commands/parse-kelivo.js'
 
 export interface DetectedTool {
   tool: Tool
@@ -827,6 +828,7 @@ export function discoverTools(env: NodeJS.ProcessEnv = process.env): DetectedToo
             } else if (entry.sourceKey === 'kelivo') {
               fileCount += findJsonFiles(detectedPath).filter((p) => basename(p) === 'chats.json').length
                 + findZipFiles(detectedPath).length
+                + findKelivoDatabaseFiles(detectedPath).length
             } else if (entry.sourceKey === 'kiro') {
               fileCount += unique([...findJsonlFiles(detectedPath), ...findJsonFiles(detectedPath)]).length
             } else if (entry.sourceKey === 'grok') {
@@ -995,9 +997,12 @@ export function discoverLogFiles(env: NodeJS.ProcessEnv = process.env): { tool: 
   const kelivoPath = probeKelivo(ctx)
   if (kelivoPath && existsSync(kelivoPath)) {
     const paths = statSync(kelivoPath).isDirectory()
-      ? [...findJsonFiles(kelivoPath).filter((p) => basename(p) === 'chats.json'), ...findZipFiles(kelivoPath)]
-      : basename(kelivoPath) === 'chats.json'
-        || basename(kelivoPath).endsWith('.zip')
+      ? [
+          ...findJsonFiles(kelivoPath).filter((p) => basename(p) === 'chats.json'),
+          ...findZipFiles(kelivoPath),
+          ...findKelivoDatabaseFiles(kelivoPath),
+        ]
+      : isKelivoSourceFile(kelivoPath)
         ? [kelivoPath]
         : []
     if (paths.length > 0) results.push({ tool: 'kelivo', paths: unique(paths) })
@@ -1076,6 +1081,22 @@ function findZipFiles(dir: string): string[] {
       if (entry.isDirectory()) {
         results.push(...findZipFiles(fullPath))
       } else if (entry.isFile() && extname(entry.name) === '.zip') {
+        results.push(fullPath)
+      }
+    }
+  } catch {}
+  return results
+}
+
+function findKelivoDatabaseFiles(dir: string): string[] {
+  const results: string[] = []
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        results.push(...findKelivoDatabaseFiles(fullPath))
+      } else if (entry.isFile() && isKelivoDatabaseFile(entry.name)) {
         results.push(fullPath)
       }
     }

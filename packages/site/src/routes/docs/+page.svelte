@@ -849,7 +849,7 @@
         <li><strong>Cursor</strong> — {zh ? '平台相关的' : 'platform-specific'} <code>state.vscdb</code></li>
         <li><strong>Copilot</strong> — <code>~/.copilot/otel</code> {zh ? '（需配置 OTEL 环境变量）' : '(requires OTEL env vars)'}</li>
         <li><strong>KiloCode</strong> — {zh ? 'IDE 扩展目录' : 'IDE extension directory'} + {zh ? '平台相关的' : 'platform-specific'} SQLite DB</li>
-        <li><strong>Kelivo</strong> — {zh ? '通过手动导入 Kelivo 备份文件（' : 'Manual import from Kelivo backup ( '}<code>chats.json</code> / <code>.zip</code>{zh ? '），详见下方「手动导入」' : ' ), see Manual Import below'}</li>
+        <li><strong>Kelivo</strong> — {zh ? '通过手动导入 Kelivo 备份文件（' : 'Manual import from Kelivo backup ( '}<code>chats.json</code> / <code>.zip</code> / <code>kelivo.db</code>{zh ? '），详见下方「手动导入」' : ' ), see Manual Import below'}</li>
         <li><strong>Gemini CLI</strong> — <code>~/.gemini/tmp</code></li>
         <li><strong>Kimi Code</strong> — <code>~/.kimi-code/sessions</code></li>
         <li><strong>CodeBuddy</strong> — <code>~/.codebuddy/projects</code> + {zh ? '平台相关的 CodeBuddy IDE 扩展数据目录' : 'platform-specific CodeBuddy IDE extension data directories'}</li>
@@ -908,11 +908,11 @@
         : 'Some AI tools do not expose local log files and require you to import usage data from exported backups. Tools that support manual import:'
       }</p>
       <ul>
-        <li><strong>Kelivo</strong> — {zh ? '从 Kelivo 导出的' : 'Import from Kelivo backup exports: '}<code>chats.json</code> {zh ? '或' : ' or '} <code>.zip</code> {zh ? '备份文件' : 'backup files'}</li>
+        <li><strong>Kelivo</strong> — {zh ? '从 Kelivo 导出的' : 'Import from Kelivo backup exports: '}<code>chats.json</code>{zh ? '、' : ', '}<code>.zip</code>{zh ? ' 备份文件，或 SQLite 聊天数据库 ' : ' backup files, or the SQLite chat database '}<code>kelivo.db</code></li>
       </ul>
       <p>{zh ? '操作步骤：' : 'Steps:'}</p>
       <ol>
-        <li>{zh ? '在 Kelivo 中导出聊天记录备份（通常为 chats.json 或包含它的 .zip 文件）' : 'Export your chat history from Kelivo (typically a chats.json file or a .zip containing it)'}</li>
+        <li>{zh ? '在 Kelivo 中导出聊天记录备份，或直接复制它的聊天数据库。新版 Kelivo 的 .zip 备份内是 SQLite 数据库（kelivo.db），旧版导出的是 chats.json' : 'Export a backup from Kelivo, or copy its chat database directly. Newer Kelivo builds put a SQLite database (kelivo.db) inside the .zip; older builds export chats.json'}</li>
         <li>{zh ? '打开 AIUsage 仪表盘，进入 Settings → Data Sources' : 'Open the AIUsage dashboard, go to Settings → Data Sources'}</li>
         <li>{zh ? '找到「手动导入」区域，点击 Kelivo 旁边的导入按钮，选择备份文件' : 'Find the "Manual Imports" section, click the import button next to Kelivo, and select the backup file'}</li>
         <li>{zh ? '等待导入完成，页面会显示导入结果（总记录数和新增记录数）' : 'Wait for the import to finish — the page shows the result (total records and newly added records)'}</li>
@@ -927,6 +927,12 @@
         {zh
           ? '每次导入后，AIUsage 会记录最后导入时间。重新解析或刷新页面后仍可查看。重复导入同一份备份不会产生重复记录。'
           : 'After each import, AIUsage records the last import time. It remains visible after re-parsing or refreshing the page. Re-importing the same backup file will not create duplicate records.'
+        }
+      </Callout>
+      <Callout type="warn">
+        {zh
+          ? '优先导入 Kelivo 自己导出的 .zip 备份。直接选择 kelivo.db 时，如果 Kelivo 正在运行，最新消息可能还只存在于同目录的 kelivo.db-wal 中，没有写进 db 文件本身，导入会因此缺少最近的部分；AIUsage 检测到这种情况会给出提示。'
+          : 'Prefer the .zip backup that Kelivo exports. If you select kelivo.db directly while Kelivo is running, its newest messages may still live in the neighbouring kelivo.db-wal instead of the database file itself, and the import will be missing them; AIUsage warns you when it detects this.'
         }
       </Callout>
     </section>

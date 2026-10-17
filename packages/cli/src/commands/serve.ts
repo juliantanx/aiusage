@@ -192,6 +192,9 @@ export function serve(options: ServeOptions): void {
       console.log('[serve] parsing logs...')
       runDbWrite(() => runParse(options.db)).then((result) => {
         console.log(`[serve] parsed ${result.parsedCount} records, ${result.toolCallCount} tool calls.`)
+        for (const warning of result.warnings) {
+          console.warn(`[serve] warning: ${warning}`)
+        }
       }).catch((err) => {
         console.error('[serve] initial parse failed:', err)
       })

@@ -3,6 +3,7 @@ import http from 'node:http'
 import Database from 'better-sqlite3'
 import { createApiServer } from '../../src/api/server.js'
 import { initializeDatabase } from '../../src/db/index.js'
+import { createKelivoDatabase } from '../helpers/kelivo-fixture.js'
 
 describe('POST /api/import/kelivo', () => {
   let db: Database.Database
@@ -72,7 +73,7 @@ describe('POST /api/import/kelivo', () => {
     })
   })
 
-  it('reports incremental Kelivo imports and exposes the latest import time', async () => {
+  it('reports incremental imports without rewriting unchanged rows', async () => {
     const firstRes = await fetch(`${baseUrl}/api/import/kelivo`, { method: 'POST', body: createKelivoForm() })
     const firstData = await firstRes.json()
     const secondRes = await fetch(`${baseUrl}/api/import/kelivo`, { method: 'POST', body: createKelivoForm() })
@@ -83,11 +84,19 @@ describe('POST /api/import/kelivo', () => {
     expect(typeof secondData.lastImportedAt).toBe('number')
     expect(secondData.lastImportedAt).toBeGreaterThanOrEqual(firstData.lastImportedAt)
 
+    // The row was already identical, so it was left alone: `lastImportedAt`
+    // reports when this tool's records were last written, not when a repeated
+    // import of the same file ran.
+    const row = db.prepare("SELECT ingested_at, updated_at FROM records WHERE tool = 'kelivo'").get() as any
+    expect(row).toMatchObject({
+      ingested_at: firstData.lastImportedAt,
+      updated_at: firstData.lastImportedAt,
+    })
     const toolsRes = await fetch(`${baseUrl}/api/detected-tools`)
     const toolsData = await toolsRes.json()
     const kelivo = toolsData.tools.find((tool: any) => tool.sourceKey === 'kelivo')
 
-    expect(kelivo).toMatchObject({ sourceKey: 'kelivo', lastImportedAt: secondData.lastImportedAt })
+    expect(kelivo).toMatchObject({ sourceKey: 'kelivo', lastImportedAt: firstData.lastImportedAt })
   })
 
   it('returns the last Kelivo import time with detected tools', async () => {
@@ -123,5 +132,40 @@ describe('POST /api/import/kelivo', () => {
 
     expect(res.status).toBe(400)
     expect(data.error.code).toBe('INVALID_FILE')
+  })
+  it('imports a SQLite-era Kelivo database uploaded from the browser', async () => {
+    const form = new FormData()
+    form.append('file', new Blob([createKelivoDatabase([
+      {
+        id: 'assistant-db-1',
+        conversation_id: 'conversation-db',
+        role: 'assistant',
+        timestamp: Date.UTC(2026, 5, 5, 13, 1) * 1000,
+        model_id: 'claude-sonnet-4-6',
+        provider_id: 'anthropic',
+        prompt_tokens: 1042,
+        completion_tokens: 153,
+        cached_tokens: 384,
+        total_tokens: 1195,
+        extras_json: JSON.stringify({ 'tokens.cacheWrite': 108, 'tokens.reasoning': 53 }),
+      },
+    ])], { type: 'application/vnd.sqlite3' }), 'kelivo.db')
+
+    const res = await fetch(`${baseUrl}/api/import/kelivo`, { method: 'POST', body: form })
+    const data = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(data).toMatchObject({ imported: 1, added: 1, errors: [] })
+    const row = db.prepare('SELECT tool, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, session_id FROM records').get() as any
+    expect(row).toMatchObject({
+      tool: 'kelivo',
+      model: 'claude-sonnet-4-6',
+      input_tokens: 550,
+      output_tokens: 100,
+      cache_read_tokens: 384,
+      cache_write_tokens: 108,
+      thinking_tokens: 53,
+      session_id: 'conversation-db',
+    })
   })
 })

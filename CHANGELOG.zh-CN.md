@@ -7,6 +7,12 @@
 
 ## [未发布]
 
+### 修复
+- **SQLite 版本的 Kelivo 备份无法导入** — Kelivo 将聊天存储从 Hive 迁移到 SQLite 后，`.zip` 备份内变成 `database/kelivo.db` 而不是 `chats.json`，导入会直接以 `chats.json not found in zip` 失败。现在导入器会读取压缩包中的 SQLite 数据库，也接受直接选择的 `.db`/`.sqlite` 文件，`chats.json` 仍然兼容。SQLite 中的微秒时间戳会被正确换算，数据库 `extras_json` 或 `chats.json` 里的 cache-write 与 reasoning token 不再被丢弃。与 AIUsage 其他来源保持一致，cache-write 与 reasoning token 现在单独记入对应字段，不再并入输入与输出 token。
+- **Kelivo 记录沿用应用内的供应商名称** — `providerId` 是面向用户的供应商名称（如 “OpenAI - MiMo”），部分行甚至是 UUID，导致按供应商聚合时显示的是代理配置名而不是模型厂商。现在记录优先使用 AIUsage 依据模型推断出的供应商，仅在模型无法识别时保留 Kelivo 的名称。
+- **Kelivo 数据库在文件大小不再增长后不会被重新读取** — 解析器的 watermark 会跳过「已记录的偏移量到达文件末尾」的文件，这对只追加的日志是对的，对 SQLite 却是错的：SQLite 会原地重写已有页、把新内容写进 `-wal` 而不改变主文件大小，因此首次导入之后的新消息一直看不到。现在每次运行都会完整读取 Kelivo 数据库，并且只在记录的取值确实变化时才写入，所以重复读取既不会产生重复，也不会把已同步的行重新标记为新数据。
+- **复制运行中的 Kelivo 数据库时会把库文件和 WAL 拆开** — 原来逐个复制文件，复制过程中若发生 checkpoint，快照就会悄悄缺少最近的行。现在只要数据库还有 sidecar，就用 SQLite 的在线备份（online backup）生成快照，它包含尚未 checkpoint 的 WAL 内容，也不会出现两者混拼。逐文件复制只保留给 SQLite 无法在线读取的库，同样会给出同类提示。若数据库是被单独复制的（例如从运行中的 Kelivo 上传，缺少 `-wal`），导入仍会执行，但会明确提示最近的消息可能缺失，而不是默默完成。
+
 ---
 
 ## [1.5.22] - 2026-10-14

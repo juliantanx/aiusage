@@ -180,6 +180,9 @@ program
       })
       reporter?.done()
       console.log(`Parsed ${result.parsedCount} records, ${result.toolCallCount} tool calls.`)
+      for (const warning of result.warnings) {
+        console.warn(`Warning: ${warning}`)
+      }
       if (result.errors.length > 0) {
         console.warn(`${result.errors.length} errors encountered.`)
       }
