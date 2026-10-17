@@ -343,8 +343,8 @@ program
   .option('--pricing', 'Recalculate using latest pricing')
   .action(() => {
     const db = createDatabase(DB_PATH)
-    const result = recalcPricing(db)
-    console.log(`Updated ${result.updatedCount} records, skipped ${result.skippedCount}.`)
+    const result = recalcPricing(db, { currentDeviceInstanceId: getState(AIUSAGE_DIR)?.deviceInstanceId })
+    console.log(`Updated ${result.updatedCount} records, skipped ${result.skippedCount}, updated ${result.syncedUpdatedCount} synced records.`)
     db.close()
   })
 

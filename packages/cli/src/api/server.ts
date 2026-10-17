@@ -33,6 +33,7 @@ import { base64url, sha256Buffer } from '../leaderboard/crypto.js'
 import { recordLeaderboardUpload, uploadLeaderboardData } from '../commands/leaderboard-upload.js'
 import { runParseKelivo } from '../commands/parse-kelivo.js'
 import { insertRecord, LOCAL_RECORDS_WHERE } from '../db/records.js'
+import { applyPricingToSyncedRecords, type SyncedRecordPricing } from '../db/synced-records.js'
 import { AsyncTaskQueue, type AsyncTaskQueueStatus } from '../db/write-queue.js'
 import { getPricingRegistrySummary, getUserAliasBindings, hasUserPrice, listLocalModelBindings, listPricingAliasTargets, listPricingModels, loadPricingRuntime, removeUserPricingAlias, resetUserPriceToSynced, resolvePriceFromRegistry, setUserPrice, setUserPricingAlias, syncPricingFromLitellm } from '../pricing-registry.js'
 import type { DetectedTool } from '../discovery.js'
@@ -110,7 +111,11 @@ function emptyPricingRecalcStatus(): PricingRecalcStatus {
   }
 }
 
-async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<PricingRecalcStatus, 'total' | 'processed' | 'updated' | 'skipped'>) => void): Promise<number> {
+async function recalcCosts(
+  db: Database.Database,
+  onProgress?: (status: Pick<PricingRecalcStatus, 'total' | 'processed' | 'updated' | 'skipped'>) => void,
+  currentDeviceInstanceId?: string,
+): Promise<number> {
   const BATCH_SIZE = 1000
   let updated = 0
   let processed = 0
@@ -128,13 +133,34 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
   const total = totalRow.total
   onProgress?.({ total, processed, updated, skipped })
 
+  // The recalculated price also goes to the synced_records mirror of every row
+  // repriced here (see applyPricingToSyncedRecords): the summary and cost
+  // endpoints read the current device's rows from `records` and every other
+  // device's from `synced_records`, so a recalculation that wrote records alone
+  // left the dashboard on the price the owner had published — a gateway-reported
+  // $0 stayed $0 however often *Recalculate now* ran. Every row is repriced,
+  // as the command-line recalculation does; without a device id the readings
+  // never leave `records`, so no mirror is excluded, and the mirror guard only
+  // ever writes pulled copies.
+  const mirrorOptions = currentDeviceInstanceId ? { excludeDeviceInstanceId: currentDeviceInstanceId } : {}
+
   while (true) {
     const records = db.prepare(
-      'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > ? ORDER BY id LIMIT ?'
-    ).all(lastId, BATCH_SIZE) as any[]
+      'SELECT id, tool, model, provider, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, thinking_tokens, cost, cost_source FROM records WHERE id > @lastId ORDER BY id LIMIT @limit'
+    ).all({ lastId, limit: BATCH_SIZE }) as any[]
     if (records.length === 0) break
-    const updateStmt = db.prepare('UPDATE records SET model = ?, provider = ?, cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
+    // A pulled row's updated_at is the version of the remote record it mirrors:
+    // bumping it would make every later correction from its owner look stale to
+    // mergeSyncedRecordsIntoRecords. Only locally parsed rows are marked
+    // changed — as `recalcPricing` does for the command-line recalculation.
+    const updateStmt = db.prepare(`
+      UPDATE records
+      SET model = ?, provider = ?, cost = ?, cost_source = ?,
+          updated_at = CASE WHEN origin = 'local' THEN ? ELSE updated_at END
+      WHERE id = ?
+    `)
     const tx = db.transaction((batch: any[]) => {
+      const repriced: SyncedRecordPricing[] = []
       for (const r of batch) {
         processed++
 
@@ -160,10 +186,15 @@ async function recalcCosts(db: Database.Database, onProgress?: (status: Pick<Pri
         }, exchangeRate) : 0
         const costSource = price ? 'pricing' : 'unknown'
 
+        // Offered to the mirror even when the copy already carries the price: a
+        // mirror pulled after an earlier run never took it, and nothing else
+        // would write it there.
+        repriced.push({ id: r.id, model, provider, cost, costSource })
         if (model === r.model && provider === r.provider && cost === r.cost && costSource === r.cost_source) continue
         updateStmt.run(model, provider, cost, costSource, Date.now(), r.id)
         updated++
       }
+      applyPricingToSyncedRecords(db, repriced, mirrorOptions)
     })
     tx(records)
     lastId = records[records.length - 1].id
@@ -674,7 +705,7 @@ export function createApiServer(db: Database.Database, options?: ApiServerOption
             ...progress,
             state: 'running',
           }
-        })
+        }, options?.currentDeviceInstanceId)
         if (pricingNeedsRecalcSince != null && pricingRecalcGeneration === startedGeneration) {
           pricingNeedsRecalcSince = null
         }

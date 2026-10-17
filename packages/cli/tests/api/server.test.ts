@@ -4,6 +4,7 @@ import { createApiServer } from '../../src/api/server.js'
 import Database from 'better-sqlite3'
 import { CURATED_PRICES } from '@aiusage/core'
 import { initializeDatabase } from '../../src/db/index.js'
+import { mergeSyncedRecordsIntoRecords } from '../../src/db/synced-records.js'
 import { SyncRuntimeController } from '../../src/sync/runtime.js'
 
 function insertTestRecord(db: Database.Database, overrides: Record<string, unknown> = {}) {
@@ -417,6 +418,60 @@ describe('API Server', () => {
     const done = await waitForPricingRecalcDone(baseUrl)
     expect(done.state).toBe('done')
     expect(done.updated).toBe(1)
+  })
+
+  it('applies a recalculated price to the rows another device published (issue #13)', async () => {
+    // A remote device reported usage with no price: its row sits in
+    // synced_records, and every summary reads it from there. The local
+    // recalculation must correct both tables, or the dashboard keeps showing
+    // the owner's $0 however often it runs.
+    insertTestSyncedRecord(db, {
+      id: 'synced-remote-1',
+      tool: 'openclaw',
+      model: 'deepseek-v4-pro',
+      provider: 'deepseek',
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cost: 0,
+      cost_source: 'pricing',
+      session_key: 'remote-session-1',
+    })
+    const remoteUpdatedAt = (db.prepare('SELECT updated_at FROM synced_records WHERE id = ?').get('synced-remote-1') as any).updated_at
+    mergeSyncedRecordsIntoRecords(db, 'local-uuid-0000')
+
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    server = createApiServer(db, { currentDeviceInstanceId: 'local-uuid-0000' })
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const address = server.address() as any
+        baseUrl = `http://127.0.0.1:${address.port}`
+        resolve()
+      })
+    })
+
+    const summaryBefore = await (await fetch(`${baseUrl}/api/summary?range=all`)).json()
+    expect(summaryBefore.totalCost).toBe(0)
+
+    const put = await fetch(`${baseUrl}/api/pricing`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'deepseek-v4-pro', input: 1, output: 2, currency: 'USD' }),
+    })
+    expect(put.ok).toBe(true)
+
+    const start = await fetch(`${baseUrl}/api/pricing/recalc`, { method: 'POST' })
+    expect(start.status).toBe(202)
+    await waitForPricingRecalcDone(baseUrl)
+
+    // 1M input * $1 + 0.5M output * $2, in both tables the readings use.
+    const mirror = db.prepare('SELECT cost, cost_source, updated_at FROM synced_records WHERE id = ?').get('synced-remote-1') as any
+    expect(mirror.cost).toBeCloseTo(2)
+    expect(mirror.cost_source).toBe('pricing')
+    // The owner's next correction must still count as the newest version.
+    expect(mirror.updated_at).toBe(remoteUpdatedAt)
+
+    const summaryAfter = await (await fetch(`${baseUrl}/api/summary?range=all`)).json()
+    expect(summaryAfter.totalCost).toBeCloseTo(2)
   })
 
   it('shows corrected Sessions cost after a manual price overrides a log-sourced cost (issue #13)', async () => {

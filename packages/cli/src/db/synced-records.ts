@@ -73,6 +73,114 @@ export function insertSyncedRecord(db: Database.Database, record: SyncRecord, ti
   return result.changes > 0
 }
 
+export interface SyncedRecordPricing {
+  id: string
+  model: string
+  provider: string
+  cost: number
+  costSource: SyncRecord['costSource']
+}
+
+/**
+ * Write the price a recalculation recomputed into the `synced_records` mirror
+ * of the pulled rows it repriced.
+ *
+ * Summaries read another device's usage from `synced_records` — the merged
+ * copy in `records` is excluded precisely so the row is not counted twice —
+ * so a recalculation that wrote `records` alone left the dashboard showing
+ * the price the owner had published: usage another device reported at $0 (a
+ * gateway that cannot price the model) stayed $0 however often *Recalculate
+ * pricing* ran. Both tables are now written with the same values, so a merged
+ * copy and its mirror normally describe the same price. This is a local
+ * correction: it is never published (uploads are built from locally parsed
+ * rows only) and the owner stays authoritative.
+ *
+ * Two prices the recalculation must not make worse are kept as they are:
+ *
+ *  - a positive cost from `pricing` is kept when the local registry has no
+ *    price for the model (the recomputation would write `0 / 'unknown'`).
+ *    Price lists legitimately differ between devices — one may have a manual
+ *    price or a newer sync — and "this device cannot price the model" is not
+ *    a correction of what the owner's device priced.
+ *  - a positive `log` cost is kept. The owner logged it, and a price table on
+ *    another device must not override it on that device's dashboard (this is
+ *    also how a recalculation behaved before the mirror was written).
+ *
+ * A record the owner published at $0 is not affected by either guard: its
+ * cost is not positive, so it is still priced — which is the case this
+ * function exists for. A record the owner republished at $0 after a priced
+ * version is repriced here as well, as the owner's current version says.
+ *
+ * Only a mirror a recalculation may speak for is written. The merged copy in
+ * `records` must be a pulled copy (`origin = 'synced'` — never a local row
+ * that happens to share the id), must be at least as new as the mirror
+ * (`updated_at`), and must carry the mirror's exact token counts: a copy whose
+ * tokens differ is one the pull refreshed after the caller read it, or one the
+ * merge has not applied a newer mirror to yet, and a price recomputed from its
+ * tokens is not the price of the tokens the mirror holds. `updated_at` is
+ * deliberately left alone — it is the version of the remote record the row
+ * mirrors, the value the pull upsert and `mergeSyncedRecordsIntoRecords`
+ * compare against — so the owner's next version still replaces the
+ * recalculated price, and stamping it with the local clock can never make that
+ * correction look stale.
+ *
+ * A mirror that no merged copy exists for is not written: nothing local holds
+ * the usage it describes, and its cost is the owner's to publish. A mirror
+ * that already carries the values is not written either. `entries` is every
+ * row the caller priced, in the values its copy in `records` holds — a row
+ * whose copy already had them included, because it is the mirror that may be
+ * behind, and a recalculation is what puts the two back in step.
+ *
+ * `options.excludeDeviceInstanceId` names the device whose own rows the caller
+ * reads from `records` (every reading that spans devices excludes that
+ * device's rows in `synced_records` so that an echoed copy of a local row is
+ * never counted twice). The mirrors attributed to it are left alone all the
+ * same: what a recalculation changes is the price of the usage it priced, and
+ * that usage is read from `records`.
+ *
+ * Returns the ids whose mirror changed; call inside the same transaction as
+ * the `records` update, so the two tables cannot be left disagreeing.
+ */
+export function applyPricingToSyncedRecords(
+  db: Database.Database,
+  entries: Iterable<SyncedRecordPricing>,
+  options: { excludeDeviceInstanceId?: string } = {},
+): string[] {
+  const excludeDevice = options.excludeDeviceInstanceId !== undefined
+    ? 'AND synced_records.device_instance_id != @excludeDeviceId'
+    : ''
+  const update = db.prepare(`
+    UPDATE synced_records
+    SET model = @model, provider = @provider, cost = @cost, cost_source = @costSource
+    WHERE id = @id
+      ${excludeDevice}
+      AND EXISTS (
+        SELECT 1 FROM records r
+        WHERE r.id = synced_records.id
+          AND r.origin = 'synced'
+          AND r.updated_at >= synced_records.updated_at
+          AND r.input_tokens = synced_records.input_tokens
+          AND r.output_tokens = synced_records.output_tokens
+          AND r.cache_read_tokens = synced_records.cache_read_tokens
+          AND r.cache_write_tokens = synced_records.cache_write_tokens
+          AND r.thinking_tokens = synced_records.thinking_tokens
+      )
+      -- A model the local registry cannot price yields no correction; see
+      -- the two prices this function leaves alone, above.
+      AND NOT (@costSource = 'unknown' AND synced_records.cost > 0)
+      AND NOT (synced_records.cost_source = 'log' AND synced_records.cost > 0)
+      AND (model != @model OR provider != @provider OR cost != @cost OR cost_source != @costSource)
+  `)
+  const params = options.excludeDeviceInstanceId !== undefined
+    ? { excludeDeviceId: options.excludeDeviceInstanceId }
+    : {}
+  const changed: string[] = []
+  for (const entry of entries) {
+    if (update.run({ ...entry, ...params }).changes > 0) changed.push(entry.id)
+  }
+  return changed
+}
+
 export function getSyncedRecordById(db: Database.Database, id: string): SyncRecord | null {
   const row = db.prepare('SELECT * FROM synced_records WHERE id = ?').get(id) as Record<string, unknown> | undefined
   if (!row) return null
