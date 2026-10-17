@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import { calculateCost, resolveExchangeRate, resolvePrice } from '@aiusage/core'
 import type { Config } from '../config.js'
+import { NEXT_UPDATED_AT } from './record-version.js'
 
 /**
  * Reprice the records a migration queued in `pending_cost_recalc`.
@@ -14,7 +15,8 @@ import type { Config } from '../config.js'
  * A record whose model no longer resolves to a price becomes
  * `cost = 0, cost_source = 'unknown'`, as *Recalculate pricing* would leave
  * it, rather than keeping a cost computed from the old token counts. Logged
- * costs are left alone. `updated_at` is bumped so the new cost is published.
+ * costs are left alone. `updated_at` is moved above the row's old version and
+ * every acknowledgement (`NEXT_UPDATED_AT`), so the new cost is published.
  * The queue is drained in the same transaction, so an interrupted run is
  * simply repeated on the next database open. Returns the number of records
  * repriced.
@@ -30,7 +32,7 @@ export function recalcPendingCosts(db: Database.Database, config?: Config | null
     FROM pending_cost_recalc p
     JOIN records r ON r.id = p.record_id
   `)
-  const update = db.prepare('UPDATE records SET cost = ?, cost_source = ?, updated_at = ? WHERE id = ?')
+  const update = db.prepare(`UPDATE records SET cost = ?, cost_source = ?, updated_at = ${NEXT_UPDATED_AT} WHERE id = ?`)
 
   // The queue is read under the write lock: another process sharing the
   // database may drain it and re-parse a record in the meantime, and its cost

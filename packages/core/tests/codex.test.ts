@@ -39,7 +39,8 @@ describe('CodexParser', () => {
     expect(result).not.toBeNull()
     expect(result!.record.model).toBe('gpt-4o')
     expect(result!.record.inputTokens).toBe(100)
-    expect(result!.record.outputTokens).toBe(50)
+    // fixture: output_tokens 50 of which reasoning_output_tokens 20
+    expect(result!.record.outputTokens).toBe(30)
     expect(result!.record.cacheReadTokens).toBe(0)
     expect(result!.record.thinkingTokens).toBe(20)
     expect(result!.record.cacheWriteTokens).toBe(0)

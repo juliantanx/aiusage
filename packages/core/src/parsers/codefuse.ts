@@ -62,12 +62,16 @@ function usageFromCodexPayload(payload: any): UsageParts | null {
   // Codex reports input_tokens inclusive of cached_input_tokens. Store only the
   // uncached part so cached tokens are not counted (and priced) twice.
   const cachedTokens = num(usage.cached_input_tokens)
+  // output_tokens likewise includes reasoning_output_tokens. Thinking tokens
+  // are summed and priced beside output tokens, so store only the
+  // non-reasoning part as output.
+  const reasoningTokens = num(usage.reasoning_output_tokens)
   return {
     inputTokens: Math.max(0, num(usage.input_tokens) - cachedTokens),
-    outputTokens: num(usage.output_tokens),
+    outputTokens: Math.max(0, num(usage.output_tokens) - reasoningTokens),
     cacheReadTokens: cachedTokens,
     cacheWriteTokens: 0,
-    thinkingTokens: num(usage.reasoning_output_tokens),
+    thinkingTokens: reasoningTokens,
   }
 }
 

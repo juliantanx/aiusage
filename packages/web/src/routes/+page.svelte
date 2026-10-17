@@ -5,6 +5,7 @@
   import { fetchHomeSummary, refreshData as triggerRefresh, fetchConfig, fetchQuotas, SETTINGS_UPDATED_EVENT } from '$lib/api.js'
   import { t } from '$lib/i18n.js'
   import { formatCost, displayCurrency, exchangeRate } from '$lib/stores.js'
+  import { tokenComposition } from '$lib/token-composition.js'
 
   const DISPLAY_KEY = 'aiusage-home-display'
 
@@ -158,11 +159,8 @@
   $: timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   $: dateStr  = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
 
-  $: tokenParts    = data ? (data.inputTokens||0)+(data.outputTokens||0)+(data.cacheReadTokens||0)+(data.cacheWriteTokens||0) : 0
-  $: inputPct      = tokenParts > 0 ? (data.inputTokens     / tokenParts) * 100 : 0
-  $: outputPct     = tokenParts > 0 ? (data.outputTokens    / tokenParts) * 100 : 0
-  $: cacheReadPct  = tokenParts > 0 ? (data.cacheReadTokens / tokenParts) * 100 : 0
-  $: cacheWritePct = tokenParts > 0 ? (data.cacheWriteTokens/ tokenParts) * 100 : 0
+  // Thinking tokens are stored apart from output tokens; the bar counts them as output.
+  $: ({ inputPct, outputPct, cacheReadPct, cacheWritePct } = tokenComposition(data))
 
   $: refreshSecs  = Math.round(globalRefreshMs / 1000)
   $: refreshPct   = refreshSecs > 0 ? (1 - countdown / refreshSecs) * 100 : 0

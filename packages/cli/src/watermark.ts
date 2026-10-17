@@ -14,8 +14,10 @@ const CURRENT_ANTIGRAVITY_PARSER_VERSION = 1
  * v1: input tokens of embedded Codex sessions exclude cached tokens. Every
  * CodeFuse log is re-imported once; records keep their ids, so the re-import
  * corrects input tokens and cost in place.
+ * v2: output tokens of embedded Codex sessions exclude reasoning tokens, which
+ * are stored as thinking tokens. Corrected by the same one-time re-import.
  */
-const CURRENT_CODEFUSE_PARSER_VERSION = 1
+const CURRENT_CODEFUSE_PARSER_VERSION = 2
 
 export interface WatermarkEntry {
   offset: number

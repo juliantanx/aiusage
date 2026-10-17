@@ -68,8 +68,12 @@ export class CodexParser implements Parser {
     // uncached part so cached tokens are not counted (and priced) twice.
     const cacheReadTokens = usage.cached_input_tokens ?? 0
     const inputTokens = Math.max(0, (usage.input_tokens ?? 0) - cacheReadTokens)
-    const outputTokens = usage.output_tokens ?? 0
+    // Codex also reports output_tokens inclusive of reasoning_output_tokens
+    // (total_tokens = input_tokens + output_tokens). Totals sum the output and
+    // thinking columns and pricing charges both at the output price, so store
+    // only the non-reasoning part as output.
     const thinkingTokens = usage.reasoning_output_tokens ?? 0
+    const outputTokens = Math.max(0, (usage.output_tokens ?? 0) - thinkingTokens)
     const cacheWriteTokens = 0 // Codex doesn't provide this
 
     const cost = model === 'unknown' ? 0 : calculateCost(model, {

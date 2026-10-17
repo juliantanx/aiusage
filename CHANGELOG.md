@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Codex reasoning tokens were counted and billed twice** ([#138](https://github.com/juliantanx/aiusage/pull/138) by [@aaroncchung](https://github.com/aaroncchung)) — Codex reports output tokens inclusive of reasoning tokens; they were stored as output and again as thinking tokens, and cost charged both. Output tokens are now stored without the reasoning part, for Codex and for Codex sessions embedded in CodeFuse. Existing local Codex rows are corrected by a migration and repriced, and CodeFuse logs are re-imported once. Corrected rows are uploaded again at the next sync. The home page token composition bar now counts thinking tokens in its output segment.
+
 ---
 
 ## [1.5.22] - 2026-10-14

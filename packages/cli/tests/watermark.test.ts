@@ -219,7 +219,7 @@ describe('WatermarkManager', () => {
 
     wm.save()
     const saved = JSON.parse(readFileSync(watermarkPath, 'utf-8'))
-    expect(saved.codefuseParserVersion).toBe(1)
+    expect(saved.codefuseParserVersion).toBe(2)
   })
 
   it('preserves CodeFuse entries written by the current parser version', () => {
@@ -227,7 +227,7 @@ describe('WatermarkManager', () => {
       files: {
         codefuse: { '/cf/projects/current.jsonl': { offset: 7, size: 7, mtime: 7 } },
       },
-      codefuseParserVersion: 1,
+      codefuseParserVersion: 2,
     }), 'utf-8')
 
     const wm = new WatermarkManager(watermarkPath)

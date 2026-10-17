@@ -7,6 +7,9 @@
 
 ## [未发布]
 
+### 修复
+- **Codex 的推理 token 被重复统计和计费**（[#138](https://github.com/juliantanx/aiusage/pull/138)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — Codex 上报的输出 token 已包含推理 token；它们既被存为输出 token，又被存为思考 token，费用也按两者计算。现在 Codex 以及嵌入 CodeFuse 的 Codex 会话保存的输出 token 不再包含推理部分。已有的本地 Codex 记录由迁移更正并重新计费，CodeFuse 日志会重新导入一次。更正后的记录会在下一次同步时再次上传。首页的 token 构成条现在把思考 token 计入输出部分。
+
 ---
 
 ## [1.5.22] - 2026-10-14
