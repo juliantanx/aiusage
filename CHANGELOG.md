@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.26] - 2026-10-22
+
+Fix stale dashboard totals and polling lifecycle issues, make the site pass TypeScript checking, and clean up repository and Docker build configuration. This release includes [#149](https://github.com/juliantanx/aiusage/pull/149), [#150](https://github.com/juliantanx/aiusage/pull/150), and [#151](https://github.com/juliantanx/aiusage/pull/151) by [@aaroncchung](https://github.com/aaroncchung).
+
 ### Changed
 - **The site passes `tsc --noEmit`** ([#149](https://github.com/juliantanx/aiusage/pull/149) by [@aaroncchung](https://github.com/aaroncchung)) — the type check reported 122 errors in `packages/site`, almost all because the database client was typed as a bare query function: `sql.begin` did not exist for the compiler, and transaction handles were typed as query results. The client and transaction handles now have their postgres.js types, query results take their row types as the query's type argument instead of an assertion, and the last few parameter and predicate errors are fixed. The site now reports no errors. Types only: nothing changes at run time. The CI step that keeps it at zero follows separately.
 - **Repository housekeeping** ([#150](https://github.com/juliantanx/aiusage/pull/150) by [@aaroncchung](https://github.com/aaroncchung)) — the pnpm store index committed by accident (`.pnpm-store/`) is no longer tracked and is now ignored. The CLI Docker image prepares `pnpm@9.15.0`, the `packageManager` version it already ran, instead of downloading an unused `pnpm@latest` on every build. The site's `db:seed` script, which ran a `seed.ts` that never existed, is removed.
@@ -631,6 +637,7 @@ Fix multi-device sync correctness across GitHub, S3/R2, and Cloud.
 
 ---
 
+[1.5.26]: https://github.com/juliantanx/aiusage/compare/v1.5.25...v1.5.26
 [1.5.25]: https://github.com/juliantanx/aiusage/compare/v1.5.24...v1.5.25
 [1.5.24]: https://github.com/juliantanx/aiusage/compare/v1.5.23...v1.5.24
 [1.5.23]: https://github.com/juliantanx/aiusage/compare/v1.5.22...v1.5.23

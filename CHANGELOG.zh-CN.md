@@ -7,6 +7,12 @@
 
 ## [未发布]
 
+---
+
+## [1.5.26] - 2026-10-22
+
+本版本修复看板总量滞后和轮询生命周期问题，使站点通过 TypeScript 检查，并清理仓库及 Docker 构建配置，包含 [@aaroncchung](https://github.com/aaroncchung) 贡献的 [#149](https://github.com/juliantanx/aiusage/pull/149)、[#150](https://github.com/juliantanx/aiusage/pull/150) 和 [#151](https://github.com/juliantanx/aiusage/pull/151)。
+
 ### 变更
 - **站点通过 `tsc --noEmit` 类型检查**（[#149](https://github.com/juliantanx/aiusage/pull/149)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — `packages/site` 的类型检查原有 122 个错误，几乎都是因为数据库客户端被声明成单纯的查询函数：编译器认为 `sql.begin` 不存在，事务句柄也被声明成查询结果的类型。现在客户端和事务句柄使用 postgres.js 自身的类型，查询结果通过查询的类型参数获得行类型，不再使用类型断言，其余少数参数和类型谓词错误也已修正。站点现在没有类型错误。此改动只涉及类型，运行时行为不变。保持零错误的 CI 检查将另行提交。
 - **仓库整理**（[#150](https://github.com/juliantanx/aiusage/pull/150)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — 误提交的 pnpm store 索引（`.pnpm-store/`）不再纳入版本控制，并已加入忽略列表。CLI 的 Docker 镜像改为预先准备 `pnpm@9.15.0`（即 `packageManager` 指定、构建时实际一直使用的版本），不再在每次构建时下载用不到的 `pnpm@latest`。站点中的 `db:seed` 脚本指向一个从未存在过的 `seed.ts`，现已删除。
@@ -627,6 +633,7 @@
 
 ---
 
+[1.5.26]: https://github.com/juliantanx/aiusage/compare/v1.5.25...v1.5.26
 [1.5.25]: https://github.com/juliantanx/aiusage/compare/v1.5.24...v1.5.25
 [1.5.24]: https://github.com/juliantanx/aiusage/compare/v1.5.23...v1.5.24
 [1.5.23]: https://github.com/juliantanx/aiusage/compare/v1.5.22...v1.5.23
