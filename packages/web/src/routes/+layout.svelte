@@ -63,6 +63,10 @@
   let authError = ''
   let authSubmitting = false
   let unlockOpen = false
+  // Bumped by a successful unlock, which mounts the page again: the public
+  // home was refused its protected requests (settings, quotas, refresh) while
+  // locked. The initial auth check never changes it.
+  let unlockCount = 0
 
   $: isHomeRoute = $page.url.pathname === '/'
   $: shellState = getAuthShellState({
@@ -93,6 +97,7 @@
     try {
       await login(password)
       authenticated = true
+      unlockCount += 1
       password = ''
       unlockOpen = false
       fetchConfig().then(applyConfig).catch(() => {})
@@ -192,8 +197,12 @@
       <div class="auth-loading">{$t('auth.checking')}</div>
     </section>
   </main>
-{:else if shouldShowPublicHome}
-  <div class="public-shell">
+{:else}
+<!-- The public home and the full shell share one <slot />, so the page is not
+     mounted a second time when the auth check settles on `/` (issue #109). -->
+<div class:app={!shouldShowPublicHome} class:public-shell={shouldShowPublicHome} class:collapsed>
+
+  {#if shouldShowPublicHome}
     <header class="public-header">
       <button class="public-unlock" type="button" on:click={openUnlock} aria-label={$t('auth.unlockDashboard')}>
         <svg class="brand-logo" width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -208,13 +217,6 @@
         {$lang === 'en' ? '中' : 'EN'}
       </button>
     </header>
-
-    <main class="public-page-content">
-      <div class="public-page-inner">
-        <slot />
-      </div>
-    </main>
-  </div>
 
   {#if unlockOpen}
     <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -251,9 +253,7 @@
       {/if}
     </section>
   {/if}
-{:else}
-<div class="app" class:collapsed>
-
+  {:else}
   <aside class="sidebar" class:open={mobileOpen}>
     <div class="sidebar-inner">
 
@@ -324,9 +324,11 @@
 
     </div>
   </aside>
+  {/if}
 
-  <div class="main-area">
+  <div class:main-area={!shouldShowPublicHome}>
 
+    {#if !shouldShowPublicHome}
     <header class="mobile-header">
       <button class="hamburger" on:click={toggleMobile}>
         <span></span><span></span><span></span>
@@ -349,9 +351,12 @@
         </button>
       </div>
     </header>
+    {/if}
 
-    <main class="page-content">
-      <slot />
+    <main class:page-content={!shouldShowPublicHome} class:public-page-content={shouldShowPublicHome}>
+      {#key unlockCount}
+        <slot />
+      {/key}
     </main>
 
   </div>
@@ -490,9 +495,6 @@
 
   .public-page-content {
     min-height: calc(100vh - 5.25rem);
-  }
-
-  .public-page-inner {
     max-width: 1180px;
     margin: 0 auto;
   }

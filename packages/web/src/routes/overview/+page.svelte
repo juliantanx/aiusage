@@ -13,9 +13,9 @@
   let tcTab = 'all'
   let initialized = false
 
-  async function loadData() {
+  async function loadData({ showLoading = true } = {}) {
     if (!initialized) return
-    loading = true
+    if (showLoading) loading = true
     error = null
     try {
       data = await fetchSummary({ ...$dateRange, device: $selectedDevice, tool: $selectedTool })
@@ -31,8 +31,9 @@
     // Show existing data first; don't block the page on log parsing (issue #40).
     initialized = true
     await loadData()
-    // Refresh logs in the background, then reload once it completes.
-    refreshData().then(() => loadData()).catch(() => {})
+    // Refresh logs in the background, then reload once it completes. The
+    // figures already shown stay up while the reload is in flight.
+    refreshData().then(() => loadData({ showLoading: false })).catch(() => {})
   })
 
   $: $dateRange, $selectedDevice, $selectedTool, loadData()

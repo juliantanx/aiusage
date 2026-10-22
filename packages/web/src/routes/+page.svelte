@@ -97,8 +97,12 @@
   let countdown      = 0
   let countdownTimer = null
   let refreshTimeout = null
+  // Set by onDestroy. A request that was pending when the page went away must
+  // not start timers that nothing will clear (issue #109).
+  let destroyed      = false
 
   function startRefreshCycle() {
+    if (destroyed) return
     clearInterval(countdownTimer)
     clearTimeout(refreshTimeout)
     const secs = Math.round(globalRefreshMs / 1000)
@@ -127,27 +131,31 @@
   onMount(async () => {
     display = loadDisplay()
     clockTimer = setInterval(() => { now = new Date() }, 1000)
+    // Added before the first await, so the listener onDestroy removes is
+    // always one that was already added.
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
 
     try {
       const cfg = await fetchConfig()
       if (cfg?.refreshInterval) globalRefreshMs = cfg.refreshInterval
     } catch {}
+    if (destroyed) return
 
     // Render whatever is already in the database first so the landing page is
     // never blocked on log parsing. Trae/large log sources can make /api/refresh
     // take tens of seconds; awaiting it here left the page stuck loading (issue #40).
     await Promise.all([loadData(), loadQuotaWarnings()])
+    if (destroyed) return
     startRefreshCycle()
 
     // Kick off a fresh parse in the background, then quietly update once it lands.
     triggerRefresh()
-      .then(() => Promise.all([silentRefresh(), loadQuotaWarnings()]))
+      .then(() => destroyed ? undefined : Promise.all([silentRefresh(), loadQuotaWarnings()]))
       .catch(() => {})
-
-    window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated)
   })
 
   onDestroy(() => {
+    destroyed = true
     clearInterval(clockTimer)
     clearInterval(countdownTimer)
     clearTimeout(refreshTimeout)

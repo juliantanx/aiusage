@@ -11,6 +11,10 @@
 - **站点通过 `tsc --noEmit` 类型检查**（[#149](https://github.com/juliantanx/aiusage/pull/149)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — `packages/site` 的类型检查原有 122 个错误，几乎都是因为数据库客户端被声明成单纯的查询函数：编译器认为 `sql.begin` 不存在，事务句柄也被声明成查询结果的类型。现在客户端和事务句柄使用 postgres.js 自身的类型，查询结果通过查询的类型参数获得行类型，不再使用类型断言，其余少数参数和类型谓词错误也已修正。站点现在没有类型错误。此改动只涉及类型，运行时行为不变。保持零错误的 CI 检查将另行提交。
 - **仓库整理**（[#150](https://github.com/juliantanx/aiusage/pull/150)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — 误提交的 pnpm store 索引（`.pnpm-store/`）不再纳入版本控制，并已加入忽略列表。CLI 的 Docker 镜像改为预先准备 `pnpm@9.15.0`（即 `packageManager` 指定、构建时实际一直使用的版本），不再在每次构建时下载用不到的 `pnpm@latest`。站点中的 `db:seed` 脚本指向一个从未存在过的 `seed.ts`，现已删除。
 
+### 修复
+- **概览和首页显示的是最近一次刷新之前的总量**（[#151](https://github.com/juliantanx/aiusage/pull/151)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — 看板把汇总接口的响应存在缓存里，并一直返回缓存中的旧副本；后台取回的新副本只会替换缓存，从未显示出来。概览页会先解析新日志再重新加载，但显示的仍是刷新之前的总量（与 Token、费用和模型页面不一致）；首页的每次轮询以及第一次点击“立即刷新”显示的也都是上一次的结果。现在汇总响应不再缓存，每次加载都显示本地服务当时的数据。概览页在刷新后重新加载时保留当前数字，不再闪现加载状态。
+- **冷启动打开 `/` 时首页被挂载两次，并留下一个持续运行的轮询**（[#151](https://github.com/juliantanx/aiusage/pull/151)，由 [@aaroncchung](https://github.com/aaroncchung) 贡献） — 看板的鉴权检查完成时，布局会重新创建页面；第一个仍在加载中的副本在已被销毁之后才启动倒计时和对 `/api/home-summary` 的轮询，两者会在所有页面上一直运行到标签页关闭；在轮询请求尚未返回时离开首页也会出现同样的问题。现在公开首页和完整看板共用同一个页面实例，首页只挂载一次（在首页解锁看板后仍会重新加载一次，以读取锁定时无权访问的设置和配额），离开首页后也不会再启动任何定时器或监听器。
+
 ---
 
 ## [1.5.25] - 2026-10-22

@@ -16,29 +16,15 @@ export async function githubConnection(action, body = {}) {
   return result
 }
 
-// Stale-while-revalidate cache (§11.4)
-const swrCache = new Map()
+// Responses are not cached: every call that is not joining a request already
+// in flight asks the local server again, so a reload after a refresh or a
+// poll shows the current data (issue #108).
 const inflightRequests = new Map()
 
-async function apiFetch(url, { signal, swr = false, method } = {}) {
+async function apiFetch(url, { signal, method } = {}) {
   const request = () => method
     ? fetch(url, signal ? { method, signal } : { method })
     : signal ? fetch(url, { signal }) : fetch(url)
-
-  // Stale-while-revalidate: return cached data immediately, refresh in background
-  if (swr && swrCache.has(url)) {
-    const cached = swrCache.get(url)
-    // Revalidate in background if stale (> 5s)
-    if (Date.now() - cached.fetchedAt > 5000 && !inflightRequests.has(url)) {
-      const promise = request()
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data) swrCache.set(url, { data, fetchedAt: Date.now() }) })
-        .catch(() => {})
-        .finally(() => inflightRequests.delete(url))
-      inflightRequests.set(url, promise)
-    }
-    return cached.data
-  }
 
   // Deduplicate in-flight requests
   if (inflightRequests.has(url)) {
@@ -53,24 +39,20 @@ async function apiFetch(url, { signal, swr = false, method } = {}) {
       }
       return response.json()
     })
-    .then(data => {
-      if (swr) swrCache.set(url, { data, fetchedAt: Date.now() })
-      return data
-    })
     .finally(() => inflightRequests.delete(url))
 
   inflightRequests.set(url, promise)
   return promise
 }
 
-export async function fetchSummary(params, { signal, swr = true } = {}) {
-  return apiFetch(buildUrl('/api/summary', params), { signal, swr })
+export async function fetchSummary(params, { signal } = {}) {
+  return apiFetch(buildUrl('/api/summary', params), { signal })
 }
 
 // Public aggregate totals for the home page; stays reachable without the
 // dashboard password and only accepts `range`.
-export async function fetchHomeSummary(params, { signal, swr = true } = {}) {
-  return apiFetch(buildUrl('/api/home-summary', { range: params?.range }), { signal, swr })
+export async function fetchHomeSummary(params, { signal } = {}) {
+  return apiFetch(buildUrl('/api/home-summary', { range: params?.range }), { signal })
 }
 
 export async function fetchBootstrap(params = {}) {
