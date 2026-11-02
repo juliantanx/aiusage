@@ -1,6 +1,6 @@
 {
   "name": "@aiusage/web",
-  "version": "1.5.26",
+  "version": "1.5.27",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.27] - 2026-11-02
+
+Fix the Settings page's last-sync status for custom S3 endpoints, prefixes, and non-default GitHub branches. This release includes [#153](https://github.com/juliantanx/aiusage/pull/153) by [@Fiveo9](https://github.com/Fiveo9).
+
 ### Fixed
 - **Settings reported "Last sync: Never" after a sync that had run** ([#153](https://github.com/juliantanx/aiusage/pull/153) by [@Fiveo9](https://github.com/Fiveo9)) — the sync status section replaced the server's status with "Never" unless the target key it rebuilt from the form matched the status's own `lastSyncTarget`. That rebuilt key left out the S3 prefix and endpoint and the GitHub branch, which became part of the key in 1.5.18 (`s3:usage?endpoint=...`): a configuration using a custom endpoint (Cloudflare R2, MinIO) or a non-default branch never matched, so a successful sync still showed "Never" and no result counts. It also read the form instead of the saved configuration, so editing the repository or bucket emptied the status before saving. The page now shows the status the server reports for the configured target; the server already selects that target, and only it knows the full key.
 
@@ -640,6 +646,7 @@ Fix multi-device sync correctness across GitHub, S3/R2, and Cloud.
 
 ---
 
+[1.5.27]: https://github.com/juliantanx/aiusage/compare/v1.5.26...v1.5.27
 [1.5.26]: https://github.com/juliantanx/aiusage/compare/v1.5.25...v1.5.26
 [1.5.25]: https://github.com/juliantanx/aiusage/compare/v1.5.24...v1.5.25
 [1.5.24]: https://github.com/juliantanx/aiusage/compare/v1.5.23...v1.5.24

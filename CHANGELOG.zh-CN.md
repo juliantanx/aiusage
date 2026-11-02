@@ -7,6 +7,12 @@
 
 ## [未发布]
 
+---
+
+## [1.5.27] - 2026-11-02
+
+本版本修复设置页在使用自定义 S3 端点、前缀或非默认 GitHub 分支时显示错误的上次同步状态，包含 [@Fiveo9](https://github.com/Fiveo9) 贡献的 [#153](https://github.com/juliantanx/aiusage/pull/153)。
+
 ### 修复
 - **同步成功后，设置页仍把“上次同步”显示为“从未”**（[#153](https://github.com/juliantanx/aiusage/pull/153)，由 [@Fiveo9](https://github.com/Fiveo9) 贡献） — 同步状态区会用表单拼出的同步目标键与状态里的 `lastSyncTarget` 比较，不一致就把整个状态当成空，显示“从未”。表单拼出的键没有包含 S3 的前缀与端点、以及 GitHub 的分支，而这些字段从 1.5.18 起已属于目标键（`s3:usage?endpoint=...`）：使用自定义端点（Cloudflare R2、MinIO）或非默认分支的配置永远匹配不上，即使同步成功也一直显示“从未”，也看不到上传统计。它读取的又是表单而不是已保存的配置，因此在保存前编辑仓库或存储桶也会让状态变为空。现在页面直接显示服务端为当前配置目标返回的状态：目标由服务端选定，也只有它知道完整的目标键。
 
@@ -636,6 +642,7 @@
 
 ---
 
+[1.5.27]: https://github.com/juliantanx/aiusage/compare/v1.5.26...v1.5.27
 [1.5.26]: https://github.com/juliantanx/aiusage/compare/v1.5.25...v1.5.26
 [1.5.25]: https://github.com/juliantanx/aiusage/compare/v1.5.24...v1.5.25
 [1.5.24]: https://github.com/juliantanx/aiusage/compare/v1.5.23...v1.5.24
