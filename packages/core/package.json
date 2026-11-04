@@ -1,6 +1,6 @@
 {
   "name": "@aiusage/core",
-  "version": "1.5.27",
+  "version": "1.5.28",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

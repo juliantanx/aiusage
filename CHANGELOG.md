@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.28] - 2026-11-04
+
+Improve the widget's USD/CNY exchange-rate availability. This release includes [#154](https://github.com/juliantanx/aiusage/pull/154) by [@cahthuranag](https://github.com/cahthuranag).
+
+### Fixed
+- **Widget exchange-rate refresh failed when its only host was unavailable** ([#154](https://github.com/juliantanx/aiusage/pull/154) by [@cahthuranag](https://github.com/cahthuranag)) — the widget now tries jsDelivr, currency-api.pages.dev, and allratestoday.com in order. Network errors, HTTP failures, and missing or invalid CNY rates advance to the next source; successful responses retain the source URL in the exchange-rate cache.
+- **A stalled exchange-rate source blocked the remaining fallbacks** — each source now has a five-second timeout covering both response headers and the full JSON body. A timed-out request is cancelled before trying the next source. Regression tests cover stalled headers and bodies, all sources timing out, and timer cleanup.
+
+---
+
 ## [1.5.27] - 2026-11-02
 
 Fix the Settings page's last-sync status for custom S3 endpoints, prefixes, and non-default GitHub branches. This release includes [#153](https://github.com/juliantanx/aiusage/pull/153) by [@Fiveo9](https://github.com/Fiveo9).
@@ -646,6 +656,7 @@ Fix multi-device sync correctness across GitHub, S3/R2, and Cloud.
 
 ---
 
+[1.5.28]: https://github.com/juliantanx/aiusage/compare/v1.5.27...v1.5.28
 [1.5.27]: https://github.com/juliantanx/aiusage/compare/v1.5.26...v1.5.27
 [1.5.26]: https://github.com/juliantanx/aiusage/compare/v1.5.25...v1.5.26
 [1.5.25]: https://github.com/juliantanx/aiusage/compare/v1.5.24...v1.5.25

@@ -9,6 +9,16 @@
 
 ---
 
+## [1.5.28] - 2026-11-04
+
+本版本提高小组件 USD/CNY 汇率获取的可用性，包含 [@cahthuranag](https://github.com/cahthuranag) 贡献的 [#154](https://github.com/juliantanx/aiusage/pull/154)。
+
+### 修复
+- **唯一的汇率源不可用时，小组件无法刷新汇率**（[#154](https://github.com/juliantanx/aiusage/pull/154)，由 [@cahthuranag](https://github.com/cahthuranag) 贡献） — 现在依次尝试 jsDelivr、currency-api.pages.dev 和 allratestoday.com。网络错误、HTTP 失败或缺失、无效的 CNY 汇率都会触发下一源；成功响应的来源 URL 会保存在汇率缓存中。
+- **汇率源卡住时阻塞所有备用源** — 每个源现在有 5 秒超时，覆盖响应头和完整 JSON 响应体的读取。超时后取消请求并尝试下一源。新增回归测试覆盖响应头与响应体卡住、所有源超时及定时器清理。
+
+---
+
 ## [1.5.27] - 2026-11-02
 
 本版本修复设置页在使用自定义 S3 端点、前缀或非默认 GitHub 分支时显示错误的上次同步状态，包含 [@Fiveo9](https://github.com/Fiveo9) 贡献的 [#153](https://github.com/juliantanx/aiusage/pull/153)。
@@ -642,6 +652,7 @@
 
 ---
 
+[1.5.28]: https://github.com/juliantanx/aiusage/compare/v1.5.27...v1.5.28
 [1.5.27]: https://github.com/juliantanx/aiusage/compare/v1.5.26...v1.5.27
 [1.5.26]: https://github.com/juliantanx/aiusage/compare/v1.5.25...v1.5.26
 [1.5.25]: https://github.com/juliantanx/aiusage/compare/v1.5.24...v1.5.25
