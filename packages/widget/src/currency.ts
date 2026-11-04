@@ -19,6 +19,7 @@ export const EXCHANGE_RATE_SOURCES = [
 ] as const
 
 export const EXCHANGE_RATE_SOURCE: string = EXCHANGE_RATE_SOURCES[0]
+const EXCHANGE_RATE_TIMEOUT_MS = 5_000
 
 export interface UsdCnyRate {
   rate: number
@@ -29,8 +30,12 @@ export interface UsdCnyRate {
 export async function fetchUsdCnyRate(fetchFn: typeof fetch = fetch): Promise<UsdCnyRate> {
   let lastError: unknown = new Error('USD/CNY rate missing')
   for (const source of EXCHANGE_RATE_SOURCES) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      controller.abort(new Error('Exchange rate request timed out'))
+    }, EXCHANGE_RATE_TIMEOUT_MS)
     try {
-      const response = await fetchFn(source)
+      const response = await fetchFn(source, { signal: controller.signal })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
       const payload = await response.json() as { date?: string; usd?: { cny?: number } }
@@ -42,6 +47,9 @@ export async function fetchUsdCnyRate(fetchFn: typeof fetch = fetch): Promise<Us
       return { rate, date: payload.date, source }
     } catch (error) {
       lastError = error
+    } finally {
+      // Keep the timeout active until the response body has also been read.
+      clearTimeout(timeout)
     }
   }
   throw lastError
