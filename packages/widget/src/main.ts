@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
-import { EXCHANGE_RATE_SOURCE } from './currency'
+import { EXCHANGE_RATE_SOURCE, fetchUsdCnyRate } from './currency'
 import type { ExchangeRateState } from './currency'
 import { queryWidgetData } from './data'
 import { t } from './i18n'
@@ -288,22 +288,15 @@ async function refreshExchangeRate(force = false): Promise<ExchangeRateState> {
 
   exchangeRatePromise = (async () => {
     try {
-      const response = await fetch(EXCHANGE_RATE_SOURCE)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-
-      const payload = await response.json() as { date?: string; usd?: { cny?: number } }
-      const rate = payload.usd?.cny
-      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
-        throw new Error('USD/CNY rate missing')
-      }
+      const { rate, date, source } = await fetchUsdCnyRate()
 
       exchangeRate = {
         base: 'USD',
         target: 'CNY',
         rate,
         fetchedAt: Date.now(),
-        date: payload.date,
-        source: EXCHANGE_RATE_SOURCE,
+        date,
+        source,
       }
       saveExchangeRateCache(exchangeRate)
     } catch (error) {
